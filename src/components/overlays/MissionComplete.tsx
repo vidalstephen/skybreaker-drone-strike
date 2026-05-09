@@ -1,0 +1,78 @@
+import { motion } from 'motion/react';
+import type { MissionCompletionResult } from '../../types/game';
+
+export interface MissionCompleteProps {
+  startTime: number;
+  enemiesDestroyed: number;
+  health: number;
+  targetsDestroyed: number;
+  totalTargets: number;
+  result: MissionCompletionResult | null;
+  onReturnToHangar: () => void;
+}
+
+export function MissionComplete({ startTime, enemiesDestroyed, health, targetsDestroyed, totalTargets, result, onReturnToHangar }: MissionCompleteProps) {
+  const elapsedMs = result?.elapsedMs ?? Date.now() - startTime;
+
+  return (
+    <div className="absolute inset-0 bg-black/90 z-50 flex items-center justify-center overflow-y-auto p-4 py-[calc(1rem+env(safe-area-inset-top))] backdrop-blur-xl sm:p-8">
+      <motion.div
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        className="max-w-md w-full border border-orange-500/30 p-1 bg-black/40 my-auto"
+      >
+        <div className="border border-orange-500/50 p-4 flex flex-col items-center text-center sm:p-8">
+          <div className="text-orange-500 text-[10px] tracking-[0.45em] mb-2 uppercase font-mono sm:text-xs sm:tracking-[1em]">Mission Status</div>
+          <h1 className="text-3xl text-white font-black italic tracking-tighter mb-6 serif sm:text-4xl sm:mb-8">MISSION ACCOMPLISHED</h1>
+
+          <div className="w-full h-px bg-white/10 mb-6 sm:mb-8" />
+
+          <div className="grid grid-cols-2 gap-4 w-full mb-6 sm:gap-8 sm:mb-12">
+            <div className="flex flex-col items-center">
+              <span className="text-[10px] text-white/40 uppercase tracking-widest mb-1">Time Elapsed</span>
+              <span className="text-xl font-mono text-white sm:text-2xl">
+                {Math.floor(elapsedMs / 60000)}:
+                {Math.floor((elapsedMs % 60000) / 1000).toString().padStart(2, '0')}
+              </span>
+            </div>
+            <div className="flex flex-col items-center">
+              <span className="text-[10px] text-white/40 uppercase tracking-widest mb-1">Combat Rank</span>
+              <span className="text-xl font-mono text-emerald-400 sm:text-2xl">{result?.rank ?? '--'}</span>
+            </div>
+            <div className="flex flex-col items-center">
+              <span className="text-[10px] text-white/40 uppercase tracking-widest mb-1">Enemies Downed</span>
+              <span className="text-xl font-mono text-red-400 sm:text-2xl">{enemiesDestroyed}</span>
+            </div>
+            <div className="flex flex-col items-center">
+              <span className="text-[10px] text-white/40 uppercase tracking-widest mb-1">Hull Integrity</span>
+              <span className="text-xl font-mono text-orange-400 sm:text-2xl">{health}%</span>
+            </div>
+            <div className="flex flex-col items-center">
+              <span className="text-[10px] text-white/40 uppercase tracking-widest mb-1">Targets Destroyed</span>
+              <span className="text-xl font-mono text-white sm:text-2xl">{targetsDestroyed} / {totalTargets}</span>
+            </div>
+            <div className="flex flex-col items-center">
+              <span className="text-[10px] text-white/40 uppercase tracking-widest mb-1">Score</span>
+              <span className="text-xl font-mono text-white sm:text-2xl">{result?.score.toLocaleString() ?? '0'}</span>
+            </div>
+          </div>
+
+          {result && (
+            <div className="w-full border border-white/10 bg-white/[0.03] p-3 mb-6 text-left sm:p-4 sm:mb-8">
+              <div className="text-[10px] uppercase tracking-[0.25em] text-orange-400 font-mono mb-2">Reward Unlocked</div>
+              <div className="text-sm uppercase tracking-[0.16em] text-white font-mono">{result.reward.label}</div>
+              <div className="mt-2 text-xs leading-relaxed text-white/55">{result.reward.description}</div>
+            </div>
+          )}
+
+          <button
+            onClick={onReturnToHangar}
+            className="w-full min-h-12 py-3 bg-orange-500 text-black font-black tracking-[0.16em] hover:bg-white transition-colors duration-300 uppercase italic sm:py-4 sm:tracking-[0.2em]"
+          >
+            Return to Hangar
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+}

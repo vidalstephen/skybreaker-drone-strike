@@ -1,0 +1,25 @@
+services:
+  skybreaker:
+    build:
+      context: .
+      args:
+        GEMINI_API_KEY: ${GEMINI_API_KEY}
+    image: skybreaker-drone-strike:latest
+    container_name: skybreaker-drone-strike
+    restart: unless-stopped
+    networks:
+      - proxy
+    labels:
+      - traefik.enable=true
+      - "traefik.http.routers.skybreaker-nsystems.rule=Host(`skybreaker.nsystems.live`)"
+      - traefik.http.routers.skybreaker-nsystems.entrypoints=internal
+      - traefik.http.routers.skybreaker-nsystems.middlewares=secure-headers@file
+      - traefik.http.routers.skybreaker-nsystems.priority=130
+      - "traefik.http.routers.skybreaker-vectorhost.rule=Host(`skybreaker.vectorhost.net`)"
+      - traefik.http.routers.skybreaker-vectorhost.entrypoints=internal
+      - traefik.http.routers.skybreaker-vectorhost.middlewares=secure-headers@file
+      - traefik.http.routers.skybreaker-vectorhost.priority=130
+
+networks:
+  proxy:
+    external: true

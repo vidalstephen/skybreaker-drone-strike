@@ -1,0 +1,57 @@
+@import "tailwindcss";
+
+.touch-controls {
+	display: none;
+}
+
+@media (pointer: coarse) {
+	.touch-controls {
+		display: flex;
+	}
+}
+
+@media (pointer: coarse) and (orientation: landscape) and (max-height: 520px) {
+	.mission-bottom-hud {
+		left: calc(8.75rem + env(safe-area-inset-left));
+		right: calc(13.5rem + env(safe-area-inset-right));
+		bottom: calc(0.75rem + env(safe-area-inset-bottom));
+	}
+
+	.touch-controls {
+		padding-left: calc(0.75rem + env(safe-area-inset-left));
+		padding-right: calc(0.75rem + env(safe-area-inset-right));
+	}
+
+	.touch-joystick {
+		width: 5.75rem;
+		height: 5.75rem;
+	}
+
+	.touch-joystick-knob {
+		width: 2.25rem;
+		height: 2.25rem;
+	}
+
+	.touch-action-cluster,
+	.touch-action-row {
+		gap: 0.5rem;
+	}
+
+	.touch-action-primary {
+		width: 4.25rem;
+		height: 4.25rem;
+		font-size: 0.625rem;
+	}
+
+	.touch-action-boost {
+		width: 3.75rem;
+		height: 3.75rem;
+		font-size: 0.5rem;
+	}
+
+	.touch-action-small {
+		width: 2.75rem;
+		height: 2.75rem;
+		font-size: 0.4375rem;
+	}
+}

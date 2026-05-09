@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Skybreaker Drone Strike">
+  <rect width="64" height="64" rx="12" fill="#050505"/>
+  <path d="M32 6l5.5 16.5L55 26l-13 10 4.5 18L32 44 17.5 54 22 36 9 26l17.5-3.5L32 6z" fill="#f27d26"/>
+  <path d="M32 16l3.2 10.2L46 28.4l-8 6.2 2.8 11.4L32 39.4 23.2 46 26 34.6l-8-6.2 10.8-2.2L32 16z" fill="#111111"/>
+  <circle cx="32" cy="32" r="10" fill="none" stroke="#f7f7f7" stroke-width="3"/>
+  <path d="M32 12v10M32 42v10M12 32h10M42 32h10" stroke="#f7f7f7" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="32" cy="32" r="3" fill="#f7f7f7"/>
+</svg>
