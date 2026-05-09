@@ -671,22 +671,29 @@ Completion summary:
 
 ### Phase TV-2 - Reflective Tactical Floor and Grid
 
-Status: Pending
+Status: Complete
 
 Goal: create a wet, dark tactical floor with a readable grid, starting with low-risk material and line work before considering expensive reflections.
 
-- [ ] Add floor material tuning for dark graphite, lower roughness, subtle metalness, and controlled specular response
-- [ ] Add readable major/minor grid hierarchy, center lanes, and scale cues
-- [ ] Add optional fake ground highlights under bright beacons or thrusters without using a real mirror first
-- [ ] Gate density and glow by graphics quality and reduced-effects settings
+- [x] Add floor material tuning for dark graphite, lower roughness, subtle metalness, and controlled specular response
+- [x] Add readable major/minor grid hierarchy, center lanes, and scale cues
+- [x] Add optional fake ground highlights under bright beacons or thrusters without using a real mirror first
+- [x] Gate density and glow by graphics quality and reduced-effects settings
 
 Acceptance criteria:
 
-- [ ] Floor feels polished and slightly wet without becoming a bright mirror
-- [ ] Grid remains readable at speed and does not compete with HUD text
-- [ ] Drone thruster and facility light reflections are subtle
-- [ ] LOW/reduced-effects profile remains usable on mobile-sized viewports
-- [ ] Containerized `npm run lint` and Docker production build/deploy pass
+- [x] Floor feels polished and slightly wet without becoming a bright mirror
+- [x] Grid remains readable at speed and does not compete with HUD text
+- [x] Drone thruster and facility light reflections are subtle
+- [x] LOW/reduced-effects profile remains usable on mobile-sized viewports
+- [x] Containerized `npm run lint` and Docker production build/deploy pass
+
+Completion summary:
+
+- Shipped: TV-2 reflective tactical floor and major/minor grid hierarchy. Floor material updated to `roughness: 0.38–0.40, metalness: 0.42–0.44` (dark graphite, slightly wet). Replaced single `GridHelper` with a two-layer hierarchy — fine minor grid (300 divisions, ~0.036–0.038 opacity) and coarser major grid (60 divisions, ~0.108–0.116 opacity, offset 0.08 units to avoid z-fighting). Added additive beacon glow splats (CircleGeometry, opacity 0.04) under each landmark structure, gated by `!reduceEffects && effectScale > 0.5`. Extended `MissionGridProfileDefinition` type with `majorDivisions?`, `majorOpacity?`, `minorOpacity?`. Both `SIGNAL_BREAK_ENVIRONMENT` and `IRON_VEIL_ENVIRONMENT` updated with new floor and grid values.
+- Changed: `src/types/game.ts`, `src/config/environments.ts`, `src/scene/environment.ts`.
+- Verification: Containerized `npm run lint` passed; `docker compose build && docker compose up -d` passed; container Running.
+- Notes/Risks: No real mirror/SSR — the metalness response depends on the scene's IBL/env-map probe, which is not yet set; subtle metalness will show as a desaturated highlight. Full wet-floor look may require an env map in a later phase.
 
 ### Phase TV-3 - Industrial Structure and Facility Kit
 

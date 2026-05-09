@@ -105,16 +105,29 @@ export function createMissionEnvironment(
   settings: AppSettings
 ) {
   const atmosphere = createMissionAtmosphere(scene, environment, settings);
-  const grid = new THREE.GridHelper(
-    environment.gridProfile.size,
-    environment.gridProfile.divisions,
-    environment.gridProfile.color,
-    environment.gridProfile.color
-  );
-  grid.position.y = environment.gridProfile.y;
-  (grid.material as THREE.LineBasicMaterial).opacity = environment.gridProfile.opacity;
-  (grid.material as THREE.LineBasicMaterial).transparent = true;
-  scene.add(grid);
+
+  // --- TV-2: Major/minor grid hierarchy ---
+  const gp = environment.gridProfile;
+  const minorDivisions = gp.divisions;
+  const minorOpacity = gp.minorOpacity ?? gp.opacity;
+  const majorDivisions = gp.majorDivisions ?? Math.round(minorDivisions / 5);
+  const majorOpacity = gp.majorOpacity ?? gp.opacity * 2.5;
+
+  const minorGrid = new THREE.GridHelper(gp.size, minorDivisions, gp.color, gp.color);
+  minorGrid.position.y = gp.y;
+  (minorGrid.material as THREE.LineBasicMaterial).opacity = minorOpacity;
+  (minorGrid.material as THREE.LineBasicMaterial).transparent = true;
+  (minorGrid.material as THREE.LineBasicMaterial).depthWrite = false;
+  scene.add(minorGrid);
+
+  const majorGrid = new THREE.GridHelper(gp.size, majorDivisions, gp.color, gp.color);
+  majorGrid.position.y = gp.y + 0.08; // slight offset above minor to avoid z-fighting
+  (majorGrid.material as THREE.LineBasicMaterial).opacity = majorOpacity;
+  (majorGrid.material as THREE.LineBasicMaterial).transparent = true;
+  (majorGrid.material as THREE.LineBasicMaterial).depthWrite = false;
+  scene.add(majorGrid);
+  // alias for return
+  const grid = minorGrid;
 
   const floorGeometry = new THREE.PlaneGeometry(environment.gridProfile.size, environment.gridProfile.size);
   const floorMaterial = new THREE.MeshStandardMaterial({
@@ -149,6 +162,24 @@ export function createMissionEnvironment(
     mesh.position.set(Math.cos(angle) * dist, height / 2 - 1, Math.sin(angle) * dist);
     mesh.rotation.y = Math.random() * Math.PI;
     envGroup.add(mesh);
+
+    // TV-2: Fake ground highlight (beacon glow splat) under each landmark structure
+    if (!settings.reduceEffects && graphicsProfile.effectScale > 0.5) {
+      const splatRadius = Math.max(width, depth) * 0.65;
+      const splatGeo = new THREE.CircleGeometry(splatRadius, 16);
+      const splatMat = new THREE.MeshBasicMaterial({
+        color: environment.beaconPalette.primary,
+        transparent: true,
+        opacity: 0.04,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        side: THREE.DoubleSide,
+      });
+      const splat = new THREE.Mesh(splatGeo, splatMat);
+      splat.rotation.x = -Math.PI / 2;
+      splat.position.set(mesh.position.x, -0.45, mesh.position.z);
+      envGroup.add(splat);
+    }
   }
   scene.add(envGroup);
 

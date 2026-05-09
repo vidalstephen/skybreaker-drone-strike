@@ -202,6 +202,10 @@ export interface MissionGridProfileDefinition {
   size: number;
   divisions: number;
   y: number;
+  // TV-2: major/minor grid hierarchy
+  majorDivisions?: number;  // coarser grid division count; defaults to divisions / 5
+  majorOpacity?: number;    // major line opacity; defaults to opacity * 2.5
+  minorOpacity?: number;    // minor line opacity; defaults to opacity
 }
 
 export interface MissionBeaconPaletteDefinition {
