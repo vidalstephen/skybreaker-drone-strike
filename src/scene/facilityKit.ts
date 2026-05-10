@@ -49,6 +49,30 @@ function buildMonolith(
   beacon.position.y = 8 + 22 + 14 + 13 + 1.4;
   group.add(beacon);
 
+  const padWidth = bw * 0.28;
+  const padDepth = bd * 0.28;
+  const padOffsetX = bw * 0.46;
+  const padOffsetZ = bd * 0.46;
+  const padPositions: [number, number][] = [
+    [-padOffsetX, -padOffsetZ],
+    [padOffsetX, -padOffsetZ],
+    [-padOffsetX, padOffsetZ],
+    [padOffsetX, padOffsetZ],
+  ];
+  padPositions.forEach(([padX, padZ]) => {
+    const pad = new THREE.Mesh(new THREE.BoxGeometry(padWidth, 1.6, padDepth), structMat);
+    pad.position.set(padX, 0.8, padZ);
+    group.add(pad);
+  });
+
+  const sideRail = new THREE.Mesh(new THREE.BoxGeometry(1.2, 12, bd + 1), accentMat);
+  sideRail.position.set(-bw * 0.34, 20, 0);
+  group.add(sideRail);
+
+  const antenna = new THREE.Mesh(new THREE.BoxGeometry(0.9, 9, 0.9), structMat);
+  antenna.position.set(uw * 0.45, 8 + 22 + 14 + 4.5, 0);
+  group.add(antenna);
+
   return { group, footprint: bw };
 }
 
@@ -93,6 +117,22 @@ function buildCompound(
   beacon.position.set(bw * 0.16, 5 + 17 + 6 + 1.2, 0);
   group.add(beacon);
 
+  const railFront = new THREE.Mesh(new THREE.BoxGeometry(bw * 0.82, 1.1, 1.0), accentMat);
+  railFront.position.set(0, 8.6, -bd * 0.52);
+  group.add(railFront);
+
+  const railBack = new THREE.Mesh(new THREE.BoxGeometry(bw * 0.82, 1.1, 1.0), accentMat);
+  railBack.position.set(0, 8.6, bd * 0.52);
+  group.add(railBack);
+
+  const servicePipe = new THREE.Mesh(new THREE.BoxGeometry(2.0, 2.0, bd * 0.9), structMat);
+  servicePipe.position.set(-bw * 0.46, 8.5, 0);
+  group.add(servicePipe);
+
+  const roofAntenna = new THREE.Mesh(new THREE.BoxGeometry(1.0, 8, 1.0), structMat);
+  roofAntenna.position.set(bw * 0.34, 23, -bd * 0.18);
+  group.add(roofAntenna);
+
   return { group, footprint: bw };
 }
 
@@ -124,11 +164,34 @@ function buildGantry(
   pin.position.y = height + 3;
   group.add(pin);
 
+  const basePadLeft = new THREE.Mesh(new THREE.BoxGeometry(7, 1.8, 7), structMat);
+  basePadLeft.position.set(-sep / 2, 0.9, 0);
+  group.add(basePadLeft);
+
+  const basePadRight = new THREE.Mesh(new THREE.BoxGeometry(7, 1.8, 7), structMat);
+  basePadRight.position.set(sep / 2, 0.9, 0);
+  group.add(basePadRight);
+
+  const braceLeft = new THREE.Mesh(new THREE.BoxGeometry(2, height * 0.74, 1.6), structMat);
+  braceLeft.position.set(-sep * 0.25, height * 0.44, 0);
+  braceLeft.rotation.z = -0.42;
+  group.add(braceLeft);
+
+  const braceRight = new THREE.Mesh(new THREE.BoxGeometry(2, height * 0.74, 1.6), structMat);
+  braceRight.position.set(sep * 0.25, height * 0.44, 0);
+  braceRight.rotation.z = 0.42;
+  group.add(braceRight);
+
+  const lamp = new THREE.Mesh(new THREE.BoxGeometry(3.5, 2.2, 3.5), accentMat);
+  lamp.position.y = height - 4.8;
+  group.add(lamp);
+
   return { group, footprint: sep + 6 };
 }
 
 function buildPylon(
   structMat: THREE.Material,
+  accentMat: THREE.Material,
   beaconMat: THREE.Material,
 ): { group: THREE.Group; footprint: number } {
   const group = new THREE.Group();
@@ -150,11 +213,29 @@ function buildPylon(
   beacon.position.y = height + 3;
   group.add(beacon);
 
+  const lowerCollar = new THREE.Mesh(new THREE.CylinderGeometry(botR * 0.88, botR, 1.8, 8), structMat);
+  lowerCollar.position.y = height * 0.28;
+  group.add(lowerCollar);
+
+  const midBand = new THREE.Mesh(new THREE.CylinderGeometry(3.2, 3.6, 1.4, 8), accentMat);
+  midBand.position.y = height * 0.62;
+  group.add(midBand);
+
+  const finWidth = botR * 1.45;
+  const finA = new THREE.Mesh(new THREE.BoxGeometry(finWidth, height * 0.34, 1.1), structMat);
+  finA.position.y = height * 0.35;
+  group.add(finA);
+
+  const finB = new THREE.Mesh(new THREE.BoxGeometry(1.1, height * 0.34, finWidth), structMat);
+  finB.position.y = height * 0.35;
+  group.add(finB);
+
   return { group, footprint: botR * 2 };
 }
 
 function buildBeaconMast(
   structMat: THREE.Material,
+  accentMat: THREE.Material,
   beaconMat: THREE.Material,
 ): { group: THREE.Group; footprint: number } {
   const group = new THREE.Group();
@@ -185,7 +266,166 @@ function buildBeaconMast(
   topBeacon.position.y = height + 1.6;
   group.add(topBeacon);
 
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(4.5, 5.5, 2.2, 8), structMat);
+  base.position.y = 1.1;
+  group.add(base);
+
+  const serviceBox = new THREE.Mesh(new THREE.BoxGeometry(5, 4, 4), structMat);
+  serviceBox.position.set(4.5, 3.4, 0);
+  group.add(serviceBox);
+
+  const lowerArm = new THREE.Mesh(new THREE.BoxGeometry(8, 1.0, 1.0), accentMat);
+  lowerArm.position.y = height * 0.42;
+  lowerArm.rotation.y = Math.PI / 2;
+  group.add(lowerArm);
+
   return { group, footprint: 14 };
+}
+
+function buildAntennaArray(
+  structMat: THREE.Material,
+  accentMat: THREE.Material,
+  beaconMat: THREE.Material,
+): { group: THREE.Group; footprint: number } {
+  const group = new THREE.Group();
+  const platformWidth = 30 + Math.random() * 12;
+  const platformDepth = 18 + Math.random() * 8;
+
+  const platform = new THREE.Mesh(new THREE.BoxGeometry(platformWidth, 3.5, platformDepth), structMat);
+  platform.position.y = 1.75;
+  group.add(platform);
+
+  const railFront = new THREE.Mesh(new THREE.BoxGeometry(platformWidth * 0.9, 1.0, 0.9), accentMat);
+  railFront.position.set(0, 4.1, -platformDepth * 0.48);
+  group.add(railFront);
+
+  const railBack = new THREE.Mesh(new THREE.BoxGeometry(platformWidth * 0.9, 1.0, 0.9), accentMat);
+  railBack.position.set(0, 4.1, platformDepth * 0.48);
+  group.add(railBack);
+
+  const mastOffsets = [-platformWidth * 0.28, 0, platformWidth * 0.24];
+  mastOffsets.forEach((mastOffset, index) => {
+    const mastHeight = 18 + index * 5 + Math.random() * 4;
+    const mast = new THREE.Mesh(new THREE.BoxGeometry(1.2, mastHeight, 1.2), structMat);
+    mast.position.set(mastOffset, 3.5 + mastHeight / 2, 0);
+    group.add(mast);
+
+    const crossArm = new THREE.Mesh(new THREE.BoxGeometry(9 + index * 2, 1.0, 1.0), accentMat);
+    crossArm.position.set(mastOffset, 3.5 + mastHeight * 0.7, 0);
+    group.add(crossArm);
+
+    const topBeacon = new THREE.Mesh(new THREE.SphereGeometry(1.0, 6, 4), beaconMat);
+    topBeacon.position.set(mastOffset, 3.5 + mastHeight + 1.0, 0);
+    group.add(topBeacon);
+  });
+
+  const dish = new THREE.Mesh(new THREE.CylinderGeometry(5.4, 5.4, 1.1, 12), structMat);
+  dish.rotation.z = Math.PI / 2;
+  dish.position.set(platformWidth * 0.34, 13, -platformDepth * 0.16);
+  group.add(dish);
+
+  const dishStem = new THREE.Mesh(new THREE.BoxGeometry(1.4, 10, 1.4), structMat);
+  dishStem.position.set(platformWidth * 0.34, 8, -platformDepth * 0.16);
+  group.add(dishStem);
+
+  const dishAccent = new THREE.Mesh(new THREE.BoxGeometry(1.1, 1.1, 8), accentMat);
+  dishAccent.position.set(platformWidth * 0.34, 13, -platformDepth * 0.16);
+  group.add(dishAccent);
+
+  return { group, footprint: platformWidth };
+}
+
+function buildPerimeterLight(
+  structMat: THREE.Material,
+  accentMat: THREE.Material,
+  beaconMat: THREE.Material,
+): { group: THREE.Group; footprint: number } {
+  const group = new THREE.Group();
+  const railLength = 24 + Math.random() * 10;
+  const postHeight = 8 + Math.random() * 5;
+
+  const groundRail = new THREE.Mesh(new THREE.BoxGeometry(railLength, 1.4, 2.4), structMat);
+  groundRail.position.y = 0.7;
+  group.add(groundRail);
+
+  const postOffsets = [-railLength * 0.36, 0, railLength * 0.36];
+  postOffsets.forEach((postOffset, index) => {
+    const post = new THREE.Mesh(new THREE.BoxGeometry(1.4, postHeight, 1.4), structMat);
+    post.position.set(postOffset, 1.4 + postHeight / 2, 0);
+    group.add(post);
+
+    const lightHead = new THREE.Mesh(new THREE.BoxGeometry(4.5, 1.6, 2.4), accentMat);
+    lightHead.position.set(postOffset, postHeight + 2.4, 0);
+    lightHead.rotation.y = index % 2 === 0 ? 0.16 : -0.16;
+    group.add(lightHead);
+
+    const warningTip = new THREE.Mesh(new THREE.SphereGeometry(0.8, 6, 4), beaconMat);
+    warningTip.position.set(postOffset, postHeight + 3.5, 0);
+    group.add(warningTip);
+  });
+
+  const shieldFront = new THREE.Mesh(new THREE.BoxGeometry(railLength * 0.78, 4.5, 0.9), structMat);
+  shieldFront.position.set(0, 3.1, -2.9);
+  shieldFront.rotation.x = 0.18;
+  group.add(shieldFront);
+
+  return { group, footprint: railLength };
+}
+
+function buildPlatformCluster(
+  structMat: THREE.Material,
+  accentMat: THREE.Material,
+  beaconMat: THREE.Material,
+): { group: THREE.Group; footprint: number } {
+  const group = new THREE.Group();
+  const deckWidth = 44 + Math.random() * 16;
+  const deckDepth = 26 + Math.random() * 10;
+
+  const deck = new THREE.Mesh(new THREE.BoxGeometry(deckWidth, 4, deckDepth), structMat);
+  deck.position.y = 2;
+  group.add(deck);
+
+  const padA = new THREE.Mesh(new THREE.BoxGeometry(deckWidth * 0.42, 10, deckDepth * 0.48), structMat);
+  padA.position.set(-deckWidth * 0.20, 9, -deckDepth * 0.12);
+  group.add(padA);
+
+  const padB = new THREE.Mesh(new THREE.BoxGeometry(deckWidth * 0.30, 15, deckDepth * 0.36), structMat);
+  padB.position.set(deckWidth * 0.23, 11.5, deckDepth * 0.10);
+  group.add(padB);
+
+  const serviceBlock = new THREE.Mesh(new THREE.BoxGeometry(deckWidth * 0.22, 6, deckDepth * 0.30), structMat);
+  serviceBlock.position.set(deckWidth * 0.08, 7, -deckDepth * 0.34);
+  group.add(serviceBlock);
+
+  const gantryArm = new THREE.Mesh(new THREE.BoxGeometry(deckWidth * 0.78, 2.2, 2.2), accentMat);
+  gantryArm.position.set(0, 18.5, deckDepth * 0.26);
+  group.add(gantryArm);
+
+  const supportLeft = new THREE.Mesh(new THREE.BoxGeometry(2.2, 18, 2.2), structMat);
+  supportLeft.position.set(-deckWidth * 0.35, 11, deckDepth * 0.26);
+  group.add(supportLeft);
+
+  const supportRight = new THREE.Mesh(new THREE.BoxGeometry(2.2, 18, 2.2), structMat);
+  supportRight.position.set(deckWidth * 0.35, 11, deckDepth * 0.26);
+  group.add(supportRight);
+
+  const beaconLeft = new THREE.Mesh(new THREE.SphereGeometry(1.2, 7, 5), beaconMat);
+  beaconLeft.position.set(-deckWidth * 0.35, 21, deckDepth * 0.26);
+  group.add(beaconLeft);
+
+  const beaconRight = new THREE.Mesh(new THREE.SphereGeometry(1.2, 7, 5), beaconMat);
+  beaconRight.position.set(deckWidth * 0.35, 21, deckDepth * 0.26);
+  group.add(beaconRight);
+
+  const railFront = new THREE.Mesh(new THREE.BoxGeometry(deckWidth * 0.9, 1.0, 1.0), accentMat);
+  railFront.position.set(0, 5, -deckDepth * 0.52);
+  group.add(railFront);
+
+  const railBack = new THREE.Mesh(new THREE.BoxGeometry(deckWidth * 0.9, 1.0, 1.0), accentMat);
+  railBack.position.set(0, 5, deckDepth * 0.52);
+  group.add(railBack);
+
+  return { group, footprint: deckWidth };
 }
 
 // ---------------------------------------------------------------------------
@@ -199,10 +439,13 @@ function buildArchetype(
   beaconMat: THREE.Material,
 ): { group: THREE.Group; footprint: number } {
   switch (archetype) {
+    case 'antenna-array':    return buildAntennaArray(structMat, accentMat, beaconMat);
     case 'compound':    return buildCompound(structMat, accentMat, beaconMat);
     case 'gantry':      return buildGantry(structMat, accentMat);
-    case 'pylon':       return buildPylon(structMat, beaconMat);
-    case 'beacon-mast': return buildBeaconMast(structMat, beaconMat);
+    case 'perimeter-light':  return buildPerimeterLight(structMat, accentMat, beaconMat);
+    case 'platform-cluster': return buildPlatformCluster(structMat, accentMat, beaconMat);
+    case 'pylon':       return buildPylon(structMat, accentMat, beaconMat);
+    case 'beacon-mast': return buildBeaconMast(structMat, accentMat, beaconMat);
     case 'monolith':
     default:            return buildMonolith(structMat, accentMat, beaconMat);
   }

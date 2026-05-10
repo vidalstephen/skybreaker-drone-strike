@@ -26,10 +26,14 @@ export const SIGNAL_BREAK_ENVIRONMENT: MissionEnvironmentDefinition = {
   ambientLight: { color: 0xc8d8ee, intensity: 0.58 },
   sunLight: { color: 0xffffff, intensity: 0.70, position: [50, 100, 50] },
   landmarkStyle: 'monoliths',
-  landmarkCount: 60,
+  landmarkCount: 68,
   plateauCount: 15,
   boundaryRadius: 1500,
-  structureKit: { archetypes: ['monolith', 'gantry', 'beacon-mast'], minDist: 280, maxDist: 640 },
+  structureKit: {
+    archetypes: ['monolith', 'platform-cluster', 'gantry', 'antenna-array', 'beacon-mast', 'perimeter-light'],
+    minDist: 285,
+    maxDist: 680,
+  },
   hazards: [],
 };
 
@@ -59,10 +63,14 @@ export const IRON_VEIL_ENVIRONMENT: MissionEnvironmentDefinition = {
   ambientLight: { color: 0xffd8b8, intensity: 0.50 },
   sunLight: { color: 0xffb46a, intensity: 0.95, position: [-80, 120, 40] },
   landmarkStyle: 'ridges',
-  landmarkCount: 42,
+  landmarkCount: 50,
   plateauCount: 22,
   boundaryRadius: 1700,
-  structureKit: { archetypes: ['compound', 'pylon', 'beacon-mast'], minDist: 310, maxDist: 700 },
+  structureKit: {
+    archetypes: ['compound', 'platform-cluster', 'pylon', 'antenna-array', 'beacon-mast', 'perimeter-light'],
+    minDist: 320,
+    maxDist: 740,
+  },
   hazards: [
     {
       id: 'ash-static-west',

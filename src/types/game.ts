@@ -151,7 +151,15 @@ export interface MissionEnemyWaveEntry {
 }
 
 // TV-3: Industrial structure archetypes
-export type StructureArchetype = 'monolith' | 'compound' | 'gantry' | 'pylon' | 'beacon-mast';
+export type StructureArchetype =
+  | 'monolith'
+  | 'compound'
+  | 'gantry'
+  | 'pylon'
+  | 'beacon-mast'
+  | 'antenna-array'
+  | 'perimeter-light'
+  | 'platform-cluster';
 
 export interface StructureKitDefinition {
   archetypes: StructureArchetype[];
