@@ -783,21 +783,28 @@ Completion summary:
 
 ### Phase TV-6 - Tactical Reticle and Weapon Path Polish
 
-Status: Pending
+Status: Complete - `visual/reticle-path-polish` branch
 
 Goal: refine shot readability and tactical feedback without returning to a cluttered HUD.
 
-- [ ] Refine `Crosshair.tsx` projected weapon path with convergence, firing, and hit-confirm readability
-- [ ] Add optional world-space path/convergence cues near the drone or target line only if they improve clarity
-- [ ] Integrate missile lock and primary-fire feedback without adding extra panels
-- [ ] Preserve actual projectile direction and current aim-screen calculation semantics
+- [x] Refine `Crosshair.tsx` projected weapon path with convergence, firing, and hit-confirm readability
+- [x] Evaluate optional world-space path/convergence cues near the drone or target line; keep this pass screen-space to avoid duplicating HUD information
+- [x] Integrate missile lock and primary-fire feedback without adding extra panels
+- [x] Preserve actual projectile direction and current aim-screen calculation semantics
 
 Acceptance criteria:
 
-- [ ] Reticle and projected path clarify shot direction in chase view
-- [ ] Missile lock and hit-confirm remain readable but restrained
-- [ ] No new redundant pippers, brackets, or HUD clutter
-- [ ] Containerized `npm run lint` and Docker production build/deploy pass
+- [x] Reticle and projected path clarify shot direction in chase view
+- [x] Missile lock and hit-confirm remain readable but restrained
+- [x] No new redundant pippers, brackets, or HUD clutter
+- [x] Containerized `npm run lint` and Docker production build/deploy pass
+
+Completion summary:
+
+- Shipped: Tactical reticle polish with a restrained secondary lock progress ring, acquired-lock color feedback, and convergence markers along the existing projected weapon path. The path still runs from the drone nose screen point to `aimScreenPos`, preserving shot direction semantics while improving chase-view readability.
+- Changed: `src/components/hud/Crosshair.tsx` now renders lock-progress arcs and small path brackets using HUD constants; `src/components/Game.tsx` exposes visual-only secondary lock progress/acquired/target state; `src/types/game.ts` adds the new HUD fields; `src/config/constants.ts` adds reticle tuning constants.
+- Verification: Containerized `npm run lint` passed; `docker compose build --progress=plain && docker compose up -d && docker compose ps` passed; `curl -I -L --max-time 20 https://skybreaker.nsystems.live` returned HTTP 200.
+- Notes/Risks: No world-space path cues were added because the screen-space reticle now carries the extra feedback without increasing scene clutter. Local VS Code diagnostics still show the known React declaration noise, but Docker TypeScript/build verification is clean.
 
 ### Phase TV-7 - Drone Visual Polish
 

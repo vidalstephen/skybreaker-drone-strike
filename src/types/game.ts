@@ -413,6 +413,9 @@ export interface GameState {
   secondaryWeaponLabel: string;
   secondaryReady: boolean;
   secondaryLockLabel: string;
+  secondaryLockProgress: number;
+  secondaryLockAcquired: boolean;
+  secondaryLockHasTarget: boolean;
   startTime: number;
   lockedTargetId: string | null;
   aimScreenPos?: { x: number; y: number };

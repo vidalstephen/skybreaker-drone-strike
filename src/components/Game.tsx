@@ -163,6 +163,9 @@ export default function Game({
     secondaryWeaponLabel: initialSecondaryWeapon?.label ?? 'Locked',
     secondaryReady: !!initialSecondaryWeapon,
     secondaryLockLabel: initialSecondaryWeapon?.lockRequired ? 'NO AIR TARGET' : 'READY',
+    secondaryLockProgress: 0,
+    secondaryLockAcquired: !initialSecondaryWeapon?.lockRequired,
+    secondaryLockHasTarget: false,
     startTime: Date.now(),
     lockedTargetId: null,
     settings: {
@@ -598,9 +601,9 @@ export default function Game({
 
         // Weapon Firing Logic
         const updateSecondaryLock = (weapon: WeaponDefinition | null) => {
-          if (!weapon) return { enemy: null as Enemy | null, acquired: false, label: 'LOCKED' };
-          if (!weapon.lockRequired) return { enemy: null as Enemy | null, acquired: true, label: 'READY' };
-          if (!droneRef.current) return { enemy: null as Enemy | null, acquired: false, label: 'NO AIR TARGET' };
+          if (!weapon) return { enemy: null as Enemy | null, acquired: false, label: 'LOCKED', progress: 0, hasTarget: false };
+          if (!weapon.lockRequired) return { enemy: null as Enemy | null, acquired: true, label: 'READY', progress: 1, hasTarget: false };
+          if (!droneRef.current) return { enemy: null as Enemy | null, acquired: false, label: 'NO AIR TARGET', progress: 0, hasTarget: false };
 
           const range = weapon.lockRange ?? 700;
           const cone = weapon.lockCone ?? 0.8;
@@ -625,19 +628,23 @@ export default function Game({
 
           if (!bestEnemy) {
             secondaryLockRef.current = { candidateEnemyId: null, lockedEnemyId: null, startedAt: 0 };
-            return { enemy: null as Enemy | null, acquired: false, label: 'NO AIR TARGET' };
+            return { enemy: null as Enemy | null, acquired: false, label: 'NO AIR TARGET', progress: 0, hasTarget: false };
           }
 
           if (secondaryLockRef.current.candidateEnemyId !== bestEnemy.id) {
             secondaryLockRef.current = { candidateEnemyId: bestEnemy.id, lockedEnemyId: null, startedAt: now };
           }
 
-          const acquired = now - secondaryLockRef.current.startedAt >= (weapon.lockAcquireMs ?? 500);
+          const acquireMs = weapon.lockAcquireMs ?? 500;
+          const progress = THREE.MathUtils.clamp((now - secondaryLockRef.current.startedAt) / acquireMs, 0, 1);
+          const acquired = progress >= 1;
           if (acquired) secondaryLockRef.current.lockedEnemyId = bestEnemy.id;
 
           return {
             enemy: bestEnemy,
             acquired,
+            progress,
+            hasTarget: true,
             label: acquired ? `LOCKED ${bestEnemy.label.toUpperCase()}` : `LOCKING ${bestEnemy.label.toUpperCase()}`,
           };
         };
@@ -1280,6 +1287,9 @@ export default function Game({
             secondaryWeaponLabel: secondaryWeapon?.label ?? 'Locked',
             secondaryReady,
             secondaryLockLabel: secondaryWeapon ? secondaryLock.label : 'LOCKED',
+            secondaryLockProgress: secondaryWeapon?.lockRequired ? secondaryLock.progress : 0,
+            secondaryLockAcquired: secondaryWeapon?.lockRequired ? secondaryLock.acquired : false,
+            secondaryLockHasTarget: secondaryWeapon?.lockRequired ? secondaryLock.hasTarget : false,
             message: activeHazard ? activeHazard.message : prev.message,
             aimScreenPos: { x: aimScreenX, y: aimScreenY },
             droneScreenPos: { x: droneScreenX, y: droneScreenY }
@@ -1408,6 +1418,9 @@ export default function Game({
           recoil={gameState.recoil}
           firing={gameState.firing}
           hitConfirmed={gameState.hitConfirmed}
+          secondaryLockProgress={gameState.secondaryLockProgress}
+          secondaryLockAcquired={gameState.secondaryLockAcquired}
+          secondaryLockHasTarget={gameState.secondaryLockHasTarget}
           aimScreenPos={gameState.aimScreenPos}
           droneScreenPos={gameState.droneScreenPos}
         />
