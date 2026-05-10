@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { AppSettings, MissionEnvironmentDefinition } from '../types/game';
 import type { GraphicsProfile } from './renderer';
+import { createFacilityStructures } from './facilityKit';
 
 export interface MissionAtmosphereVisuals {
   skyDome: THREE.Mesh;
@@ -140,100 +141,8 @@ export function createMissionEnvironment(
   floor.position.y = -0.6;
   scene.add(floor);
 
-  const envGroup = new THREE.Group();
-  const structMat = new THREE.MeshStandardMaterial({
-    color: environment.structureColor,
-    roughness: 0.88,
-    metalness: 0.08,
-    emissive: new THREE.Color(environment.structureColor),
-    emissiveIntensity: 0.16,
-    fog: true,
-  });
-
-  // TV-2.1: Shared materials for emissive accent strips and directional reflection streaks
-  const accentMat = new THREE.MeshStandardMaterial({
-    color: environment.beaconPalette.primary,
-    emissive: new THREE.Color(environment.beaconPalette.primary),
-    emissiveIntensity: 1.8,
-    roughness: 0.55,
-    metalness: 0.0,
-  });
-  const streakMat = (!settings.reduceEffects && graphicsProfile.effectScale > 0.5)
-    ? new THREE.MeshBasicMaterial({
-        color: environment.beaconPalette.primary,
-        transparent: true,
-        opacity: 0.014,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending,
-        side: THREE.DoubleSide,
-      })
-    : null;
-
-  const landmarkCount = Math.max(12, Math.round(environment.landmarkCount * graphicsProfile.effectScale));
-  for (let i = 0; i < landmarkCount; i++) {
-    const ridgeStyle = environment.landmarkStyle === 'ridges';
-    const width = ridgeStyle ? 50 + Math.random() * 120 : 12 + Math.random() * 38;
-    const depth = ridgeStyle ? 8 + Math.random() * 24 : 12 + Math.random() * 38;
-    const height = ridgeStyle ? 12 + Math.random() * 28 : 10 + Math.random() * 44;
-    const geo = new THREE.BoxGeometry(width, height, depth);
-    const mesh = new THREE.Mesh(geo, structMat);
-    const angle = Math.random() * Math.PI * 2;
-    const dist = 280 + Math.random() * 380;
-
-    mesh.position.set(Math.cos(angle) * dist, height / 2 - 1, Math.sin(angle) * dist);
-    mesh.rotation.y = Math.random() * Math.PI;
-    envGroup.add(mesh);
-
-    // TV-2.1: Emissive accent strip on ~40% of landmarks + floor reflection streak
-    if (Math.random() < 0.42) {
-      const accentGeo = new THREE.BoxGeometry(width * 0.72, 0.9, depth * 0.72);
-      const accentMesh = new THREE.Mesh(accentGeo, accentMat);
-      accentMesh.position.set(mesh.position.x, mesh.position.y + height / 2 + 0.25, mesh.position.z);
-      envGroup.add(accentMesh);
-      if (streakMat) {
-        const streakLen = Math.max(width, depth) * 2.6;
-        const streakGeo = new THREE.PlaneGeometry(width * 0.26, streakLen);
-        const streak = new THREE.Mesh(streakGeo, streakMat);
-        streak.rotation.x = -Math.PI / 2;
-        streak.rotation.z = angle;
-        streak.position.set(mesh.position.x, -0.42, mesh.position.z);
-        envGroup.add(streak);
-      }
-    }
-
-    // TV-2: Two-layer beacon glow splat — inner core + wide soft falloff to match reference
-    if (!settings.reduceEffects && graphicsProfile.effectScale > 0.5) {
-      const baseRadius = Math.max(width, depth);
-      // inner pool
-      const innerGeo = new THREE.CircleGeometry(baseRadius * 1.6, 20);
-      const innerMat = new THREE.MeshBasicMaterial({
-        color: environment.beaconPalette.primary,
-        transparent: true,
-        opacity: 0.028,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending,
-        side: THREE.DoubleSide,
-      });
-      const inner = new THREE.Mesh(innerGeo, innerMat);
-      inner.rotation.x = -Math.PI / 2;
-      inner.position.set(mesh.position.x, -0.44, mesh.position.z);
-      envGroup.add(inner);
-      // outer falloff
-      const outerGeo = new THREE.CircleGeometry(baseRadius * 3.4, 24);
-      const outerMat = new THREE.MeshBasicMaterial({
-        color: environment.beaconPalette.primary,
-        transparent: true,
-        opacity: 0.011,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending,
-        side: THREE.DoubleSide,
-      });
-      const outer = new THREE.Mesh(outerGeo, outerMat);
-      outer.rotation.x = -Math.PI / 2;
-      outer.position.set(mesh.position.x, -0.46, mesh.position.z);
-      envGroup.add(outer);
-    }
-  }
+  // TV-3: Build industrial facility structures using archetype kit system
+  const envGroup = createFacilityStructures(environment, graphicsProfile, settings);
   scene.add(envGroup);
 
   const boundaryGeo = new THREE.RingGeometry(environment.boundaryRadius, environment.boundaryRadius + 5, 64);

@@ -150,6 +150,15 @@ export interface MissionEnemyWaveEntry {
   count: number;
 }
 
+// TV-3: Industrial structure archetypes
+export type StructureArchetype = 'monolith' | 'compound' | 'gantry' | 'pylon' | 'beacon-mast';
+
+export interface StructureKitDefinition {
+  archetypes: StructureArchetype[];
+  minDist?: number; // radial min from origin; defaults to 280
+  maxDist?: number; // radial max from origin; defaults to 660
+}
+
 export interface MissionEnvironmentDefinition {
   id: string;
   label: string;
@@ -172,6 +181,7 @@ export interface MissionEnvironmentDefinition {
   landmarkCount: number;
   plateauCount: number;
   boundaryRadius: number;
+  structureKit?: StructureKitDefinition;
   hazards: MissionHazardDefinition[];
 }
 

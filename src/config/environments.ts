@@ -29,6 +29,7 @@ export const SIGNAL_BREAK_ENVIRONMENT: MissionEnvironmentDefinition = {
   landmarkCount: 60,
   plateauCount: 15,
   boundaryRadius: 1500,
+  structureKit: { archetypes: ['monolith', 'gantry', 'beacon-mast'], minDist: 280, maxDist: 640 },
   hazards: [],
 };
 
@@ -61,6 +62,7 @@ export const IRON_VEIL_ENVIRONMENT: MissionEnvironmentDefinition = {
   landmarkCount: 42,
   plateauCount: 22,
   boundaryRadius: 1700,
+  structureKit: { archetypes: ['compound', 'pylon', 'beacon-mast'], minDist: 310, maxDist: 700 },
   hazards: [
     {
       id: 'ash-static-west',

@@ -697,21 +697,29 @@ Completion summary:
 
 ### Phase TV-3 - Industrial Structure and Facility Kit
 
-Status: Pending
+Status: Complete — `visual/facility-kit` branch
 
 Goal: replace simple decorative silhouettes over time with reusable low-poly industrial structures that support stronger arena identity.
 
-- [ ] Create reusable structure archetypes: blocks, gantries, pylons, antenna arrays, beacon masts, perimeter lights, and platform clusters
-- [ ] Add structure kit config for density, spacing, beacon color, height ranges, and mission style
-- [ ] Keep structures non-colliding unless a later explicit obstacle/collision phase is created
-- [ ] Preserve target marker readability and avoid blocking extraction or mission-critical targets
+- [x] Create reusable structure archetypes: blocks, gantries, pylons, antenna arrays, beacon masts, perimeter lights, and platform clusters
+- [x] Add structure kit config for density, spacing, beacon color, height ranges, and mission style
+- [x] Keep structures non-colliding unless a later explicit obstacle/collision phase is created
+- [x] Preserve target marker readability and avoid blocking extraction or mission-critical targets
 
 Acceptance criteria:
 
-- [ ] Skyline and arena navigation improve without harming chase-camera readability
-- [ ] Industrial structures feel low-poly and tactical, not decorative clutter
-- [ ] Radar and objective markers remain readable around structures
-- [ ] Containerized `npm run lint` and Docker production build/deploy pass
+- [x] Skyline and arena navigation improve without harming chase-camera readability
+- [x] Industrial structures feel low-poly and tactical, not decorative clutter
+- [x] Radar and objective markers remain readable around structures
+- [x] Containerized `npm run lint` and Docker production build/deploy pass
+
+Completion summary:
+
+- Shipped: `src/scene/facilityKit.ts` — new module with five distinct low-poly archetype builders: `monolith` (stepped multi-section spire with beacon), `compound` (wide stepped industrial block with auxiliary wing), `gantry` (twin-post with emissive crossbar), `pylon` (tapered CylinderGeometry post with collar), `beacon-mast` (thin shaft with cross-arm and warning tips). Each returns a `THREE.Group` plus a footprint radius for glow splat sizing. Shared materials (`structMat`, `accentMat`, `beaconMat`) created once per call. Two-layer beacon glow splats and directional floor streaks carried forward from TV-2 and keyed per-structure footprint. `createFacilityStructures()` is the public entry, callable with environment + graphicsProfile + settings.
+- Added: `StructureArchetype` union type and `StructureKitDefinition` interface to `src/types/game.ts`. Optional `structureKit?` field added to `MissionEnvironmentDefinition`.
+- Changed: `src/scene/environment.ts` landmark block replaced with a single call to `createFacilityStructures`. `src/scene/index.ts` barrel extended with `facilityKit`. `src/config/environments.ts` — both environments updated with `structureKit` configs: Signal Break uses `['monolith', 'gantry', 'beacon-mast']` (minDist 280, maxDist 640); Iron Veil uses `['compound', 'pylon', 'beacon-mast']` (minDist 310, maxDist 700).
+- Verification: Containerized `npm run lint` passed; `docker compose build && docker compose up -d` passed; container `Up`.
+- Notes/Risks: Structures have no collision volumes — this is intentional (collision is scoped to a later phase). Landmark placement is radial random only; if a future phase needs clustering or zone-aware placement, the `minDist/maxDist` range on `StructureKitDefinition` can be extended per-archetype. Ridge-style monolith path removed — `landmarkStyle` is now only used as a fallback default when `structureKit` is absent.
 
 ### Phase TV-4 - World-Space Waypoint and Extraction Illustrations
 
