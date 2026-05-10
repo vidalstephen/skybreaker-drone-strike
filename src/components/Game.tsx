@@ -49,8 +49,10 @@ import {
   createSpeedStreaks,
   disposeCombatResources,
   updateMissionAtmosphere,
+  updateWaypointIllustration,
   type CombatResources,
   type GraphicsProfile,
+  type WaypointIllustrationHandles,
 } from '../scene';
 import { calculateMissionResult, formatMissionObjective } from '../systems/missionSystem';
 import { calculateScreenPosition } from '../systems/targetingProjection';
@@ -775,9 +777,31 @@ export default function Game({
             }
           }
           
-          // Rotate extraction base for visual flair
-          extractionMeshRef.current.children[0].rotation.y += 0.02;
+          const extractionWaypoint = extractionMeshRef.current.userData.waypoint as WaypointIllustrationHandles | undefined;
+          if (extractionWaypoint) {
+            updateWaypointIllustration(extractionWaypoint, {
+              elapsed: clock.elapsedTime,
+              cameraPosition: cameraRef.current?.position,
+              active: true,
+            });
+          }
+
+          const rotatingBase = extractionMeshRef.current.userData.rotatingBase as THREE.Object3D | undefined;
+          (rotatingBase ?? extractionMeshRef.current.children[0]).rotation.y += 0.02;
         }
+
+        targetsRef.current.forEach(target => {
+          const waypoint = target.mesh.userData.waypoint as WaypointIllustrationHandles | undefined;
+          if (!waypoint) return;
+          waypoint.group.visible = !target.destroyed;
+          if (!target.destroyed) {
+            updateWaypointIllustration(waypoint, {
+              elapsed: clock.elapsedTime,
+              cameraPosition: cameraRef.current?.position,
+              active: true,
+            });
+          }
+        });
 
         // Update Projectiles (with Player Hit Detection)
         projectilesRef.current = projectilesRef.current.filter(p => {
@@ -886,6 +910,8 @@ export default function Game({
                   target.mesh.children[1].visible = false;
                   target.mesh.children[2].visible = false;
                   target.mesh.children[3].visible = false;
+                  const waypoint = target.mesh.userData.waypoint as WaypointIllustrationHandles | undefined;
+                  if (waypoint) waypoint.group.visible = false;
                   
                   // Recalculate destroyed count from source of truth to avoid double-count
                   const newCount = targetsRef.current.filter(t => t.destroyed).length;

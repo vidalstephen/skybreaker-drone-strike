@@ -1,5 +1,9 @@
 import * as THREE from 'three';
 import type { Target } from '../types/game';
+import {
+  createExtractionWaypointIllustration,
+  createTargetWaypointIllustration,
+} from './waypointIllustrations';
 
 export function createMissionTarget(scene: THREE.Scene, pos: THREE.Vector3, id: string, health: number): Target {
   const group = new THREE.Group();
@@ -27,6 +31,10 @@ export function createMissionTarget(scene: THREE.Scene, pos: THREE.Vector3, id: 
   beam.position.y = 1000;
   group.add(beam);
 
+  const waypoint = createTargetWaypointIllustration(0xff6a18);
+  group.add(waypoint.group);
+  group.userData.waypoint = waypoint;
+
   group.position.copy(pos);
   group.position.y = 0;
   scene.add(group);
@@ -46,6 +54,11 @@ export function createExtractionZone(scene: THREE.Scene, position: [number, numb
   const extBeam = new THREE.Mesh(extBeamGeo, extBeamMat);
   extBeam.position.y = 1000;
   extractionGroup.add(extBeam);
+
+  const waypoint = createExtractionWaypointIllustration(0x00ffff);
+  extractionGroup.add(waypoint.group);
+  extractionGroup.userData.waypoint = waypoint;
+  extractionGroup.userData.rotatingBase = extBase;
 
   extractionGroup.position.set(...position);
   extractionGroup.visible = false;

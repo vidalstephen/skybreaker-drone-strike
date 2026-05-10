@@ -459,6 +459,9 @@ Mobile responsiveness:
 - 2026-05-09: TV-1 deployed URL smoke `curl -I -L --max-time 20 https://skybreaker.nsystems.live` - returned HTTP 200 after deploy; hands-on visual browser review remains recommended because no browser page is shared in this session.
 - 2026-05-09: Tactical visual foundation `docker run --rm -v "$PWD":/app -v skybreaker-drone-strike-node-modules:/app/node_modules -w /app node:20-alpine sh -lc "npm run lint"` - passed; TypeScript `tsc --noEmit` completed with zero errors in the container.
 - 2026-05-09: Tactical visual foundation `docker compose build --progress=plain && docker compose up -d && docker compose ps` - passed; Vite production build completed with the existing large chunk warning, image `skybreaker-drone-strike:latest` rebuilt, and container `skybreaker-drone-strike` reported `Up`.
+- 2026-05-10: TV-4 world-space waypoint illustrations `docker run --rm -v "$PWD":/app -v skybreaker-drone-strike-node-modules:/app/node_modules -w /app node:20-alpine sh -lc "npm run lint"` - passed; TypeScript `tsc --noEmit` completed with zero errors in the container.
+- 2026-05-10: TV-4 world-space waypoint illustrations `docker compose build --progress=plain && docker compose up -d && docker compose ps` - passed; Vite production build completed with the existing large chunk warning, image `skybreaker-drone-strike:latest` rebuilt, and container `skybreaker-drone-strike` reported `Up`.
+- 2026-05-10: TV-4 deployed URL smoke `curl -I -L --max-time 20 https://skybreaker.nsystems.live` - returned HTTP 200 after deploy.
 
 - 2026-05-09: VS Code diagnostics for `src` - no errors found after HUD, overlay, and phase-state extraction.
 - 2026-05-09: `docker run --rm -v "$PWD":/app -v skybreaker-drone-strike-node-modules:/app/node_modules -w /app node:20-alpine sh -lc "npm ci && npm run lint"` - passed; TypeScript `tsc --noEmit` completed with zero errors.
@@ -723,21 +726,28 @@ Completion summary:
 
 ### Phase TV-4 - World-Space Waypoint and Extraction Illustrations
 
-Status: Pending
+Status: Complete — `visual/world-space-waypoints` branch
 
 Goal: make objectives and extraction clearer in the world while preserving the existing screen-space marker and radar systems.
 
-- [ ] Add reusable world-space target callouts: ground rings, vertical stems, beacon caps, class icons, and distance-scaled effects
-- [ ] Upgrade extraction visuals with a clearer landing/exfiltration illustration and approach affordance
-- [ ] Keep `TargetMarkers.tsx` props and click-to-lock behavior stable
-- [ ] Keep marker safe-zone and overlap behavior unchanged unless explicitly refactored with tests
+- [x] Add reusable world-space target callouts: ground rings, vertical stems, beacon caps, class icons, and distance-scaled effects
+- [x] Upgrade extraction visuals with a clearer landing/exfiltration illustration and approach affordance
+- [x] Keep `TargetMarkers.tsx` props and click-to-lock behavior stable
+- [x] Keep marker safe-zone and overlap behavior unchanged unless explicitly refactored with tests
 
 Acceptance criteria:
 
-- [ ] Player can visually identify target/extraction zones in-world before relying on HUD brackets
-- [ ] Screen-space marker positions, off-screen arrows, and extraction priority remain unchanged
-- [ ] No added HUD panel clutter
-- [ ] Containerized `npm run lint` and Docker production build/deploy pass
+- [x] Player can visually identify target/extraction zones in-world before relying on HUD brackets
+- [x] Screen-space marker positions, off-screen arrows, and extraction priority remain unchanged
+- [x] No added HUD panel clutter
+- [x] Containerized `npm run lint` and Docker production build/deploy pass
+
+Completion summary:
+
+- Shipped: `src/scene/waypointIllustrations.ts` — reusable world-space waypoint illustration module with target and extraction builders plus `updateWaypointIllustration()` animation. Target callouts now include orange ground rings, pulse/approach rings, a vertical stem, rotating beacon cap, diamond class icon, and directional chevrons. Extraction now includes cyan landing/exfiltration rings, cross-lane pad affordance, vertical guide stem, rotating beacon/arrow cap, and approach chevrons.
+- Changed: `src/scene/objectiveModels.ts` attaches waypoint handles to target and extraction groups through `userData` while preserving the existing target child order used by hit flash/destruction code. `src/components/Game.tsx` animates named waypoint handles per-frame, hides target callouts on destruction, and rotates the extraction base via `userData.rotatingBase` instead of relying on `children[0]`. `src/scene/index.ts` exports the waypoint module.
+- Verification: Containerized `npm run lint` passed; `docker compose build --progress=plain && docker compose up -d && docker compose ps` passed; `curl -I -L --max-time 20 https://skybreaker.nsystems.live` returned HTTP 200.
+- Notes/Risks: `TargetMarkers.tsx`, marker projection math, click-to-lock behavior, safe-zone margins, and extraction priority were intentionally unchanged. VS Code diagnostics still show the known local React type-resolution noise; Docker TypeScript remains the phase verifier.
 
 ### Phase TV-5 - Facility Assault Targets and Weak Points
 
