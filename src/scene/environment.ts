@@ -163,22 +163,37 @@ export function createMissionEnvironment(
     mesh.rotation.y = Math.random() * Math.PI;
     envGroup.add(mesh);
 
-    // TV-2: Fake ground highlight (beacon glow splat) under each landmark structure
+    // TV-2: Two-layer beacon glow splat — inner core + wide soft falloff to match reference
     if (!settings.reduceEffects && graphicsProfile.effectScale > 0.5) {
-      const splatRadius = Math.max(width, depth) * 0.65;
-      const splatGeo = new THREE.CircleGeometry(splatRadius, 16);
-      const splatMat = new THREE.MeshBasicMaterial({
+      const baseRadius = Math.max(width, depth);
+      // inner pool
+      const innerGeo = new THREE.CircleGeometry(baseRadius * 1.6, 20);
+      const innerMat = new THREE.MeshBasicMaterial({
         color: environment.beaconPalette.primary,
         transparent: true,
-        opacity: 0.04,
+        opacity: 0.028,
         depthWrite: false,
         blending: THREE.AdditiveBlending,
         side: THREE.DoubleSide,
       });
-      const splat = new THREE.Mesh(splatGeo, splatMat);
-      splat.rotation.x = -Math.PI / 2;
-      splat.position.set(mesh.position.x, -0.45, mesh.position.z);
-      envGroup.add(splat);
+      const inner = new THREE.Mesh(innerGeo, innerMat);
+      inner.rotation.x = -Math.PI / 2;
+      inner.position.set(mesh.position.x, -0.44, mesh.position.z);
+      envGroup.add(inner);
+      // outer falloff
+      const outerGeo = new THREE.CircleGeometry(baseRadius * 3.4, 24);
+      const outerMat = new THREE.MeshBasicMaterial({
+        color: environment.beaconPalette.primary,
+        transparent: true,
+        opacity: 0.011,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        side: THREE.DoubleSide,
+      });
+      const outer = new THREE.Mesh(outerGeo, outerMat);
+      outer.rotation.x = -Math.PI / 2;
+      outer.position.set(mesh.position.x, -0.46, mesh.position.z);
+      envGroup.add(outer);
     }
   }
   scene.add(envGroup);
