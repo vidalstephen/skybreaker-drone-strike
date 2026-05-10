@@ -462,6 +462,9 @@ Mobile responsiveness:
 - 2026-05-10: TV-4 world-space waypoint illustrations `docker run --rm -v "$PWD":/app -v skybreaker-drone-strike-node-modules:/app/node_modules -w /app node:20-alpine sh -lc "npm run lint"` - passed; TypeScript `tsc --noEmit` completed with zero errors in the container.
 - 2026-05-10: TV-4 world-space waypoint illustrations `docker compose build --progress=plain && docker compose up -d && docker compose ps` - passed; Vite production build completed with the existing large chunk warning, image `skybreaker-drone-strike:latest` rebuilt, and container `skybreaker-drone-strike` reported `Up`.
 - 2026-05-10: TV-4 deployed URL smoke `curl -I -L --max-time 20 https://skybreaker.nsystems.live` - returned HTTP 200 after deploy.
+- 2026-05-10: TV-5 facility weak-point targets `docker run --rm -v "$PWD":/app -v skybreaker-drone-strike-node-modules:/app/node_modules -w /app node:20-alpine sh -lc "npm run lint"` - passed; TypeScript `tsc --noEmit` completed with zero errors in the container.
+- 2026-05-10: TV-5 facility weak-point targets `docker compose build --progress=plain && docker compose up -d && docker compose ps` - passed; Vite production build completed with the existing large chunk warning, image `skybreaker-drone-strike:latest` rebuilt, and container `skybreaker-drone-strike` reported `Up`.
+- 2026-05-10: TV-5 deployed URL smoke `curl -I -L --max-time 20 https://skybreaker.nsystems.live` - returned HTTP 200 after deploy.
 
 - 2026-05-09: VS Code diagnostics for `src` - no errors found after HUD, overlay, and phase-state extraction.
 - 2026-05-09: `docker run --rm -v "$PWD":/app -v skybreaker-drone-strike-node-modules:/app/node_modules -w /app node:20-alpine sh -lc "npm ci && npm run lint"` - passed; TypeScript `tsc --noEmit` completed with zero errors.
@@ -751,24 +754,32 @@ Completion summary:
 
 ### Phase TV-5 - Facility Assault Targets and Weak Points
 
-Status: Pending
+Status: Complete — `visual/weakpoint-targets` branch
 
 Goal: evolve isolated towers into structured facility assault targets with destructible key points while preserving mission counting and extraction rules.
 
-- [ ] Extend `MissionTargetDefinition` with backward-compatible target archetype and optional weak-point definitions
-- [ ] Add runtime target handles for weak points, damage meshes, beacon/glow parts, and final destroyed visuals
-- [ ] Route projectile hits to weak points first where configured, then aggregate final installation destruction
-- [ ] Preserve `target.destroyed` as the source of truth for mission objective counts
-- [ ] Preserve exactly-once target destruction and exactly-once extraction completion
+- [x] Extend `MissionTargetDefinition` with backward-compatible target archetype and optional weak-point definitions
+- [x] Add runtime target handles for weak points, damage meshes, beacon/glow parts, and final destroyed visuals
+- [x] Route projectile hits to weak points first where configured, then aggregate final installation destruction
+- [x] Preserve `target.destroyed` as the source of truth for mission objective counts
+- [x] Preserve exactly-once target destruction and exactly-once extraction completion
 
 Acceptance criteria:
 
-- [ ] Weak points take damage and provide clear hit/destruction feedback
-- [ ] Destroying all required weak points destroys the facility target once
-- [ ] Target destroyed count cannot double-count simultaneous hits
-- [ ] Extraction activates only after all mission targets are destroyed
-- [ ] Existing missions without weak-point config still behave as before
-- [ ] Containerized `npm run lint` and Docker production build/deploy pass
+- [x] Weak points take damage and provide clear hit/destruction feedback
+- [x] Destroying all required weak points destroys the facility target once
+- [x] Target destroyed count cannot double-count simultaneous hits
+- [x] Extraction activates only after all mission targets are destroyed
+- [x] Existing missions without weak-point config still behave as before
+- [x] Containerized `npm run lint` and Docker production build/deploy pass
+
+Completion summary:
+
+- Shipped: Backward-compatible facility target and weak-point model. `MissionTargetDefinition` now supports optional `archetype` plus `weakPoints`; `MissionWeakPointDefinition`, `MissionTargetArchetype`, and runtime `TargetWeakPoint` types were added. Targets without weak-point config still use legacy direct health damage.
+- Shipped: Facility target visuals in `src/scene/objectiveModels.ts` now include named `TargetVisualHandles`, expanded target bases/decks/rails/service structures, relay-spire detail variants, weak-point sockets/cores/guard rings, final destroyed mesh lists, and runtime weak-point positions/health/radii.
+- Changed: `src/config/missions.ts` adds weak-point layouts to Signal Break radar towers and Iron Veil relay spires. Later campaign targets remain without weak-point config to validate the backward-compatible path. `src/components/Game.tsx` now routes player projectile impacts to active weak points first, blocks core damage while required weak points remain, disables weak-point meshes with localized explosion feedback, aggregates required weak-point health into target health, and destroys the final facility exactly once through `target.destroyed`.
+- Verification: Containerized `npm run lint` passed; `docker compose build --progress=plain && docker compose up -d && docker compose ps` passed; `curl -I -L --max-time 20 https://skybreaker.nsystems.live` returned HTTP 200.
+- Notes/Risks: Target damage routing still lives inside `Game.tsx` with the rest of projectile collision logic; a later combat-system extraction can move the helper functions once frame-loop refactoring is explicitly in scope. Weak-point collision uses simple spherical radii around configured local offsets; no physical obstacle collision was added.
 
 ### Phase TV-6 - Tactical Reticle and Weapon Path Polish
 

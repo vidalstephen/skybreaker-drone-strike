@@ -52,12 +52,48 @@ import {
   updateWaypointIllustration,
   type CombatResources,
   type GraphicsProfile,
+  type TargetVisualHandles,
   type WaypointIllustrationHandles,
 } from '../scene';
 import { calculateMissionResult, formatMissionObjective } from '../systems/missionSystem';
 import { calculateScreenPosition } from '../systems/targetingProjection';
-import { GamePhase, type AppSettings, type CampaignProgress, type MissionCompletionResult, type MissionDefinition, type Target, type Enemy, type Projectile, type Explosion, type GameState, type WeaponDefinition } from '../types/game';
+import { GamePhase, type AppSettings, type CampaignProgress, type MissionCompletionResult, type MissionDefinition, type Target, type TargetWeakPoint, type Enemy, type Projectile, type Explosion, type GameState, type WeaponDefinition } from '../types/game';
 
+function getTargetVisualHandles(target: Target): TargetVisualHandles | undefined {
+  return target.mesh.userData.targetHandles as TargetVisualHandles | undefined;
+}
+
+function getActiveWeakPoints(target: Target): TargetWeakPoint[] {
+  return target.weakPoints?.filter(weakPoint => !weakPoint.destroyed) ?? [];
+}
+
+function findWeakPointImpact(target: Target, projectilePosition: THREE.Vector3, impactRadius: number): TargetWeakPoint | null {
+  const activeWeakPoints = getActiveWeakPoints(target);
+  let closestWeakPoint: TargetWeakPoint | null = null;
+  let closestDistance = Infinity;
+
+  activeWeakPoints.forEach(weakPoint => {
+    const hitRadius = Math.max(weakPoint.radius, impactRadius);
+    const distance = projectilePosition.distanceTo(weakPoint.position);
+    if (distance < hitRadius && distance < closestDistance) {
+      closestWeakPoint = weakPoint;
+      closestDistance = distance;
+    }
+  });
+
+  return closestWeakPoint;
+}
+
+function updateAggregateTargetHealth(target: Target): void {
+  const requiredWeakPoints = target.weakPoints?.filter(weakPoint => weakPoint.required) ?? [];
+  if (requiredWeakPoints.length === 0) return;
+  target.health = requiredWeakPoints.reduce((remainingHealth, weakPoint) => remainingHealth + (weakPoint.destroyed ? 0 : Math.max(0, weakPoint.health)), 0);
+}
+
+function areRequiredWeakPointsDestroyed(target: Target): boolean {
+  const requiredWeakPoints = target.weakPoints?.filter(weakPoint => weakPoint.required) ?? [];
+  return requiredWeakPoints.length > 0 && requiredWeakPoints.every(weakPoint => weakPoint.destroyed);
+}
 
 function getGraphicsProfile(settings: AppSettings): GraphicsProfile {
   const effectScale = settings.reduceEffects ? 0.45 : 1;
@@ -334,7 +370,7 @@ export default function Game({
 
     // --- Mission Targets ---
     targetsRef.current = mission.targets.map(target => (
-      createMissionTarget(scene, new THREE.Vector3(...target.position), target.id, target.health)
+      createMissionTarget(scene, new THREE.Vector3(...target.position), target)
     ));
 
     // --- Extraction Zone ---
@@ -856,11 +892,17 @@ export default function Game({
             // Check collision with targets
             targetsRef.current.forEach(target => {
               if (target.destroyed || collided) return;
-              if (p.mesh.position.distanceTo(target.position.clone().add(new THREE.Vector3(0, 40, 0))) < 30) {
-                target.health -= p.damage;
+              const impactRadius = p.blastRadius ?? 0;
+              const weakPointImpact = findWeakPointImpact(target, p.mesh.position, impactRadius);
+              const activeWeakPoints = getActiveWeakPoints(target);
+              const targetCorePosition = target.position.clone().add(new THREE.Vector3(0, 40, 0));
+              const coreHit = p.mesh.position.distanceTo(targetCorePosition) < Math.max(30, impactRadius);
+
+              if (weakPointImpact || coreHit) {
                 collided = true;
                 hitTimeRef.current = Date.now();
                 onSound('hit');
+                const hitWorldPosition = weakPointImpact?.position ?? p.mesh.position;
                 
                 // Hit sparks
                 const sparkGroup = new THREE.Group();
@@ -870,27 +912,67 @@ export default function Game({
                   spark.position.set((Math.random()-0.5)*4, (Math.random()-0.5)*4, (Math.random()-0.5)*4);
                   sparkGroup.add(spark);
                 }
-                sparkGroup.position.copy(p.mesh.position);
+                sparkGroup.position.copy(hitWorldPosition);
                 scene.add(sparkGroup);
                 explosionsRef.current.push({ mesh: sparkGroup, life: 10, maxLife: 10 });
 
-                // ... (existing hit feedback)
-                (target.mesh.children[1] as THREE.Mesh).material = new THREE.MeshStandardMaterial({ 
-                  color: 0xff4400, 
-                  emissive: 0xff0000, 
-                  emissiveIntensity: HIT_FLASH_EMISSIVE 
-                });
-                setTimeout(() => {
-                  if (!target.destroyed) {
-                    (target.mesh.children[1] as THREE.Mesh).material = new THREE.MeshStandardMaterial({ 
-                      color: 0x222222, 
-                      emissive: 0xff0000, 
-                      emissiveIntensity: 0.1 
-                    });
-                  }
-                }, 50);
+                const targetHandles = getTargetVisualHandles(target);
+                const damageMesh = weakPointImpact?.damageMesh instanceof THREE.Mesh
+                  ? weakPointImpact.damageMesh
+                  : targetHandles?.damageMesh ?? target.mesh.children[1] as THREE.Mesh;
 
-                if (target.health <= 0 && !target.destroyed) {
+                damageMesh.material = new THREE.MeshStandardMaterial({
+                  color: weakPointImpact ? 0xff8a2a : 0xff4400,
+                  emissive: 0xff0000,
+                  emissiveIntensity: HIT_FLASH_EMISSIVE,
+                });
+
+                if (weakPointImpact) {
+                  weakPointImpact.health -= p.damage;
+                  updateAggregateTargetHealth(target);
+                  setTimeout(() => {
+                    if (!weakPointImpact.destroyed && !target.destroyed && weakPointImpact.damageMesh instanceof THREE.Mesh) {
+                      const defaultMaterial = weakPointImpact.damageMesh.userData.defaultMaterial as THREE.Material | undefined;
+                      weakPointImpact.damageMesh.material = defaultMaterial ?? new THREE.MeshStandardMaterial({ color: 0xff2a2a, emissive: 0xff2a2a, emissiveIntensity: 1.2 });
+                    }
+                  }, 50);
+
+                  if (weakPointImpact.health <= 0 && !weakPointImpact.destroyed) {
+                    weakPointImpact.destroyed = true;
+                    weakPointImpact.health = 0;
+                    weakPointImpact.mesh.visible = false;
+                    const weakPointExplosion = new THREE.Group();
+                    for (let i = 0; i < 5; i++) {
+                      const partGeo = new THREE.SphereGeometry(Math.random() * 2 + 1.4, 4, 4);
+                      const part = new THREE.Mesh(partGeo, sharedResources.current?.explosionMat || new THREE.MeshBasicMaterial({ color: 0xff7700 }));
+                      part.position.set((Math.random()-0.5)*14, (Math.random()-0.5)*14, (Math.random()-0.5)*14);
+                      weakPointExplosion.add(part);
+                    }
+                    weakPointExplosion.position.copy(weakPointImpact.position);
+                    scene.add(weakPointExplosion);
+                    explosionsRef.current.push({ mesh: weakPointExplosion, life: 18, maxLife: 18 });
+
+                    if (!areRequiredWeakPointsDestroyed(target)) {
+                      setGameState(prev => ({ ...prev, message: `${weakPointImpact.label.toUpperCase()} DISABLED` }));
+                    }
+                  }
+                } else if (activeWeakPoints.length > 0) {
+                  setGameState(prev => ({ ...prev, message: 'WEAK POINTS REQUIRED' }));
+                  setTimeout(() => {
+                    if (!target.destroyed && targetHandles?.damageMesh) {
+                      targetHandles.damageMesh.material = targetHandles.damageDefaultMaterial;
+                    }
+                  }, 50);
+                } else {
+                  target.health -= p.damage;
+                  setTimeout(() => {
+                    if (!target.destroyed && targetHandles?.damageMesh) {
+                      targetHandles.damageMesh.material = targetHandles.damageDefaultMaterial;
+                    }
+                  }, 50);
+                }
+
+                if ((target.health <= 0 || areRequiredWeakPointsDestroyed(target)) && !target.destroyed) {
                   // Guard: only destroy once — prevents double-count from simultaneous hits
                   target.destroyed = true;
                   onSound('success');
@@ -907,9 +989,8 @@ export default function Game({
                   explosionGroup.position.y += 40;
                   scene.add(explosionGroup);
                   explosionsRef.current.push({ mesh: explosionGroup, life: 30, maxLife: 30 });
-                  target.mesh.children[1].visible = false;
-                  target.mesh.children[2].visible = false;
-                  target.mesh.children[3].visible = false;
+                  const finalMeshes = targetHandles?.finalMeshes ?? [target.mesh.children[1], target.mesh.children[2], target.mesh.children[3]];
+                  finalMeshes.forEach(finalMesh => { finalMesh.visible = false; });
                   const waypoint = target.mesh.userData.waypoint as WaypointIllustrationHandles | undefined;
                   if (waypoint) waypoint.group.visible = false;
                   

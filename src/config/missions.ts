@@ -1,5 +1,16 @@
-import type { MissionDefinition } from '../types/game';
+import type { MissionDefinition, MissionWeakPointDefinition } from '../types/game';
 import { IRON_VEIL_ENVIRONMENT, SIGNAL_BREAK_ENVIRONMENT } from './environments';
+
+const RADAR_TOWER_WEAK_POINTS: MissionWeakPointDefinition[] = [
+  { id: 'array-left', label: 'Left Array', offset: [-7, 44, 0], health: 50, radius: 13, required: true },
+  { id: 'array-right', label: 'Right Array', offset: [7, 44, 0], health: 50, radius: 13, required: true },
+];
+
+const RELAY_SPIRE_WEAK_POINTS: MissionWeakPointDefinition[] = [
+  { id: 'relay-core', label: 'Relay Core', offset: [0, 38, 7], health: 45, radius: 12, required: true },
+  { id: 'upper-node', label: 'Upper Node', offset: [0, 64, -6], health: 45, radius: 12, required: true },
+  { id: 'stabilizer', label: 'Stabilizer', offset: [8, 24, 0], health: 35, radius: 11, required: true },
+];
 
 export const MISSIONS: MissionDefinition[] = [
   {
@@ -19,9 +30,9 @@ export const MISSIONS: MissionDefinition[] = [
       { label: 'Threat', value: 'Interceptors' },
     ],
     targets: [
-      { id: 'tower_0', position: [400, 0, -400], health: 100 },
-      { id: 'tower_1', position: [-550, 0, 200], health: 100 },
-      { id: 'tower_2', position: [100, 0, 700], health: 100 },
+      { id: 'tower_0', position: [400, 0, -400], health: 100, archetype: 'tower', weakPoints: RADAR_TOWER_WEAK_POINTS },
+      { id: 'tower_1', position: [-550, 0, 200], health: 100, archetype: 'tower', weakPoints: RADAR_TOWER_WEAK_POINTS },
+      { id: 'tower_2', position: [100, 0, 700], health: 100, archetype: 'tower', weakPoints: RADAR_TOWER_WEAK_POINTS },
     ],
     extraction: {
       label: 'North Zone',
@@ -76,10 +87,10 @@ export const MISSIONS: MissionDefinition[] = [
       { label: 'Threat', value: 'Heavy Patrol' },
     ],
     targets: [
-      { id: 'spire_0', position: [520, 0, -520], health: 100 },
-      { id: 'spire_1', position: [-650, 0, -180], health: 100 },
-      { id: 'spire_2', position: [-120, 0, 760], health: 100 },
-      { id: 'spire_3', position: [760, 0, 260], health: 100 },
+      { id: 'spire_0', position: [520, 0, -520], health: 125, archetype: 'relay-spire', weakPoints: RELAY_SPIRE_WEAK_POINTS },
+      { id: 'spire_1', position: [-650, 0, -180], health: 125, archetype: 'relay-spire', weakPoints: RELAY_SPIRE_WEAK_POINTS },
+      { id: 'spire_2', position: [-120, 0, 760], health: 125, archetype: 'relay-spire', weakPoints: RELAY_SPIRE_WEAK_POINTS },
+      { id: 'spire_3', position: [760, 0, 260], health: 125, archetype: 'relay-spire', weakPoints: RELAY_SPIRE_WEAK_POINTS },
     ],
     extraction: {
       label: 'East Ridge',

@@ -123,10 +123,23 @@ export interface MissionBriefingItem {
   value: string;
 }
 
+export type MissionTargetArchetype = 'tower' | 'relay-spire' | 'facility-node';
+
+export interface MissionWeakPointDefinition {
+  id: string;
+  label: string;
+  offset: [number, number, number];
+  health: number;
+  radius: number;
+  required?: boolean;
+}
+
 export interface MissionTargetDefinition {
   id: string;
   position: [number, number, number];
   health: number;
+  archetype?: MissionTargetArchetype;
+  weakPoints?: MissionWeakPointDefinition[];
 }
 
 export interface MissionExtractionDefinition {
@@ -295,6 +308,7 @@ export interface Target {
   health: number;
   mesh: THREE.Group;
   destroyed: boolean;
+  weakPoints?: TargetWeakPoint[];
   screenPos?: {
     x: number;
     y: number;
@@ -302,6 +316,20 @@ export interface Target {
     offScreen?: boolean;
     angle?: number;
   };
+}
+
+export interface TargetWeakPoint {
+  id: string;
+  label: string;
+  position: THREE.Vector3;
+  localOffset: THREE.Vector3;
+  health: number;
+  maxHealth: number;
+  radius: number;
+  required: boolean;
+  destroyed: boolean;
+  mesh: THREE.Object3D;
+  damageMesh?: THREE.Object3D;
 }
 
 export interface Enemy {
