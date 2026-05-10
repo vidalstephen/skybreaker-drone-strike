@@ -41,7 +41,7 @@ export function createGameRenderer(canvas: HTMLCanvasElement, graphicsProfile: G
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, graphicsProfile.pixelRatio));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 0.95;
+  renderer.toneMappingExposure = 1.08;
   return renderer;
 }
 
