@@ -6,9 +6,10 @@ export interface GameOverProps {
   totalTargets: number;
   enemiesDestroyed: number;
   onRetryMission: () => void;
+  onReturnToHangar: () => void;
 }
 
-export function GameOver({ targetsDestroyed, totalTargets, enemiesDestroyed, onRetryMission }: GameOverProps) {
+export function GameOver({ targetsDestroyed, totalTargets, enemiesDestroyed, onRetryMission, onReturnToHangar }: GameOverProps) {
   return (
     <div className="absolute inset-0 bg-black/95 z-50 flex items-center justify-center overflow-y-auto p-4 py-[calc(1rem+env(safe-area-inset-top))] backdrop-blur-2xl sm:p-8">
       <motion.div
@@ -36,12 +37,20 @@ export function GameOver({ targetsDestroyed, totalTargets, enemiesDestroyed, onR
             </div>
           </div>
 
-          <button
-            onClick={onRetryMission}
-            className="w-full min-h-12 py-3 bg-red-600 text-white font-black tracking-[0.16em] hover:bg-white hover:text-black transition-colors duration-300 uppercase italic sm:py-4 sm:tracking-[0.2em]"
-          >
-            Retry Mission
-          </button>
+          <div className="grid w-full gap-3">
+            <button
+              onClick={onRetryMission}
+              className="w-full min-h-12 py-3 bg-red-600 text-white font-black tracking-[0.16em] hover:bg-white hover:text-black transition-colors duration-300 uppercase italic sm:py-4 sm:tracking-[0.2em]"
+            >
+              Retry Mission
+            </button>
+            <button
+              onClick={onReturnToHangar}
+              className="w-full min-h-12 py-3 border border-white/15 bg-black/45 text-white font-black tracking-[0.16em] hover:border-orange-500 hover:text-orange-300 transition-colors duration-300 uppercase italic sm:py-4 sm:tracking-[0.2em]"
+            >
+              Return to Hangar
+            </button>
+          </div>
         </div>
       </motion.div>
     </div>

@@ -48,3 +48,6 @@ export const AIM_PATH_DASH            = '6 9'; // strokeDasharray: dash + gap (p
 export const AIM_PATH_FADE_MS         = 150;  // ms for path to return to idle after firing
 export const RETICLE_PULSE_MS         = 200;  // ms for reticle pulse on fire
 export const CENTER_MARKER_SIZE       = 8;    // reference size for center aim dot (px)
+export const AIM_CONVERGENCE_MARKERS  = 3;    // small path brackets near reticle
+export const LOCK_RING_RADIUS         = 45;   // svg units for secondary lock progress arc
+export const LOCK_RING_STROKE         = 2.2;  // svg stroke width for secondary lock arc

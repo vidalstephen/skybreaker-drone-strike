@@ -7,6 +7,12 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   graphicsQuality: 'HIGH',
   reduceEffects: false,
   invertY: true,
+  hudScale: 100,
+  touchControlsScale: 100,
+  screenShake: 70,
+  pointerSensitivity: 100,
+  showTelemetry: true,
+  menuMotion: true,
 };
 
 export const DEFAULT_CAMPAIGN_PROGRESS: CampaignProgress = {

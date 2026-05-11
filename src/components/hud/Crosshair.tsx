@@ -5,6 +5,9 @@ import {
   AIM_PATH_DASH,
   AIM_PATH_FADE_MS,
   RETICLE_PULSE_MS,
+  AIM_CONVERGENCE_MARKERS,
+  LOCK_RING_RADIUS,
+  LOCK_RING_STROKE,
 } from '../../config/constants';
 import type { CameraMode } from '../../types/game';
 
@@ -15,12 +18,31 @@ export interface CrosshairProps {
   recoil?: boolean;
   firing?: boolean;
   hitConfirmed?: boolean;
+  secondaryLockProgress?: number;
+  secondaryLockAcquired?: boolean;
+  secondaryLockHasTarget?: boolean;
   aimScreenPos?: { x: number; y: number };
   droneScreenPos?: { x: number; y: number };
 }
 
-export function Crosshair({ cameraMode, boosting, aligned, recoil, firing, hitConfirmed, aimScreenPos, droneScreenPos }: CrosshairProps) {
-  const pathOpacity = firing ? AIM_PATH_OPACITY_FIRING : AIM_PATH_OPACITY_IDLE;
+export function Crosshair({ cameraMode, boosting, aligned, recoil, firing, hitConfirmed, secondaryLockProgress = 0, secondaryLockAcquired = false, secondaryLockHasTarget = false, aimScreenPos, droneScreenPos }: CrosshairProps) {
+  const lockActive = secondaryLockHasTarget || secondaryLockAcquired;
+  const lockProgress = Math.max(0, Math.min(1, secondaryLockProgress));
+  const pathOpacity = Math.min(0.92, (firing ? AIM_PATH_OPACITY_FIRING : AIM_PATH_OPACITY_IDLE) + (secondaryLockAcquired ? 0.12 : 0));
+  const lockCircumference = 2 * Math.PI * LOCK_RING_RADIUS;
+  const lockDashOffset = lockCircumference * (1 - lockProgress);
+  const reticleStyle = cameraMode === 'CHASE' && aimScreenPos
+    ? { left: aimScreenPos.x, top: aimScreenPos.y, transform: 'translate(-50%, -50%)' }
+    : { left: '50%', top: '50%', transform: 'translate(-50%, -50%)' };
+  const convergenceMarkers = AIM_CONVERGENCE_MARKERS > 0 && aimScreenPos && droneScreenPos
+    ? Array.from({ length: AIM_CONVERGENCE_MARKERS }, (_, index) => {
+        const progress = 0.58 + index * (0.30 / Math.max(1, AIM_CONVERGENCE_MARKERS - 1));
+        const x = droneScreenPos.x + (aimScreenPos.x - droneScreenPos.x) * progress;
+        const y = droneScreenPos.y + (aimScreenPos.y - droneScreenPos.y) * progress;
+        const angle = Math.atan2(aimScreenPos.y - droneScreenPos.y, aimScreenPos.x - droneScreenPos.x);
+        return { x, y, angle, opacity: 0.18 + index * 0.12 };
+      })
+    : [];
 
   return (
     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -33,14 +55,40 @@ export function Crosshair({ cameraMode, boosting, aligned, recoil, firing, hitCo
           <div className="absolute top-1/4 right-20 text-[8px] font-mono text-orange-500/60 uppercase text-right">MAG_LOCK: ACTIVE</div>
         </div>
       )}
-      <div className="relative w-32 h-32">
+      <div className="absolute w-16 h-16" style={reticleStyle}>
         {/* Main reticle ring */}
         <div className={`absolute inset-0 border rounded-full transition-all duration-300 ${boosting ? 'animate-pulse scale-110 opacity-70 border-orange-500/30' : aligned ? 'border-orange-400/60 scale-95 shadow-[0_0_15px_rgba(249,115,22,0.2)]' : 'border-orange-500/30'}`} />
+        {/* Secondary lock progress — visual-only cue, no extra panel */}
+        <svg className="absolute inset-0 w-full h-full pointer-events-none -rotate-90" viewBox="0 0 100 100" aria-hidden="true">
+          <circle
+            cx="50"
+            cy="50"
+            r={LOCK_RING_RADIUS}
+            fill="none"
+            stroke={secondaryLockAcquired ? '#34d399' : '#22d3ee'}
+            strokeWidth={LOCK_RING_STROKE}
+            strokeDasharray={`${lockCircumference * 0.22} ${lockCircumference * 0.055}`}
+            opacity={lockActive ? 0.18 : 0}
+          />
+          <circle
+            cx="50"
+            cy="50"
+            r={LOCK_RING_RADIUS}
+            fill="none"
+            stroke={secondaryLockAcquired ? '#34d399' : '#22d3ee'}
+            strokeWidth={LOCK_RING_STROKE}
+            strokeLinecap="round"
+            strokeDasharray={lockCircumference}
+            strokeDashoffset={lockDashOffset}
+            opacity={lockActive ? (secondaryLockAcquired ? 0.85 : 0.58) : 0}
+            style={{ transition: `stroke-dashoffset ${AIM_PATH_FADE_MS}ms linear, opacity ${AIM_PATH_FADE_MS}ms linear` }}
+          />
+        </svg>
         {/* Cardinal ticks */}
-        <div className={`absolute top-1/2 left-0 h-px bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] transition-all ${recoil ? 'w-4 translate-x-3' : 'w-6'}`} />
-        <div className={`absolute top-1/2 right-0 h-px bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] transition-all ${recoil ? 'w-4 -translate-x-3' : 'w-6'}`} />
-        <div className={`absolute top-0 left-1/2 w-px bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] transition-all ${recoil ? 'h-4 translate-y-3' : 'h-6'}`} />
-        <div className={`absolute bottom-0 left-1/2 w-px bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] transition-all ${recoil ? 'h-4 -translate-y-3' : 'h-6'}`} />
+        <div className={`absolute top-1/2 left-0 h-px bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] transition-all ${recoil ? 'w-2 translate-x-1' : 'w-3'}`} />
+        <div className={`absolute top-1/2 right-0 h-px bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] transition-all ${recoil ? 'w-2 -translate-x-1' : 'w-3'}`} />
+        <div className={`absolute top-0 left-1/2 w-px bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] transition-all ${recoil ? 'h-2 translate-y-1' : 'h-3'}`} />
+        <div className={`absolute bottom-0 left-1/2 w-px bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] transition-all ${recoil ? 'h-2 -translate-y-1' : 'h-3'}`} />
         {/* Center aim dot — always visible as a precise aim point, pulses on recoil/firing */}
         <div
           className="absolute inset-0 m-auto rounded-full bg-orange-500 transition-all"
@@ -54,7 +102,7 @@ export function Crosshair({ cameraMode, boosting, aligned, recoil, firing, hitCo
           }}
         />
         {/* Hit-confirmed flash */}
-        <div className={`absolute inset-0 m-auto w-10 h-10 pointer-events-none transform rotate-45 transition-all duration-100 ${hitConfirmed ? 'scale-100 opacity-90' : 'scale-75 opacity-0'}`}>
+        <div className={`absolute inset-0 m-auto w-7 h-7 pointer-events-none transform rotate-45 transition-all duration-100 ${hitConfirmed ? 'scale-100 opacity-90' : 'scale-75 opacity-0'}`}>
           <div className="absolute top-1/2 left-1 w-3 h-[2px] bg-red-500 shadow-[0_0_8px_rgba(255,0,0,0.9)]" />
           <div className="absolute top-1/2 right-1 w-3 h-[2px] bg-red-500 shadow-[0_0_8px_rgba(255,0,0,0.9)]" />
           <div className="absolute top-1 left-1/2 w-[2px] h-3 bg-red-500 shadow-[0_0_8px_rgba(255,0,0,0.9)]" />
@@ -84,6 +132,14 @@ export function Crosshair({ cameraMode, boosting, aligned, recoil, firing, hitCo
             strokeLinecap="round"
             style={{ transition: `opacity ${AIM_PATH_FADE_MS}ms linear` }}
           />
+          {convergenceMarkers.map((marker, index) => (
+            <g key={index} transform={`translate(${marker.x} ${marker.y}) rotate(${marker.angle * 180 / Math.PI})`} opacity={(firing ? 0.25 : marker.opacity) + (secondaryLockAcquired ? 0.16 : 0)}>
+              <line x1="-5" y1="-4" x2="-1" y2="0" stroke="#f97316" strokeWidth="1.2" strokeLinecap="round" />
+              <line x1="-5" y1="4" x2="-1" y2="0" stroke="#f97316" strokeWidth="1.2" strokeLinecap="round" />
+              <line x1="5" y1="-4" x2="1" y2="0" stroke="#f97316" strokeWidth="1.2" strokeLinecap="round" />
+              <line x1="5" y1="4" x2="1" y2="0" stroke="#f97316" strokeWidth="1.2" strokeLinecap="round" />
+            </g>
+          ))}
         </svg>
       )}
     </div>

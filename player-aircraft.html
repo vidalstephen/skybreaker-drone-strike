@@ -1,0 +1,1616 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Skybreaker Drone Strike - 3D Inspector</title>
+  <style>
+    :root {
+      --bg: #070b0d;
+      --panel: #10171a;
+      --panel-2: #151f23;
+      --line: #26373d;
+      --text: #e7f4f5;
+      --muted: #93a7ac;
+      --cyan: #18dbe2;
+      --orange: #ff8a24;
+      color-scheme: dark;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: radial-gradient(circle at 50% 20%, #132025 0, var(--bg) 56%);
+      color: var(--text);
+    }
+
+    body {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 360px;
+    }
+
+    #viewport {
+      position: relative;
+      min-width: 0;
+      min-height: 100vh;
+      background:
+        linear-gradient(rgba(22, 49, 55, 0.18) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(22, 49, 55, 0.18) 1px, transparent 1px),
+        radial-gradient(circle at 50% 45%, rgba(19, 220, 226, 0.08), transparent 42%);
+      background-size: 32px 32px, 32px 32px, auto;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: grab;
+    }
+
+    canvas:active { cursor: grabbing; }
+
+    .combat-hud {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      display: none;
+      opacity: 0;
+      transition: opacity 220ms ease;
+      overflow: hidden;
+    }
+
+    body.chase-mode .combat-hud { opacity: 0; }
+
+    .combat-hud::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(180deg, rgba(3, 6, 8, 0.18), rgba(3, 6, 8, 0.62)),
+        radial-gradient(circle at 50% 58%, transparent 0 32%, rgba(0, 0, 0, 0.42) 72%);
+      mix-blend-mode: multiply;
+    }
+
+    .reticle {
+      position: absolute;
+      left: 50%;
+      top: 45%;
+      width: 178px;
+      height: 178px;
+      transform: translate(-50%, -50%);
+      border: 1px solid rgba(255, 128, 20, 0.78);
+      border-radius: 50%;
+      box-shadow: 0 0 28px rgba(255, 128, 20, 0.18), inset 0 0 24px rgba(255, 128, 20, 0.09);
+      animation: reticle-pulse 1.8s ease-in-out infinite;
+    }
+
+    .reticle::before,
+    .reticle::after {
+      content: "";
+      position: absolute;
+      inset: 18px;
+      border-radius: 50%;
+      border: 1px solid rgba(255, 128, 20, 0.34);
+    }
+
+    .reticle::after {
+      inset: 71px;
+      border-color: rgba(255, 128, 20, 0.85);
+      border-radius: 4px;
+      transform: rotate(45deg);
+    }
+
+    .reticle-tick {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 1px;
+      height: 202px;
+      background: linear-gradient(transparent 0 18%, rgba(255, 128, 20, 0.92) 18% 26%, transparent 26% 74%, rgba(255, 128, 20, 0.92) 74% 82%, transparent 82%);
+      transform-origin: center;
+    }
+
+    .reticle-tick:nth-child(1) { transform: translate(-50%, -50%) rotate(0deg); }
+    .reticle-tick:nth-child(2) { transform: translate(-50%, -50%) rotate(90deg); }
+    .reticle-tick:nth-child(3) { transform: translate(-50%, -50%) rotate(45deg); opacity: 0.55; }
+    .reticle-tick:nth-child(4) { transform: translate(-50%, -50%) rotate(-45deg); opacity: 0.55; }
+
+    .flight-path {
+      position: absolute;
+      left: 50%;
+      top: calc(45% + 91px);
+      width: 2px;
+      height: 260px;
+      transform: translateX(-50%);
+      background: repeating-linear-gradient(to bottom, rgba(255, 128, 20, 0.95) 0 9px, transparent 9px 22px);
+      filter: drop-shadow(0 0 8px rgba(255, 128, 20, 0.4));
+      animation: path-scroll 0.7s linear infinite;
+    }
+
+    .city-silhouette {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 34%;
+      height: 160px;
+      opacity: 0.72;
+      background:
+        linear-gradient(90deg,
+          transparent 0 4%, rgba(10, 14, 16, 0.76) 4% 9%, transparent 9% 14%,
+          rgba(13, 18, 20, 0.88) 14% 20%, transparent 20% 27%,
+          rgba(9, 13, 16, 0.72) 27% 32%, transparent 32% 39%,
+          rgba(14, 19, 22, 0.9) 39% 47%, transparent 47% 54%,
+          rgba(10, 15, 18, 0.82) 54% 60%, transparent 60% 69%,
+          rgba(13, 18, 20, 0.86) 69% 77%, transparent 77% 84%,
+          rgba(10, 14, 16, 0.74) 84% 91%, transparent 91% 100%);
+      clip-path: polygon(0 72%, 5% 72%, 5% 58%, 8% 58%, 8% 44%, 11% 44%, 11% 72%, 18% 72%, 18% 38%, 21% 38%, 21% 18%, 24% 18%, 24% 72%, 35% 72%, 35% 54%, 39% 54%, 39% 28%, 41% 28%, 41% 72%, 49% 72%, 49% 42%, 51% 42%, 51% 8%, 53% 8%, 53% 72%, 64% 72%, 64% 58%, 68% 58%, 68% 34%, 71% 34%, 71% 72%, 80% 72%, 80% 48%, 83% 48%, 83% 22%, 86% 22%, 86% 72%, 100% 72%, 100% 100%, 0 100%);
+      filter: drop-shadow(0 -12px 35px rgba(24, 219, 226, 0.08));
+      animation: skyline-drift 12s linear infinite;
+    }
+
+    .extraction-marker {
+      position: absolute;
+      left: 16%;
+      top: 39%;
+      color: var(--cyan);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-align: center;
+      text-transform: uppercase;
+      filter: drop-shadow(0 0 10px rgba(24, 219, 226, 0.5));
+    }
+
+    .extraction-marker::before {
+      content: "";
+      display: block;
+      width: 42px;
+      height: 42px;
+      margin: 0 auto 8px;
+      border: 1px solid currentColor;
+      border-left-color: transparent;
+      border-right-color: transparent;
+      animation: reticle-pulse 1.5s ease-in-out infinite;
+    }
+
+    .compass {
+      position: absolute;
+      left: 50%;
+      top: 28px;
+      width: min(440px, 50vw);
+      transform: translateX(-50%);
+      color: rgba(231, 244, 245, 0.72);
+      font-size: 12px;
+      letter-spacing: 0.18em;
+      text-align: center;
+    }
+
+    .compass-line {
+      height: 1px;
+      margin-top: 8px;
+      background: linear-gradient(90deg, transparent, rgba(231, 244, 245, 0.48), transparent);
+    }
+
+    .compass span {
+      display: inline-block;
+      margin: 0 18px;
+    }
+
+    .compass .hot { color: var(--orange); }
+
+    .speed-box,
+    .objective-box,
+    .radar-box,
+    .control-hints {
+      position: absolute;
+      border: 1px solid rgba(255, 128, 20, 0.23);
+      background: rgba(4, 7, 8, 0.68);
+      box-shadow: 0 0 32px rgba(0, 0, 0, 0.24);
+      backdrop-filter: blur(8px);
+    }
+
+    .speed-box {
+      left: 30px;
+      bottom: 66px;
+      width: 260px;
+      padding: 16px 18px;
+    }
+
+    .speed-value {
+      font-size: 34px;
+      font-weight: 800;
+      line-height: 1;
+    }
+
+    .speed-label,
+    .objective-sub,
+    .radar-label {
+      color: var(--muted);
+      font-size: 10px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+    }
+
+    .bar {
+      display: grid;
+      grid-template-columns: 18px minmax(0, 1fr) 34px;
+      align-items: center;
+      gap: 9px;
+      margin-top: 13px;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--cyan);
+    }
+
+    .bar i {
+      height: 7px;
+      border-radius: 999px;
+      background: currentColor;
+      box-shadow: 0 0 10px currentColor;
+      transform-origin: left center;
+      animation: bar-thrum 1.6s ease-in-out infinite;
+    }
+
+    .bar.orange { color: var(--orange); }
+    .bar.red { color: #ff4050; }
+    .bar:nth-child(4) i { animation-delay: 0.25s; }
+    .bar:nth-child(5) i { animation-delay: 0.5s; }
+
+    .objective-box {
+      right: 24px;
+      bottom: 82px;
+      width: min(360px, 30vw);
+      padding: 17px 18px;
+    }
+
+    .objective-title {
+      color: var(--orange);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+    }
+
+    .objective-main {
+      margin-top: 16px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(231, 244, 245, 0.18);
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .objective-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 14px;
+      color: var(--cyan);
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .radar-box {
+      right: 26px;
+      top: 86px;
+      width: 152px;
+      height: 152px;
+      border-radius: 50%;
+      background:
+        radial-gradient(circle, rgba(10, 219, 226, 0.16) 0 5%, transparent 6% 18%, rgba(10, 219, 226, 0.09) 19% 20%, transparent 21% 38%, rgba(255, 128, 20, 0.24) 39% 40%, transparent 41%);
+    }
+
+    .radar-box::before,
+    .radar-box::after {
+      content: "";
+      position: absolute;
+      inset: 14px;
+      border: 1px solid rgba(255, 128, 20, 0.4);
+      border-radius: 50%;
+    }
+
+    .radar-box::after {
+      inset: 50%;
+      width: 50px;
+      height: 1px;
+      background: linear-gradient(90deg, rgba(24, 219, 226, 0.8), transparent);
+      transform-origin: left center;
+      animation: radar-sweep 2.8s linear infinite;
+      border: 0;
+    }
+
+    .radar-label {
+      position: absolute;
+      right: 30px;
+      top: 58px;
+      color: var(--text);
+    }
+
+    .control-hints {
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      padding: 8px 14px;
+      color: rgba(231, 244, 245, 0.58);
+      font-size: 11px;
+      letter-spacing: 0.2em;
+      white-space: nowrap;
+      text-transform: uppercase;
+    }
+
+    @keyframes reticle-pulse {
+      0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.82; }
+      50% { transform: translate(-50%, -50%) scale(1.035); opacity: 1; }
+    }
+
+    @keyframes path-scroll {
+      from { background-position-y: 0; }
+      to { background-position-y: 22px; }
+    }
+
+    @keyframes radar-sweep {
+      to { transform: rotate(360deg); }
+    }
+
+    @keyframes bar-thrum {
+      0%, 100% { transform: scaleX(0.9); opacity: 0.82; }
+      50% { transform: scaleX(1); opacity: 1; }
+    }
+
+    @keyframes skyline-drift {
+      from { transform: translateX(0); }
+      to { transform: translateX(-3%); }
+    }
+
+    .hud {
+      position: absolute;
+      left: 20px;
+      right: 20px;
+      top: 18px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      pointer-events: none;
+      display: none;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 22px;
+      line-height: 1.05;
+      letter-spacing: 0;
+      text-transform: uppercase;
+    }
+
+    h1 span { color: var(--orange); }
+
+    .subtitle {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .metric-strip {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      max-width: 540px;
+    }
+
+    .metric {
+      border: 1px solid rgba(24, 219, 226, 0.24);
+      background: rgba(6, 11, 13, 0.68);
+      padding: 8px 10px;
+      min-width: 104px;
+      border-radius: 6px;
+      backdrop-filter: blur(10px);
+    }
+
+    .metric b {
+      display: block;
+      font-size: 15px;
+    }
+
+    .metric span {
+      display: block;
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    aside {
+      height: 100vh;
+      overflow: auto;
+      border-left: 1px solid var(--line);
+      background: linear-gradient(180deg, rgba(15, 24, 27, 0.98), rgba(7, 10, 12, 0.98));
+      box-shadow: -24px 0 70px rgba(0, 0, 0, 0.32);
+    }
+
+    .panel {
+      padding: 18px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    h2 {
+      margin: 0 0 12px;
+      font-size: 13px;
+      line-height: 1.2;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .segmented {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+    }
+
+    button, .toggle-row {
+      border: 1px solid var(--line);
+      background: var(--panel-2);
+      color: var(--text);
+      border-radius: 6px;
+      min-height: 34px;
+      font: inherit;
+    }
+
+    button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 7px 9px;
+      cursor: pointer;
+      transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+    }
+
+    button:hover {
+      border-color: var(--cyan);
+      background: #17282d;
+    }
+
+    button.active {
+      border-color: var(--cyan);
+      background: linear-gradient(180deg, #12373b, #122428);
+      box-shadow: inset 0 0 0 1px rgba(24, 219, 226, 0.18);
+    }
+
+    .control-grid {
+      display: grid;
+      gap: 9px;
+    }
+
+    label.control {
+      display: grid;
+      gap: 7px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--cyan);
+    }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 8px 10px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--cyan);
+      flex: 0 0 auto;
+    }
+
+    .component-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .component-item {
+      display: grid;
+      grid-template-columns: 18px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 9px;
+      padding: 9px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: rgba(17, 25, 28, 0.8);
+      cursor: pointer;
+    }
+
+    .component-item:hover,
+    .component-item.selected {
+      border-color: rgba(24, 219, 226, 0.7);
+      background: rgba(19, 49, 54, 0.72);
+    }
+
+    .swatch {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      box-shadow: 0 0 14px currentColor;
+    }
+
+    .component-name {
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      font-size: 13px;
+    }
+
+    .readout {
+      display: grid;
+      gap: 9px;
+      margin-top: 6px;
+    }
+
+    .readout-row {
+      display: grid;
+      grid-template-columns: 108px minmax(0, 1fr);
+      gap: 12px;
+      padding: 7px 0;
+      border-bottom: 1px solid rgba(38, 55, 61, 0.68);
+      font-size: 12px;
+    }
+
+    .readout-row:last-child { border-bottom: 0; }
+    .readout-row span:first-child { color: var(--muted); }
+    .readout-row span:last-child { overflow-wrap: anywhere; }
+
+    .status {
+      position: absolute;
+      left: 20px;
+      bottom: 18px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border: 1px solid rgba(24, 219, 226, 0.22);
+      border-radius: 6px;
+      background: rgba(5, 8, 10, 0.72);
+      color: var(--muted);
+      font-size: 12px;
+      pointer-events: none;
+      backdrop-filter: blur(10px);
+      display: none;
+    }
+
+    .zoom-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--cyan);
+      box-shadow: 0 0 16px var(--cyan);
+    }
+
+    .error {
+      position: absolute;
+      inset: 50% auto auto 50%;
+      transform: translate(-50%, -50%);
+      width: min(520px, calc(100% - 32px));
+      padding: 18px;
+      border: 1px solid rgba(255, 138, 36, 0.4);
+      border-radius: 6px;
+      background: rgba(8, 11, 12, 0.92);
+      color: var(--text);
+      display: none;
+    }
+
+    @media (max-width: 960px) {
+      body {
+        grid-template-columns: 1fr;
+        grid-template-rows: minmax(58vh, 1fr) 42vh;
+      }
+
+      #viewport { min-height: 58vh; }
+
+      aside {
+        height: 42vh;
+        border-left: 0;
+        border-top: 1px solid var(--line);
+      }
+
+      .hud {
+        left: 12px;
+        right: 12px;
+        top: 12px;
+      }
+
+      .metric-strip { display: none; }
+      .objective-box,
+      .radar-box,
+      .radar-label { display: none; }
+      .speed-box {
+        left: 12px;
+        bottom: 54px;
+        width: 220px;
+      }
+      .control-hints { display: none; }
+      .reticle {
+        width: 132px;
+        height: 132px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main id="viewport" aria-label="3D aircraft viewport">
+    <canvas id="viewer" aria-label="interactive WebGL aircraft model"></canvas>
+    <div class="combat-hud" aria-hidden="true">
+      <div class="compass"><span class="hot">E</span><span>105</span><span>120</span><span class="hot">135</span><span>150</span><span>165</span><span class="hot">S</span><div class="compass-line"></div></div>
+      <div class="city-silhouette"></div>
+      <div class="extraction-marker">Extraction<br>942m</div>
+      <div class="reticle"><i class="reticle-tick"></i><i class="reticle-tick"></i><i class="reticle-tick"></i><i class="reticle-tick"></i></div>
+      <div class="flight-path"></div>
+      <div class="radar-label">CONNECTION&nbsp;&nbsp;<span style="color: var(--cyan)">STABLE</span></div>
+      <div class="radar-box"></div>
+      <div class="speed-box">
+        <div class="speed-value"><span id="speedReadout">285</span></div>
+        <div class="speed-label">km/h cruise velocity</div>
+        <div class="bar"><span>SHD</span><i></i><b>100</b></div>
+        <div class="bar orange"><span>ENG</span><i></i><b>100</b></div>
+        <div class="bar red"><span>SYS</span><i></i><b>100</b></div>
+      </div>
+      <div class="objective-box">
+        <div class="objective-title">Operational Objectives</div>
+        <div class="objective-main">Retreat to extraction point — 942m</div>
+        <div class="objective-sub">Enemies neutralized <span style="float:right;color:var(--orange)">2</span></div>
+        <div class="objective-grid"><span>Pulse cannon</span><span style="text-align:right">Locked</span></div>
+      </div>
+      <div class="control-hints">[W/S] Pitch - [A/D] Yaw - [Q/E] Roll - [Shift] Boost - [Space] Fire</div>
+    </div>
+    <div class="hud">
+      <div>
+        <h1>Skybreaker <span>Drone Strike</span></h1>
+        <div class="subtitle">Player aircraft / self-contained WebGL inspector</div>
+      </div>
+      <div class="metric-strip" aria-label="aircraft dimensions">
+        <div class="metric"><b>15.5u</b><span>Length</span></div>
+        <div class="metric"><b>22.0u</b><span>Wingspan</span></div>
+        <div class="metric"><b>4.0u</b><span>Body width</span></div>
+        <div class="metric"><b>2.8u</b><span>Body height</span></div>
+      </div>
+    </div>
+    <div class="status"><i class="status-dot"></i><span id="statusText">Component: Central fuselage core</span></div>
+    <div class="error" id="webglError">WebGL is not available in this browser. Try enabling hardware acceleration or opening the file in a modern Chromium, Edge, Firefox, or Safari build.</div>
+  </main>
+
+  <aside aria-label="model controls and inspector">
+    <section class="panel">
+      <h2>View</h2>
+      <div class="segmented" id="viewButtons">
+        <button data-view="iso" class="active">3/4</button>
+        <button data-view="top">Top</button>
+        <button data-view="side">Side</button>
+        <button data-view="front">Front</button>
+        <button data-view="rear">Rear</button>
+        <button data-view="under">Under</button>
+        <button data-view="chase">Chase</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Display</h2>
+      <div class="control-grid">
+        <label class="control">Exploded assembly
+          <input id="explodeRange" type="range" min="0" max="1" step="0.01" value="0">
+        </label>
+        <label class="control">Camera distance
+          <input id="zoomRange" type="range" min="10" max="58" step="0.5" value="24">
+        </label>
+        <div class="zoom-actions">
+          <button id="zoomOutButton" type="button">Zoom out</button>
+          <button id="zoomResetButton" type="button">Reset view</button>
+        </div>
+        <label class="toggle-row"><span>Collision volumes</span><input id="colliderToggle" type="checkbox"></label>
+        <label class="toggle-row"><span>Axes and grid</span><input id="axesToggle" type="checkbox" checked></label>
+        <label class="toggle-row"><span>Glow animation</span><input id="motionToggle" type="checkbox" checked></label>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Components</h2>
+      <div class="component-list" id="componentList"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Inspector</h2>
+      <div class="readout" id="inspector"></div>
+    </section>
+  </aside>
+
+  <script>
+    (() => {
+      "use strict";
+
+      const canvas = document.getElementById("viewer");
+      const viewport = document.getElementById("viewport");
+      const gl = canvas.getContext("webgl", { antialias: true, alpha: true });
+      if (!gl) {
+        document.getElementById("webglError").style.display = "block";
+        return;
+      }
+
+      const specs = [
+        { id: "fuselage", name: "Central fuselage core", role: "Lofted graphite hull with pointed nose and rear thruster socket", dims: "12.0 L x 4.0 W x 2.4 H u", material: "Matte dark graphite composite", parent: "Origin / center mass", color: "#20282b", explode: [0, 0, 0] },
+        { id: "canopy", name: "Nose / canopy module", role: "Raised amber command and sensor core", dims: "2.6 L x 2.2 W x 1.0 H u", material: "Gloss amber, low emissive", parent: "Top forward fuselage", color: "#ff8c25", explode: [0, 2.2, -0.6] },
+        { id: "dorsal", name: "Dorsal rear panel", role: "Raised upper rear engineering panel", dims: "3.6 L x 2.8 W x 0.28 H u", material: "Darker graphite armor", parent: "Upper rear fuselage", color: "#141a1d", explode: [0, 1.45, 0.7] },
+        { id: "belly", name: "Belly panel", role: "Underside mounting plate and visual lower silhouette", dims: "4.3 L x 2.1 W x 0.2 H u", material: "Near-black underside composite", parent: "Lower rear fuselage", color: "#090d0f", explode: [0, -1.45, 0.4] },
+        { id: "portArm", name: "Port wing arm", role: "Left tapered structural spar to rotor pod", dims: "8.5 L x 1.4 chord x 0.45 H u", material: "Teal armor with dark inset panel", parent: "Left fuselage hardpoint", color: "#09aeb0", explode: [-2.6, 0, 0] },
+        { id: "starboardArm", name: "Starboard wing arm", role: "Right mirrored structural spar to rotor pod", dims: "8.5 L x 1.4 chord x 0.45 H u", material: "Teal armor with dark inset panel", parent: "Right fuselage hardpoint", color: "#09aeb0", explode: [2.6, 0, 0] },
+        { id: "portPod", name: "Port pod / rotor disc", role: "Left lift fan or stabilizer disc with cyan emitter", dims: "2.6 dia x 0.6 H u", material: "Black metal shell, cyan powered ring", parent: "Outer port wing arm", color: "#43f6ff", explode: [-3.2, -0.5, 0.1] },
+        { id: "starboardPod", name: "Starboard pod / rotor disc", role: "Right mirrored lift fan or stabilizer disc", dims: "2.6 dia x 0.6 H u", material: "Black metal shell, cyan powered ring", parent: "Outer starboard wing arm", color: "#43f6ff", explode: [3.2, -0.5, 0.1] },
+        { id: "thruster", name: "Rear thruster module", role: "Centerline cylindrical propulsion unit", dims: "2.4 L x 2.0 dia u", material: "Dark shell, cyan nozzle, amber exhaust", parent: "Rear fuselage socket", color: "#ff8f21", explode: [0, -0.1, 2.8] },
+        { id: "struts", name: "Underslung stabilizer struts", role: "Paired ventral support fins under rear hull", dims: "Each 1.6 L x 0.6 W x 0.6 H u", material: "Near-black graphite", parent: "Rear underside hardpoints", color: "#101416", explode: [0, -2.1, 0.8] },
+        { id: "emitters", name: "Accent light emitters", role: "Small cyan orientation lights on hull and wing tips", dims: "0.5 L x 0.2 W x 0.15 H u", material: "Controlled cyan emissive", parent: "Fuselage sides and wing arms", color: "#43f6ff", explode: [0, 1.1, 0] }
+      ];
+
+      const materials = {
+        graphite: { color: [0.12, 0.16, 0.17], emissive: [0, 0, 0], glow: 0, alpha: 1 },
+        graphiteAlt: { color: [0.075, 0.1, 0.11], emissive: [0, 0, 0], glow: 0, alpha: 1 },
+        belly: { color: [0.035, 0.05, 0.055], emissive: [0, 0, 0], glow: 0, alpha: 1 },
+        teal: { color: [0.02, 0.63, 0.64], emissive: [0, 0.2, 0.22], glow: 0.35, alpha: 1 },
+        tealDark: { color: [0.06, 0.2, 0.21], emissive: [0, 0.04, 0.05], glow: 0.12, alpha: 1 },
+        cyan: { color: [0.34, 0.97, 1.0], emissive: [0.08, 0.95, 1.0], glow: 1.55, alpha: 1 },
+        canopy: { color: [1.0, 0.45, 0.08], emissive: [0.65, 0.16, 0.02], glow: 0.55, alpha: 1 },
+        flame: { color: [1.0, 0.43, 0.04], emissive: [1.0, 0.32, 0.02], glow: 1.2, alpha: 0.42 },
+        afterburner: { color: [1.0, 0.72, 0.25], emissive: [1.0, 0.42, 0.04], glow: 1.85, alpha: 0.32 },
+        afterburnerCore: { color: [0.55, 1.0, 1.0], emissive: [0.1, 1.0, 1.0], glow: 2.1, alpha: 0.52 },
+        collider: { color: [0.35, 0.97, 1.0], emissive: [0.35, 0.97, 1.0], glow: 0.8, alpha: 0.35 },
+        select: { color: [1.0, 0.62, 0.22], emissive: [1.0, 0.33, 0.08], glow: 0.8, alpha: 1 },
+        panel: { color: [0.06, 0.075, 0.08], emissive: [0, 0, 0], glow: 0, alpha: 1 },
+        edge: { color: [0.42, 0.58, 0.58], emissive: [0.02, 0.08, 0.08], glow: 0.12, alpha: 1 },
+        amberMark: { color: [1.0, 0.55, 0.14], emissive: [0.55, 0.18, 0.02], glow: 0.35, alpha: 1 },
+        grid: { color: [0.12, 0.23, 0.25], emissive: [0, 0.08, 0.09], glow: 0.2, alpha: 1 }
+      };
+
+      const componentState = new Map(specs.map((s) => [s.id, { spec: s, visible: true, meshes: [] }]));
+      const meshes = [];
+      const lineSets = [];
+      let selectedId = "fuselage";
+      let explode = 0;
+      let showColliders = false;
+      let showAxes = true;
+      let animateGlow = true;
+
+      const v3 = {
+        sub: (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]],
+        add: (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]],
+        scale: (a, s) => [a[0] * s, a[1] * s, a[2] * s],
+        cross: (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]],
+        dot: (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2],
+        norm(a) {
+          const d = Math.hypot(a[0], a[1], a[2]) || 1;
+          return [a[0] / d, a[1] / d, a[2] / d];
+        }
+      };
+
+      function hexToRgb(hex) {
+        const n = Number.parseInt(hex.slice(1), 16);
+        return [(n >> 16 & 255) / 255, (n >> 8 & 255) / 255, (n & 255) / 255];
+      }
+
+      function m4Identity() {
+        return [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+      }
+
+      function m4Multiply(a, b) {
+        const out = new Array(16);
+        for (let c = 0; c < 4; c += 1) {
+          for (let r = 0; r < 4; r += 1) {
+            out[c * 4 + r] =
+              a[0 * 4 + r] * b[c * 4 + 0] +
+              a[1 * 4 + r] * b[c * 4 + 1] +
+              a[2 * 4 + r] * b[c * 4 + 2] +
+              a[3 * 4 + r] * b[c * 4 + 3];
+          }
+        }
+        return out;
+      }
+
+      function m4Translation(x, y, z) {
+        const out = m4Identity();
+        out[12] = x;
+        out[13] = y;
+        out[14] = z;
+        return out;
+      }
+
+      function m4RotationX(angle) {
+        const c = Math.cos(angle), s = Math.sin(angle);
+        return [1, 0, 0, 0, 0, c, s, 0, 0, -s, c, 0, 0, 0, 0, 1];
+      }
+
+      function m4RotationY(angle) {
+        const c = Math.cos(angle), s = Math.sin(angle);
+        return [c, 0, -s, 0, 0, 1, 0, 0, s, 0, c, 0, 0, 0, 0, 1];
+      }
+
+      function m4RotationZ(angle) {
+        const c = Math.cos(angle), s = Math.sin(angle);
+        return [c, s, 0, 0, -s, c, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+      }
+
+      function m4Perspective(fovy, aspect, near, far) {
+        const f = 1 / Math.tan(fovy / 2);
+        const nf = 1 / (near - far);
+        return [
+          f / aspect, 0, 0, 0,
+          0, f, 0, 0,
+          0, 0, (far + near) * nf, -1,
+          0, 0, 2 * far * near * nf, 0
+        ];
+      }
+
+      function m4LookAt(eye, target, up) {
+        const z = v3.norm(v3.sub(eye, target));
+        const x = v3.norm(v3.cross(up, z));
+        const y = v3.cross(z, x);
+        return [
+          x[0], y[0], z[0], 0,
+          x[1], y[1], z[1], 0,
+          x[2], y[2], z[2], 0,
+          -v3.dot(x, eye), -v3.dot(y, eye), -v3.dot(z, eye), 1
+        ];
+      }
+
+      function shader(type, source) {
+        const s = gl.createShader(type);
+        gl.shaderSource(s, source);
+        gl.compileShader(s);
+        if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+        return s;
+      }
+
+      function program(vs, fs) {
+        const p = gl.createProgram();
+        gl.attachShader(p, shader(gl.VERTEX_SHADER, vs));
+        gl.attachShader(p, shader(gl.FRAGMENT_SHADER, fs));
+        gl.linkProgram(p);
+        if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+        return p;
+      }
+
+      const meshProgram = program(`
+        attribute vec3 aPosition;
+        attribute vec3 aNormal;
+        attribute vec3 aColor;
+        uniform mat4 uMvp;
+        uniform vec3 uLight;
+        uniform vec3 uEmissive;
+        uniform float uGlow;
+        uniform float uAlpha;
+        uniform float uPulse;
+        varying vec4 vColor;
+        void main() {
+          float diffuse = max(dot(normalize(aNormal), normalize(uLight)), 0.0);
+          vec3 lit = aColor * (0.24 + diffuse * 0.82) + uEmissive * uGlow * uPulse;
+          vColor = vec4(lit, uAlpha);
+          gl_Position = uMvp * vec4(aPosition, 1.0);
+        }
+      `, `
+        precision mediump float;
+        varying vec4 vColor;
+        void main() { gl_FragColor = vColor; }
+      `);
+
+      const lineProgram = program(`
+        attribute vec3 aPosition;
+        attribute vec3 aColor;
+        uniform mat4 uMvp;
+        varying vec3 vColor;
+        void main() {
+          vColor = aColor;
+          gl_Position = uMvp * vec4(aPosition, 1.0);
+        }
+      `, `
+        precision mediump float;
+        varying vec3 vColor;
+        void main() { gl_FragColor = vec4(vColor, 1.0); }
+      `);
+
+      function makeBuffer(data) {
+        const buffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(data), gl.STATIC_DRAW);
+        return buffer;
+      }
+
+      function expandMesh(vertices, faces, material, componentId) {
+        const positions = [];
+        const normals = [];
+        const colors = [];
+        const bounds = { min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] };
+        for (const face of faces) {
+          const a = vertices[face[0]], b = vertices[face[1]], c = vertices[face[2]];
+          const n = v3.norm(v3.cross(v3.sub(b, a), v3.sub(c, a)));
+          for (const p of [a, b, c]) {
+            positions.push(p[0], p[1], p[2]);
+            normals.push(n[0], n[1], n[2]);
+            colors.push(material.color[0], material.color[1], material.color[2]);
+            for (let i = 0; i < 3; i += 1) {
+              bounds.min[i] = Math.min(bounds.min[i], p[i]);
+              bounds.max[i] = Math.max(bounds.max[i], p[i]);
+            }
+          }
+        }
+        const mesh = {
+          componentId,
+          material,
+          count: positions.length / 3,
+          positionBuffer: makeBuffer(positions),
+          normalBuffer: makeBuffer(normals),
+          colorBuffer: makeBuffer(colors),
+          bounds
+        };
+        meshes.push(mesh);
+        componentState.get(componentId).meshes.push(mesh);
+        return mesh;
+      }
+
+      function addLines(id, points, material, tag = "static") {
+        const colors = [];
+        for (let i = 0; i < points.length / 3; i += 1) colors.push(material.color[0], material.color[1], material.color[2]);
+        lineSets.push({ id, tag, basePoints: points.slice(), count: points.length / 3, positionBuffer: makeBuffer(points), colorBuffer: makeBuffer(colors) });
+      }
+
+      function box(center, size, material, componentId) {
+        const [cx, cy, cz] = center, [sx, sy, sz] = size.map((v) => v / 2);
+        const v = [
+          [cx - sx, cy - sy, cz - sz], [cx + sx, cy - sy, cz - sz], [cx + sx, cy + sy, cz - sz], [cx - sx, cy + sy, cz - sz],
+          [cx - sx, cy - sy, cz + sz], [cx + sx, cy - sy, cz + sz], [cx + sx, cy + sy, cz + sz], [cx - sx, cy + sy, cz + sz]
+        ];
+        const f = [[0, 2, 1], [0, 3, 2], [4, 5, 6], [4, 6, 7], [0, 1, 5], [0, 5, 4], [3, 7, 6], [3, 6, 2], [1, 2, 6], [1, 6, 5], [0, 4, 7], [0, 7, 3]];
+        return expandMesh(v, f, material, componentId);
+      }
+
+      function quad(points, material, componentId) {
+        return expandMesh(points, [[0, 1, 2], [0, 2, 3]], material, componentId);
+      }
+
+      function tri(points, material, componentId) {
+        return expandMesh(points, [[0, 1, 2]], material, componentId);
+      }
+
+      function bladeY(center, length, width, angle, material, componentId) {
+        const [cx, cy, cz] = center;
+        const ca = Math.cos(angle), sa = Math.sin(angle);
+        const along = [ca * length / 2, 0, sa * length / 2];
+        const side = [-sa * width / 2, 0, ca * width / 2];
+        quad([
+          [cx - along[0] - side[0], cy, cz - along[2] - side[2]],
+          [cx + along[0] - side[0], cy, cz + along[2] - side[2]],
+          [cx + along[0] + side[0], cy, cz + along[2] + side[2]],
+          [cx - along[0] + side[0], cy, cz - along[2] + side[2]]
+        ], material, componentId);
+      }
+
+      function finZ(x, yBase, z, height, length, material, componentId) {
+        tri([
+          [x, yBase, z - length / 2],
+          [x, yBase, z + length / 2],
+          [x, yBase + height, z + length * 0.05]
+        ], material, componentId);
+      }
+
+      function ringPoints(s) {
+        const w = s.w, h = s.h, tw = s.tw ?? s.w * 0.52, y = s.y ?? 0;
+        return [
+          [-w * 0.46, y - h * 0.42, s.z], [w * 0.46, y - h * 0.42, s.z],
+          [w * 0.52, y - h * 0.07, s.z], [tw * 0.50, y + h * 0.36, s.z],
+          [tw * 0.22, y + h * 0.52, s.z], [-tw * 0.22, y + h * 0.52, s.z],
+          [-tw * 0.50, y + h * 0.36, s.z], [-w * 0.52, y - h * 0.07, s.z]
+        ];
+      }
+
+      function loft(sections, material, componentId) {
+        const rings = sections.map(ringPoints);
+        const vertices = rings.flat();
+        const sides = rings[0].length;
+        const faces = [];
+        for (let r = 0; r < rings.length - 1; r += 1) {
+          const a = r * sides, b = (r + 1) * sides;
+          for (let i = 0; i < sides; i += 1) {
+            const n = (i + 1) % sides;
+            faces.push([a + i, b + i, b + n], [a + i, b + n, a + n]);
+          }
+        }
+        const front = vertices.length;
+        vertices.push([0, sections[0].y ?? 0, sections[0].z]);
+        for (let i = 0; i < sides; i += 1) faces.push([front, i, (i + 1) % sides]);
+        const back = vertices.length;
+        vertices.push([0, sections.at(-1).y ?? 0, sections.at(-1).z]);
+        const off = (rings.length - 1) * sides;
+        for (let i = 0; i < sides; i += 1) faces.push([back, off + ((i + 1) % sides), off + i]);
+        return expandMesh(vertices, faces, material, componentId);
+      }
+
+      function canopy() {
+        const z0 = -3.65, z1 = -1.05;
+        const v = [
+          [-0.78, 0.78, z0], [0.78, 0.78, z0], [-0.36, 1.52, z0 + 0.22], [0.36, 1.52, z0 + 0.22],
+          [-1.1, 0.94, z1], [1.1, 0.94, z1], [-0.74, 1.86, z1 - 0.25], [0.74, 1.86, z1 - 0.25]
+        ];
+        const f = [[0, 1, 3], [0, 3, 2], [4, 6, 7], [4, 7, 5], [0, 2, 6], [0, 6, 4], [1, 5, 7], [1, 7, 3], [2, 3, 7], [2, 7, 6], [0, 4, 5], [0, 5, 1]];
+        expandMesh(v, f, materials.canopy, "canopy");
+      }
+
+      function wing(sign, inset, material, componentId) {
+        const xInner = sign * (inset ? 2.24 : 1.42);
+        const xOuter = sign * (inset ? 8.82 : 9.42);
+        const zInner = inset ? 0.03 : -0.2;
+        const zOuter = inset ? 0.58 : 0.7;
+        const chordInner = inset ? 0.76 : 2.46;
+        const chordOuter = inset ? 0.26 : 0.78;
+        const yTop = inset ? 0.36 : 0.2;
+        const yBottom = inset ? 0.28 : -0.3;
+        const v = [
+          [xInner, yTop, zInner - chordInner / 2], [xInner, yTop, zInner + chordInner / 2], [xOuter, yTop, zOuter - chordOuter / 2], [xOuter, yTop, zOuter + chordOuter / 2],
+          [xInner, yBottom, zInner - chordInner / 2], [xInner, yBottom, zInner + chordInner / 2], [xOuter, yBottom, zOuter - chordOuter / 2], [xOuter, yBottom, zOuter + chordOuter / 2]
+        ];
+        const f = [[0, 2, 3], [0, 3, 1], [4, 5, 7], [4, 7, 6], [0, 4, 6], [0, 6, 2], [1, 3, 7], [1, 7, 5], [2, 6, 7], [2, 7, 3], [0, 1, 5], [0, 5, 4]];
+        expandMesh(v, f, material, componentId);
+      }
+
+      function cylinderY(center, radius, height, sides, material, componentId) {
+        const [cx, cy, cz] = center;
+        const vertices = [[cx, cy + height / 2, cz], [cx, cy - height / 2, cz]];
+        for (let i = 0; i < sides; i += 1) {
+          const a = i / sides * Math.PI * 2;
+          vertices.push([cx + Math.cos(a) * radius, cy + height / 2, cz + Math.sin(a) * radius]);
+          vertices.push([cx + Math.cos(a) * radius, cy - height / 2, cz + Math.sin(a) * radius]);
+        }
+        const faces = [];
+        for (let i = 0; i < sides; i += 1) {
+          const n = (i + 1) % sides;
+          const top = 2 + i * 2, bot = top + 1, topN = 2 + n * 2, botN = topN + 1;
+          faces.push([0, top, topN], [1, botN, bot], [top, bot, botN], [top, botN, topN]);
+        }
+        expandMesh(vertices, faces, material, componentId);
+      }
+
+      function cylinderZ(center, radius, length, sides, material, componentId) {
+        const [cx, cy, cz] = center;
+        const vertices = [[cx, cy, cz + length / 2], [cx, cy, cz - length / 2]];
+        for (let i = 0; i < sides; i += 1) {
+          const a = i / sides * Math.PI * 2;
+          vertices.push([cx + Math.cos(a) * radius, cy + Math.sin(a) * radius, cz + length / 2]);
+          vertices.push([cx + Math.cos(a) * radius, cy + Math.sin(a) * radius, cz - length / 2]);
+        }
+        const faces = [];
+        for (let i = 0; i < sides; i += 1) {
+          const n = (i + 1) % sides;
+          const rear = 2 + i * 2, front = rear + 1, rearN = 2 + n * 2, frontN = rearN + 1;
+          faces.push([0, rear, rearN], [1, frontN, front], [rear, front, frontN], [rear, frontN, rearN]);
+        }
+        expandMesh(vertices, faces, material, componentId);
+      }
+
+      function coneZ(center, radius, length, sides, material, componentId) {
+        const [cx, cy, cz] = center;
+        const vertices = [[cx, cy, cz + length / 2]];
+        for (let i = 0; i < sides; i += 1) {
+          const a = i / sides * Math.PI * 2;
+          vertices.push([cx + Math.cos(a) * radius, cy + Math.sin(a) * radius, cz - length / 2]);
+        }
+        const faces = [];
+        for (let i = 0; i < sides; i += 1) faces.push([0, 1 + i, 1 + ((i + 1) % sides)]);
+        expandMesh(vertices, faces, material, componentId);
+      }
+
+      function torusY(center, major, minor, material, componentId) {
+        const [cx, cy, cz] = center;
+        const seg = 54, tube = 10;
+        const vertices = [];
+        const faces = [];
+        for (let i = 0; i < seg; i += 1) {
+          const u = i / seg * Math.PI * 2;
+          for (let j = 0; j < tube; j += 1) {
+            const v = j / tube * Math.PI * 2;
+            const r = major + minor * Math.cos(v);
+            vertices.push([cx + r * Math.cos(u), cy + minor * Math.sin(v), cz + r * Math.sin(u)]);
+          }
+        }
+        for (let i = 0; i < seg; i += 1) {
+          for (let j = 0; j < tube; j += 1) {
+            const a = i * tube + j;
+            const b = ((i + 1) % seg) * tube + j;
+            const c = ((i + 1) % seg) * tube + ((j + 1) % tube);
+            const d = i * tube + ((j + 1) % tube);
+            faces.push([a, b, c], [a, c, d]);
+          }
+        }
+        expandMesh(vertices, faces, material, componentId);
+      }
+
+      function torusZ(center, major, minor, material, componentId) {
+        const [cx, cy, cz] = center;
+        const seg = 54, tube = 10;
+        const vertices = [];
+        const faces = [];
+        for (let i = 0; i < seg; i += 1) {
+          const u = i / seg * Math.PI * 2;
+          for (let j = 0; j < tube; j += 1) {
+            const v = j / tube * Math.PI * 2;
+            const r = major + minor * Math.cos(v);
+            vertices.push([cx + r * Math.cos(u), cy + r * Math.sin(u), cz + minor * Math.sin(v)]);
+          }
+        }
+        for (let i = 0; i < seg; i += 1) {
+          for (let j = 0; j < tube; j += 1) {
+            const a = i * tube + j;
+            const b = ((i + 1) % seg) * tube + j;
+            const c = ((i + 1) % seg) * tube + ((j + 1) % tube);
+            const d = i * tube + ((j + 1) % tube);
+            faces.push([a, b, c], [a, c, d]);
+          }
+        }
+        expandMesh(vertices, faces, material, componentId);
+      }
+
+      function strut(sign) {
+        const x0 = sign * 0.34, x1 = sign * 0.94, z0 = 1.25, z1 = 2.95, top = -1.05, bottom = -1.72;
+        const v = [
+          [x0, top, z0], [x1, top - 0.08, z0 + 0.15], [x0, top, z1], [x1, top - 0.08, z1 - 0.12],
+          [x0, bottom, z0 + 0.28], [x1, bottom - 0.05, z0 + 0.4], [x0, bottom, z1 - 0.22], [x1, bottom - 0.05, z1 - 0.33]
+        ];
+        const f = [[0, 2, 3], [0, 3, 1], [4, 5, 7], [4, 7, 6], [0, 4, 6], [0, 6, 2], [1, 3, 7], [1, 7, 5], [2, 6, 7], [2, 7, 3], [0, 1, 5], [0, 5, 4]];
+        expandMesh(v, f, materials.belly, "struts");
+      }
+
+      function addWingDetails(sign, componentId) {
+        const rootX = sign * 1.78;
+        const tipX = sign * 8.95;
+        const topY = 0.43;
+        quad([
+          [rootX, topY, -0.88],
+          [tipX, topY + 0.02, 0.29],
+          [tipX, topY + 0.02, 0.49],
+          [rootX, topY, 0.36]
+        ], materials.panel, componentId);
+        quad([
+          [rootX + sign * 0.08, topY + 0.04, -1.08],
+          [tipX, topY + 0.05, 0.14],
+          [tipX, topY + 0.05, 0.27],
+          [rootX + sign * 0.08, topY + 0.04, -0.82]
+        ], materials.edge, componentId);
+        quad([
+          [rootX + sign * 0.2, topY + 0.035, 0.56],
+          [tipX - sign * 0.1, topY + 0.05, 0.72],
+          [tipX - sign * 0.1, topY + 0.05, 0.86],
+          [rootX + sign * 0.2, topY + 0.035, 0.92]
+        ], materials.tealDark, componentId);
+        quad([
+          [sign * 1.42, 0.24, -1.16],
+          [sign * 3.45, 0.34, -0.72],
+          [sign * 3.22, 0.34, 0.9],
+          [sign * 1.4, 0.2, 0.74]
+        ], materials.graphiteAlt, componentId);
+        quad([
+          [tipX - sign * 0.55, 0.3, 0.04],
+          [sign * 9.72, 0.24, 0.0],
+          [sign * 9.72, 0.24, 1.3],
+          [tipX - sign * 0.55, 0.3, 1.02]
+        ], materials.panel, componentId);
+        for (let i = 0; i < 4; i += 1) {
+          const x = sign * (3.35 + i * 1.12);
+          const z = -0.38 + i * 0.13;
+          const ribWidth = 0.42 - i * 0.045;
+          quad([
+            [x - sign * 0.18, topY + 0.07, z - ribWidth],
+            [x + sign * 0.18, topY + 0.07, z - ribWidth * 0.8],
+            [x + sign * 0.18, topY + 0.07, z + ribWidth],
+            [x - sign * 0.18, topY + 0.07, z + ribWidth * 0.8]
+          ], materials.graphiteAlt, componentId);
+        }
+        quad([
+          [sign * 7.95, topY + 0.09, 0.52],
+          [sign * 9.2, topY + 0.09, 0.58],
+          [sign * 9.2, topY + 0.09, 0.76],
+          [sign * 7.95, topY + 0.09, 0.72]
+        ], materials.cyan, "emitters");
+      }
+
+      function buildModel() {
+        loft([
+          { z: -6.0, w: 0.5, h: 0.5, tw: 0.24 },
+          { z: -4.75, w: 2.0, h: 1.18, tw: 0.92 },
+          { z: -3.05, w: 3.3, h: 2.05, tw: 1.65 },
+          { z: -0.4, w: 4.0, h: 2.42, tw: 2.18 },
+          { z: 3.25, w: 3.2, h: 2.0, tw: 1.74 },
+          { z: 5.45, w: 2.3, h: 1.5, tw: 1.1 }
+        ], materials.graphite, "fuselage");
+        canopy();
+        box([0, 1.22, 1.55], [2.8, 0.28, 3.62], materials.graphiteAlt, "dorsal");
+        box([0, -1.12, 1.4], [2.1, 0.2, 4.3], materials.belly, "belly");
+        wing(-1, false, materials.teal, "portArm");
+        wing(-1, true, materials.tealDark, "portArm");
+        wing(1, false, materials.teal, "starboardArm");
+        wing(1, true, materials.tealDark, "starboardArm");
+        addWingDetails(-1, "portArm");
+        addWingDetails(1, "starboardArm");
+        [-1, 1].forEach((sign) => {
+          const id = sign < 0 ? "portPod" : "starboardPod";
+          const x = sign * 9.7, z = 0.65;
+          cylinderY([x, 0, z], 1.3, 0.6, 56, materials.graphiteAlt, id);
+          cylinderY([x, -0.38, z], 1.12, 0.18, 56, materials.belly, id);
+          torusY([x, 0.35, z], 0.78, 0.075, materials.cyan, id);
+          cylinderY([x, 0.39, z], 0.28, 0.1, 40, materials.cyan, id);
+          torusY([x, 0.32, z], 1.27, 0.045, materials.tealDark, id);
+        });
+        cylinderZ([0, 0, 6.75], 1.0, 2.4, 56, materials.graphiteAlt, "thruster");
+        torusZ([0, 0, 5.55], 1.08, 0.16, materials.belly, "thruster");
+        torusZ([0, 0, 7.95], 0.68, 0.13, materials.cyan, "thruster");
+        cylinderZ([0, 0, 8.02], 0.48, 0.12, 40, materials.cyan, "thruster");
+        coneZ([0, 0, 8.72], 0.55, 1.35, 40, materials.flame, "thruster");
+        coneZ([0, 0, 9.1], 0.78, 2.25, 48, materials.afterburner, "thruster");
+        coneZ([0, 0, 8.85], 0.28, 1.45, 40, materials.afterburnerCore, "thruster");
+        torusZ([0, 0, 8.2], 0.42, 0.035, materials.afterburnerCore, "thruster");
+        strut(-1);
+        strut(1);
+        [[-1.76, 0.02, -2.55, 0.08, 0.16, 0.68], [1.76, 0.02, -2.55, 0.08, 0.16, 0.68], [-1.5, -0.08, 2.55, 0.08, 0.16, 0.58], [1.5, -0.08, 2.55, 0.08, 0.16, 0.58], [-8.3, 0.34, 0.63, 0.62, 0.08, 0.16], [8.3, 0.34, 0.63, 0.62, 0.08, 0.16], [0, -1.25, -2.0, 0.22, 0.08, 0.84]]
+          .forEach((a) => box([a[0], a[1], a[2]], [a[3], a[4], a[5]], materials.cyan, "emitters"));
+      }
+
+      function lineBox(id, center, size, mat, tag) {
+        const [cx, cy, cz] = center, [sx, sy, sz] = size.map((v) => v / 2);
+        const p = [[cx - sx, cy - sy, cz - sz], [cx + sx, cy - sy, cz - sz], [cx + sx, cy + sy, cz - sz], [cx - sx, cy + sy, cz - sz], [cx - sx, cy - sy, cz + sz], [cx + sx, cy - sy, cz + sz], [cx + sx, cy + sy, cz + sz], [cx - sx, cy + sy, cz + sz]];
+        const e = [[0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6], [6, 7], [7, 4], [0, 4], [1, 5], [2, 6], [3, 7]];
+        addLines(id, e.flatMap(([a, b]) => [...p[a], ...p[b]]), mat, tag);
+      }
+
+      function buildLineSets() {
+        const grid = [];
+        for (let i = -22; i <= 22; i += 1) {
+          grid.push(-22, -1.85, i, 22, -1.85, i, i, -1.85, -32, i, -1.85, 16);
+        }
+        addLines("grid", grid, materials.grid, "runway");
+        addLines("axes", [-10, -1.8, -7.2, -6, -1.8, -7.2, -10, -1.8, -7.2, -10, 2.2, -7.2, -10, -1.8, -7.2, -10, -1.8, -3.2], materials.cyan, "axes");
+        lineBox("fuselageCollider", [0, 0, -0.5], [4, 2.5, 10], materials.collider, "collider");
+        lineBox("portArmCollider", [-5.65, 0, 0.3], [7.8, 0.55, 1.1], materials.collider, "collider");
+        lineBox("starboardArmCollider", [5.65, 0, 0.3], [7.8, 0.55, 1.1], materials.collider, "collider");
+        lineBox("thrusterCollider", [0, 0, 6.75], [2, 2, 2.4], materials.collider, "collider");
+        [-1, 1].forEach((sign) => lineBox(sign < 0 ? "portPodCollider" : "starboardPodCollider", [sign * 9.7, 0, 0.65], [2.6, 0.7, 2.6], materials.collider, "collider"));
+      }
+
+      function componentBounds(id) {
+        const state = componentState.get(id);
+        const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
+        state.meshes.forEach((mesh) => {
+          for (let i = 0; i < 3; i += 1) {
+            min[i] = Math.min(min[i], mesh.bounds.min[i]);
+            max[i] = Math.max(max[i], mesh.bounds.max[i]);
+          }
+        });
+        return { min, max };
+      }
+
+      function selectedLineSet() {
+        const state = componentState.get(selectedId);
+        if (!state || !state.visible) return null;
+        const { min, max } = componentBounds(selectedId);
+        const spec = state.spec;
+        const offset = spec.explode.map((v) => v * explode);
+        const center = [(min[0] + max[0]) / 2 + offset[0], (min[1] + max[1]) / 2 + offset[1], (min[2] + max[2]) / 2 + offset[2]];
+        const size = [max[0] - min[0] + 0.16, max[1] - min[1] + 0.16, max[2] - min[2] + 0.16];
+        const temp = [];
+        const [cx, cy, cz] = center, [sx, sy, sz] = size.map((v) => v / 2);
+        const p = [[cx - sx, cy - sy, cz - sz], [cx + sx, cy - sy, cz - sz], [cx + sx, cy + sy, cz - sz], [cx - sx, cy + sy, cz - sz], [cx - sx, cy - sy, cz + sz], [cx + sx, cy - sy, cz + sz], [cx + sx, cy + sy, cz + sz], [cx - sx, cy + sy, cz + sz]];
+        [[0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6], [6, 7], [7, 4], [0, 4], [1, 5], [2, 6], [3, 7]].forEach(([a, b]) => temp.push(...p[a], ...p[b]));
+        return temp;
+      }
+
+      buildModel();
+      buildLineSets();
+
+      const attr = {
+        meshPos: gl.getAttribLocation(meshProgram, "aPosition"),
+        meshNorm: gl.getAttribLocation(meshProgram, "aNormal"),
+        meshColor: gl.getAttribLocation(meshProgram, "aColor"),
+        linePos: gl.getAttribLocation(lineProgram, "aPosition"),
+        lineColor: gl.getAttribLocation(lineProgram, "aColor")
+      };
+      const uni = {
+        mvp: gl.getUniformLocation(meshProgram, "uMvp"),
+        light: gl.getUniformLocation(meshProgram, "uLight"),
+        emissive: gl.getUniformLocation(meshProgram, "uEmissive"),
+        glow: gl.getUniformLocation(meshProgram, "uGlow"),
+        alpha: gl.getUniformLocation(meshProgram, "uAlpha"),
+        pulse: gl.getUniformLocation(meshProgram, "uPulse"),
+        lineMvp: gl.getUniformLocation(lineProgram, "uMvp")
+      };
+
+      const camera = { yaw: Math.PI * 0.23, pitch: 0.34, dist: 24, target: [0, 0.05, 0.8] };
+      let chaseBaseDist = 24;
+      let currentView = "iso";
+      let currentModelMatrix = m4Identity();
+      let dragging = false;
+      let lastPointer = [0, 0];
+
+      function resize() {
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        const w = Math.max(1, Math.floor(viewport.clientWidth * dpr));
+        const h = Math.max(1, Math.floor(viewport.clientHeight * dpr));
+        if (canvas.width !== w || canvas.height !== h) {
+          canvas.width = w;
+          canvas.height = h;
+        }
+        gl.viewport(0, 0, canvas.width, canvas.height);
+      }
+
+      function cameraMatrix() {
+        if (currentView === "chase" && animateGlow && !dragging) {
+          camera.yaw = Math.sin(performance.now() * 0.0009) * 0.035;
+          camera.pitch = 0.22 + Math.sin(performance.now() * 0.0013) * 0.018;
+          camera.dist = chaseBaseDist + Math.sin(performance.now() * 0.0011) * 0.22;
+          camera.target = [Math.sin(performance.now() * 0.001) * 0.12, 0.1, -0.8];
+        }
+        const cp = Math.cos(camera.pitch);
+        const eye = [
+          camera.target[0] + camera.dist * cp * Math.sin(camera.yaw),
+          camera.target[1] + camera.dist * Math.sin(camera.pitch),
+          camera.target[2] + camera.dist * cp * Math.cos(camera.yaw)
+        ];
+        const proj = m4Perspective(42 * Math.PI / 180, canvas.width / canvas.height, 0.1, 120);
+        return m4Multiply(proj, m4LookAt(eye, camera.target, [0, 1, 0]));
+      }
+
+      function componentMvp(baseMvp, id) {
+        const spec = componentState.get(id).spec;
+        const t = spec.explode.map((v) => v * explode);
+        return m4Multiply(m4Multiply(baseMvp, currentModelMatrix), m4Translation(t[0], t[1], t[2]));
+      }
+
+      function updateAnimatedGrid(time) {
+        const grid = lineSets.find((set) => set.id === "grid");
+        if (!grid) return;
+        const points = grid.basePoints.slice();
+        const shift = currentView === "chase" && animateGlow ? (time * 0.012) % 1 : 0;
+        for (let i = 2; i < points.length; i += 3) {
+          points[i] += shift;
+          if (points[i] > 16) points[i] -= 48;
+        }
+        gl.bindBuffer(gl.ARRAY_BUFFER, grid.positionBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(points), gl.DYNAMIC_DRAW);
+      }
+
+      function updateShipMotion(time) {
+        if (currentView !== "chase" || !animateGlow) {
+          currentModelMatrix = m4Identity();
+          return;
+        }
+        const t = time * 0.001;
+        const bob = Math.sin(t * 2.4) * 0.14;
+        const drift = Math.sin(t * 1.2) * 0.08;
+        const roll = Math.sin(t * 1.7) * 0.085;
+        const pitch = Math.sin(t * 2.1) * 0.024;
+        const yaw = Math.sin(t * 1.1) * 0.018;
+        currentModelMatrix = m4Multiply(
+          m4Translation(drift, bob, Math.sin(t * 1.5) * 0.08),
+          m4Multiply(m4RotationZ(roll), m4Multiply(m4RotationX(pitch), m4RotationY(yaw)))
+        );
+        const speed = Math.round(285 + Math.sin(t * 1.8) * 9 + Math.max(0, Math.sin(t * 0.42)) * 22);
+        const readout = document.getElementById("speedReadout");
+        if (readout) readout.textContent = String(speed);
+      }
+
+      function drawMesh(mesh, baseMvp, pulse) {
+        const state = componentState.get(mesh.componentId);
+        if (!state.visible) return;
+        const mat = mesh.material;
+        if (mat.alpha < 1) {
+          gl.enable(gl.BLEND);
+          gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+          gl.depthMask(false);
+        } else {
+          gl.disable(gl.BLEND);
+          gl.depthMask(true);
+        }
+        gl.uniformMatrix4fv(uni.mvp, false, componentMvp(baseMvp, mesh.componentId));
+        gl.uniform3fv(uni.light, new Float32Array(v3.norm([-0.35, 0.88, -0.28])));
+        gl.uniform3fv(uni.emissive, new Float32Array(mat.emissive));
+        gl.uniform1f(uni.glow, mat.glow);
+        gl.uniform1f(uni.alpha, mat.alpha);
+        gl.uniform1f(uni.pulse, pulse);
+        bindAttrib(mesh.positionBuffer, attr.meshPos, 3);
+        bindAttrib(mesh.normalBuffer, attr.meshNorm, 3);
+        bindAttrib(mesh.colorBuffer, attr.meshColor, 3);
+        gl.drawArrays(gl.TRIANGLES, 0, mesh.count);
+        gl.depthMask(true);
+      }
+
+      function bindAttrib(buffer, location, size) {
+        gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+        gl.enableVertexAttribArray(location);
+        gl.vertexAttribPointer(location, size, gl.FLOAT, false, 0, 0);
+      }
+
+      function drawLines(set, mvp) {
+        if (set.tag === "axes" && !showAxes) return;
+        if (set.tag === "collider" && !showColliders) return;
+        gl.uniformMatrix4fv(uni.lineMvp, false, mvp);
+        bindAttrib(set.positionBuffer, attr.linePos, 3);
+        bindAttrib(set.colorBuffer, attr.lineColor, 3);
+        gl.drawArrays(gl.LINES, 0, set.count);
+      }
+
+      let tempSelectedLine = null;
+      function drawSelected(mvp) {
+        if (currentView === "chase") return;
+        const points = selectedLineSet();
+        if (!points) return;
+        if (!tempSelectedLine || tempSelectedLine.count !== points.length / 3) {
+          const colors = [];
+          for (let i = 0; i < points.length / 3; i += 1) colors.push(materials.select.color[0], materials.select.color[1], materials.select.color[2]);
+          tempSelectedLine = { count: points.length / 3, positionBuffer: makeBuffer(points), colorBuffer: makeBuffer(colors) };
+        } else {
+          gl.bindBuffer(gl.ARRAY_BUFFER, tempSelectedLine.positionBuffer);
+          gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(points), gl.DYNAMIC_DRAW);
+        }
+        gl.uniformMatrix4fv(uni.lineMvp, false, mvp);
+        bindAttrib(tempSelectedLine.positionBuffer, attr.linePos, 3);
+        bindAttrib(tempSelectedLine.colorBuffer, attr.lineColor, 3);
+        gl.drawArrays(gl.LINES, 0, tempSelectedLine.count);
+      }
+
+      function render(time) {
+        resize();
+        const t = time * 0.001;
+        updateShipMotion(time);
+        updateAnimatedGrid(time);
+        const pulse = animateGlow ? (currentView === "chase" ? 1.28 + Math.sin(t * 6.4) * 0.48 : 1.05 + Math.sin(t * 2.8) * 0.3) : 1;
+        const baseMvp = cameraMatrix();
+        gl.clearColor(0, 0, 0, 0);
+        gl.clearDepth(1);
+        gl.enable(gl.DEPTH_TEST);
+        gl.disable(gl.CULL_FACE);
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+        gl.useProgram(meshProgram);
+        meshes.filter((m) => m.material.alpha >= 1).forEach((m) => drawMesh(m, baseMvp, pulse));
+        meshes.filter((m) => m.material.alpha < 1).forEach((m) => drawMesh(m, baseMvp, pulse));
+        gl.disable(gl.BLEND);
+        gl.depthMask(true);
+        gl.useProgram(lineProgram);
+        lineSets.forEach((set) => drawLines(set, baseMvp));
+        drawSelected(baseMvp);
+        requestAnimationFrame(render);
+      }
+
+      function selectComponent(id) {
+        selectedId = id;
+        const state = componentState.get(id);
+        if (!state) return;
+        const spec = state.spec;
+        const pos = spec.explode.map((v) => v * explode);
+        document.getElementById("statusText").textContent = `Component: ${spec.name}`;
+        document.getElementById("inspector").innerHTML = [
+          ["Name", spec.name],
+          ["Role", spec.role],
+          ["Dimensions", spec.dims],
+          ["Material", spec.material],
+          ["Parent", spec.parent],
+          ["Exploded pos", `X ${pos[0].toFixed(2)} / Y ${pos[1].toFixed(2)} / Z ${pos[2].toFixed(2)} u`],
+          ["Forward", "negative Z"],
+          ["Origin", "near fuselage center mass"]
+        ].map(([label, value]) => `<div class="readout-row"><span>${label}</span><span>${value}</span></div>`).join("");
+        document.querySelectorAll(".component-item").forEach((el) => el.classList.toggle("selected", el.dataset.id === id));
+        tempSelectedLine = null;
+      }
+
+      function buildUi() {
+        const list = document.getElementById("componentList");
+        specs.forEach((spec) => {
+          const item = document.createElement("label");
+          item.className = "component-item";
+          item.dataset.id = spec.id;
+          item.innerHTML = `<span class="swatch" style="color: ${spec.color}; background: ${spec.color}"></span><span class="component-name">${spec.name}</span><input type="checkbox" checked aria-label="${spec.name}">`;
+          item.addEventListener("click", (event) => {
+            if (event.target.tagName !== "INPUT") selectComponent(spec.id);
+          });
+          item.querySelector("input").addEventListener("change", (event) => {
+            componentState.get(spec.id).visible = event.target.checked;
+            tempSelectedLine = null;
+          });
+          list.appendChild(item);
+        });
+        document.getElementById("explodeRange").addEventListener("input", (event) => {
+          explode = Number(event.target.value);
+          selectComponent(selectedId);
+        });
+        document.getElementById("colliderToggle").addEventListener("change", (event) => { showColliders = event.target.checked; });
+        document.getElementById("axesToggle").addEventListener("change", (event) => { showAxes = event.target.checked; });
+        document.getElementById("motionToggle").addEventListener("change", (event) => { animateGlow = event.target.checked; });
+        document.getElementById("zoomRange").addEventListener("input", (event) => {
+          const distance = Number(event.target.value);
+          camera.dist = distance;
+          if (currentView === "chase") chaseBaseDist = distance;
+        });
+        document.getElementById("zoomOutButton").addEventListener("click", () => setCameraDistance(Math.min(58, camera.dist + 8)));
+        document.getElementById("zoomResetButton").addEventListener("click", () => {
+          setView(currentView);
+          setCameraDistance(currentView === "chase" ? 24 : camera.dist);
+        });
+        document.querySelectorAll("#viewButtons button").forEach((button) => button.addEventListener("click", () => setView(button.dataset.view)));
+      }
+
+      function setCameraDistance(distance) {
+        camera.dist = Math.max(10, Math.min(58, distance));
+        if (currentView === "chase") chaseBaseDist = camera.dist;
+        const zoom = document.getElementById("zoomRange");
+        if (zoom) zoom.value = String(camera.dist);
+      }
+
+      function setView(view) {
+        currentView = view;
+        const views = {
+          iso: [Math.PI * 0.23, 0.34, 25],
+          top: [0, Math.PI / 2 - 0.01, 25],
+          side: [Math.PI / 2, 0.12, 25],
+          front: [Math.PI, 0.16, 25],
+          rear: [0, 0.16, 25],
+          under: [Math.PI * 0.22, -0.56, 25],
+          chase: [0, 0.22, chaseBaseDist]
+        };
+        [camera.yaw, camera.pitch, camera.dist] = views[view] || views.iso;
+        if (view === "chase") chaseBaseDist = camera.dist;
+        const zoom = document.getElementById("zoomRange");
+        if (zoom) zoom.value = String(camera.dist);
+        camera.target = view === "chase" ? [0, 0.1, -0.8] : [0, 0.05, 0.8];
+        document.body.classList.toggle("chase-mode", view === "chase");
+        document.querySelectorAll("#viewButtons button").forEach((button) => button.classList.toggle("active", button.dataset.view === view));
+      }
+
+      canvas.addEventListener("pointerdown", (event) => {
+        dragging = true;
+        lastPointer = [event.clientX, event.clientY];
+        canvas.setPointerCapture(event.pointerId);
+      });
+      canvas.addEventListener("pointermove", (event) => {
+        if (!dragging) return;
+        const dx = event.clientX - lastPointer[0];
+        const dy = event.clientY - lastPointer[1];
+        lastPointer = [event.clientX, event.clientY];
+        camera.yaw -= dx * 0.007;
+        camera.pitch = Math.max(-1.3, Math.min(1.45, camera.pitch - dy * 0.007));
+      });
+      canvas.addEventListener("pointerup", () => { dragging = false; });
+      canvas.addEventListener("wheel", (event) => {
+        event.preventDefault();
+        setCameraDistance(camera.dist + event.deltaY * 0.02);
+      }, { passive: false });
+
+      buildUi();
+      selectComponent("fuselage");
+      setView("chase");
+      window.addEventListener("resize", resize);
+      requestAnimationFrame(render);
+    })();
+  </script>
+</body>
+</html>

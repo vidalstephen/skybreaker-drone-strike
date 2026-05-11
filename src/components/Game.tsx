@@ -16,15 +16,9 @@ import { GameOver, MissionComplete, OutOfBoundsWarning } from './overlays';
 // --- Phase 1: types and constants live in dedicated modules ---
 import {
   BASE_SPEED,
-  BOOST_MULTIPLIER,
-  ROTATION_SPEED,
-  FINE_CONTROL_SENSITIVITY,
   CAMERA_LERP,
   BOOST_FOV,
   NORMAL_FOV,
-  ENGINE_GLOW_BOOST_OPACITY,
-  ENGINE_GLOW_SCALE_MAX,
-  THRUSTER_INTENSITY_MAX,
   EXPLOSION_RADIUS_MIN,
   EXPLOSION_RADIUS_MAX,
   EXPLOSION_SCATTER,
@@ -48,13 +42,27 @@ import {
   createMissionTarget,
   createSpeedStreaks,
   disposeCombatResources,
+  updateDroneVisualState,
   updateMissionAtmosphere,
   updateWaypointIllustration,
   type CombatResources,
+  type DroneVisualHandles,
   type GraphicsProfile,
   type TargetVisualHandles,
   type WaypointIllustrationHandles,
 } from '../scene';
+import {
+  advancePosition,
+  applyAutoLevel,
+  applyFlightRotation,
+  consumeBoostEnergy,
+  getBoostState,
+  getFlightSpeed,
+  isBrakeActive,
+  shouldAutoLevel,
+  updateThrottle,
+  type FlightControlState,
+} from '../systems/flightPhysics';
 import { calculateMissionResult, formatMissionObjective } from '../systems/missionSystem';
 import { calculateScreenPosition } from '../systems/targetingProjection';
 import { GamePhase, type AppSettings, type CampaignProgress, type MissionCompletionResult, type MissionDefinition, type Target, type TargetWeakPoint, type Enemy, type Projectile, type Explosion, type GameState, type WeaponDefinition } from '../types/game';
@@ -76,6 +84,55 @@ function findWeakPointImpact(target: Target, projectilePosition: THREE.Vector3, 
     const hitRadius = Math.max(weakPoint.radius, impactRadius);
     const distance = projectilePosition.distanceTo(weakPoint.position);
     if (distance < hitRadius && distance < closestDistance) {
+      closestWeakPoint = weakPoint;
+      closestDistance = distance;
+    }
+  });
+
+  return closestWeakPoint;
+}
+
+function closestPointOnSegment(point: THREE.Vector3, segmentStart: THREE.Vector3, segmentEnd: THREE.Vector3): THREE.Vector3 {
+  const segment = segmentEnd.clone().sub(segmentStart);
+  const lengthSq = segment.lengthSq();
+  if (lengthSq <= 0) return segmentStart.clone();
+  const t = THREE.MathUtils.clamp(point.clone().sub(segmentStart).dot(segment) / lengthSq, 0, 1);
+  return segmentStart.clone().addScaledVector(segment, t);
+}
+
+function distancePointToSegment(point: THREE.Vector3, segmentStart: THREE.Vector3, segmentEnd: THREE.Vector3): number {
+  return point.distanceTo(closestPointOnSegment(point, segmentStart, segmentEnd));
+}
+
+function segmentIntersectsSphere(segmentStart: THREE.Vector3, segmentEnd: THREE.Vector3, center: THREE.Vector3, radius: number): boolean {
+  return distancePointToSegment(center, segmentStart, segmentEnd) <= radius;
+}
+
+function findWeakPointImpactOnSegment(target: Target, segmentStart: THREE.Vector3, segmentEnd: THREE.Vector3, impactRadius: number): TargetWeakPoint | null {
+  const activeWeakPoints = getActiveWeakPoints(target);
+  let closestWeakPoint: TargetWeakPoint | null = null;
+  let closestDistance = Infinity;
+
+  activeWeakPoints.forEach(weakPoint => {
+    const hitRadius = Math.max(weakPoint.radius, impactRadius, 16);
+    const distance = distancePointToSegment(weakPoint.position, segmentStart, segmentEnd);
+    if (distance <= hitRadius && distance < closestDistance) {
+      closestWeakPoint = weakPoint;
+      closestDistance = distance;
+    }
+  });
+
+  return closestWeakPoint;
+}
+
+function findNearestWeakPoint(target: Target, position: THREE.Vector3): TargetWeakPoint | null {
+  const activeWeakPoints = getActiveWeakPoints(target);
+  let closestWeakPoint: TargetWeakPoint | null = null;
+  let closestDistance = Infinity;
+
+  activeWeakPoints.forEach(weakPoint => {
+    const distance = weakPoint.position.distanceTo(position);
+    if (distance < closestDistance) {
       closestWeakPoint = weakPoint;
       closestDistance = distance;
     }
@@ -137,6 +194,7 @@ export default function Game({
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const phaseRef = useRef(phase);
+  const settingsRef = useRef(settings);
   const initialWeapons = getUnlockedWeapons(progress);
   const initialPrimaryWeapon = initialWeapons.find(weapon => weapon.slot === 'PRIMARY') ?? DEFAULT_PRIMARY_WEAPON;
   const initialSecondaryWeapon = initialWeapons.find(weapon => weapon.slot === 'SECONDARY') ?? null;
@@ -163,6 +221,9 @@ export default function Game({
     secondaryWeaponLabel: initialSecondaryWeapon?.label ?? 'Locked',
     secondaryReady: !!initialSecondaryWeapon,
     secondaryLockLabel: initialSecondaryWeapon?.lockRequired ? 'NO AIR TARGET' : 'READY',
+    secondaryLockProgress: 0,
+    secondaryLockAcquired: !initialSecondaryWeapon?.lockRequired,
+    secondaryLockHasTarget: false,
     startTime: Date.now(),
     lockedTargetId: null,
     settings: {
@@ -190,8 +251,7 @@ export default function Game({
   const projectilesRef = useRef<Projectile[]>([]);
   const explosionsRef = useRef<Explosion[]>([]);
   const aimProjectionRef = useRef<THREE.Mesh | null>(null);
-  const engineGlowsRef = useRef<THREE.Mesh[]>([]);
-  const thrustersRef = useRef<THREE.PointLight[]>([]);
+  const droneVisualsRef = useRef<DroneVisualHandles | null>(null);
   const speedStreaksRef = useRef<THREE.Group | null>(null);
   const enemiesRef = useRef<Enemy[]>([]);
   const enemySequenceRef = useRef(0);
@@ -221,20 +281,50 @@ export default function Game({
   // Flight variables
   const velocity = useRef(new THREE.Vector3(0, 0, -BASE_SPEED));
   const rotation = useRef(new THREE.Euler(0, 0, 0, 'YXZ'));
-  const lastCameraKey = useRef(false);
   const touchJoystick = useRef({ x: 0, y: 0, active: false, identifier: -1 });
-  const touchActions = useRef({ boost: false, fire: false, secondary: false, level: false });
+  const touchActions = useRef({ boost: false, brake: false, fire: false, secondary: false, level: false });
   const fineControlRef = useRef({ active: false, lastX: 0, lastY: 0, deltaX: 0, deltaY: 0 });
   const wasBoosting = useRef(false);
+  const throttleRef = useRef(1);
 
   const setNavigationLock = (id: string | null) => {
     navigationLockRef.current = id;
     setGameState(prev => ({ ...prev, lockedTargetId: id }));
   };
 
+  const cycleNavigationLock = () => {
+    const availableLocks = targetsRef.current
+      .filter(target => !target.destroyed)
+      .map(target => target.id);
+
+    if (gameLogicRef.current.targetsDestroyed >= mission.targets.length && extractionMeshRef.current) {
+      availableLocks.push('EXTRACTION');
+    }
+
+    if (availableLocks.length === 0) {
+      setNavigationLock(null);
+      return;
+    }
+
+    const currentIndex = navigationLockRef.current ? availableLocks.indexOf(navigationLockRef.current) : -1;
+    setNavigationLock(availableLocks[(currentIndex + 1) % availableLocks.length]);
+  };
+
+  const toggleCameraMode = () => {
+    gameLogicRef.current.cameraMode = gameLogicRef.current.cameraMode === 'CHASE' ? 'COCKPIT' : 'CHASE';
+    setGameState(prev => ({
+      ...prev,
+      cameraMode: gameLogicRef.current.cameraMode,
+    }));
+  };
+
   useEffect(() => {
     phaseRef.current = phase;
   }, [phase]);
+
+  useEffect(() => {
+    settingsRef.current = settings;
+  }, [settings]);
 
   useEffect(() => {
     gameLogicRef.current.invertY = settings.invertY;
@@ -287,6 +377,14 @@ export default function Game({
   const handlePointerDown = (e: React.PointerEvent) => {
     // Ignore if clicking on UI elements with pointer-events-auto (buttons, joystick handle)
     if ((e.target as HTMLElement).closest('.pointer-events-auto') && !(e.target as HTMLElement).classList.contains('canvas-area')) return;
+
+    if (e.pointerType === 'mouse') {
+      if (e.button === 0) touchActions.current.fire = true;
+      if (e.button === 2) {
+        touchActions.current.secondary = true;
+        return;
+      }
+    }
     
     fineControlRef.current.active = true;
     fineControlRef.current.lastX = e.clientX;
@@ -298,13 +396,18 @@ export default function Game({
   const handlePointerMove = (e: React.PointerEvent) => {
     if (!fineControlRef.current.active) return;
     
-    fineControlRef.current.deltaX = e.clientX - fineControlRef.current.lastX;
-    fineControlRef.current.deltaY = e.clientY - fineControlRef.current.lastY;
+    const sensitivityScale = settingsRef.current.pointerSensitivity / 100;
+    fineControlRef.current.deltaX = (e.clientX - fineControlRef.current.lastX) * sensitivityScale;
+    fineControlRef.current.deltaY = (e.clientY - fineControlRef.current.lastY) * sensitivityScale;
     fineControlRef.current.lastX = e.clientX;
     fineControlRef.current.lastY = e.clientY;
   };
 
-  const handlePointerUp = () => {
+  const handlePointerUp = (e?: React.PointerEvent) => {
+    if (!e || e.pointerType === 'mouse') {
+      touchActions.current.fire = false;
+      touchActions.current.secondary = false;
+    }
     fineControlRef.current.active = false;
     fineControlRef.current.deltaX = 0;
     fineControlRef.current.deltaY = 0;
@@ -313,7 +416,16 @@ export default function Game({
   useEffect(() => {
     sharedResources.current = createCombatResources();
 
-    const handleKeyDown = (e: KeyboardEvent) => { keysRef.current[e.code] = true; };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code === 'KeyC' && !e.repeat && phaseRef.current === GamePhase.IN_MISSION && !gameLogicRef.current.missionComplete && !gameLogicRef.current.gameOver) {
+        toggleCameraMode();
+      }
+      if ((e.code === 'Tab' || e.code === 'KeyT') && !e.repeat && phaseRef.current === GamePhase.IN_MISSION && !gameLogicRef.current.missionComplete && !gameLogicRef.current.gameOver) {
+        e.preventDefault();
+        cycleNavigationLock();
+      }
+      keysRef.current[e.code] = true;
+    };
     const handleKeyUp = (e: KeyboardEvent) => { keysRef.current[e.code] = false; };
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
@@ -365,6 +477,7 @@ export default function Game({
     const drone = droneModel.group;
     aimProjectionRef.current = droneModel.aimProjection;
     muzzleFlashRef.current = droneModel.muzzleFlash;
+    droneVisualsRef.current = droneModel.visuals;
     scene.add(drone);
     droneRef.current = drone;
 
@@ -435,32 +548,42 @@ export default function Game({
         currentSystems.current.energy = Math.min(100, currentSystems.current.energy + 0.2 * dt);
 
         // --- Controls & Energy Consumption ---
-        const wantsBoost = keys['ShiftLeft'] || keys['ShiftRight'] || touchActions.current.boost;
-        const canBoost = currentSystems.current.energy > 5;
-        const isBoosting = wantsBoost && canBoost;
+        const flightControls: FlightControlState = {
+          keys,
+          joystick: touchJoystick.current,
+          actions: touchActions.current,
+          fineControl: fineControlRef.current,
+          invertY: gameLogicRef.current.invertY,
+        };
+        const { isBoosting } = getBoostState(flightControls, currentSystems.current.energy);
+        const isBraking = isBrakeActive(flightControls);
+
+        const screenShakeScale = settingsRef.current.screenShake / 100;
 
         if (isBoosting && !wasBoosting.current) {
           // Add mild camera shake on boost activation
-          cameraShake.current = Math.max(cameraShake.current, 0.4);
+          cameraShake.current = Math.max(cameraShake.current, 0.4 * screenShakeScale);
         }
         wasBoosting.current = isBoosting;
 
-        if (isBoosting) {
-          currentSystems.current.energy = Math.max(0, currentSystems.current.energy - 0.5 * dt);
-        }
+        currentSystems.current.energy = consumeBoostEnergy(currentSystems.current.energy, isBoosting, dt);
+  throttleRef.current = updateThrottle(throttleRef.current, flightControls, dt);
 
-        const currentSpeed = BASE_SPEED * (isBoosting ? BOOST_MULTIPLIER : 1) * dt;
+  const currentSpeed = getFlightSpeed(isBoosting, dt, throttleRef.current, isBraking);
 
-        // Visual Speed Feedback: Engine glows and Thruster lights
+        // Visual Speed Feedback: named drone material and thruster handles
         const throttleTarget = isBoosting ? 1.0 : 0.4;
-        engineGlowsRef.current.forEach(glow => {
-           const mat = glow.material as THREE.MeshBasicMaterial;
-           mat.opacity += (throttleTarget * ENGINE_GLOW_BOOST_OPACITY - mat.opacity) * 0.1 * dt;
-           glow.scale.setLength(1 + throttleTarget * (ENGINE_GLOW_SCALE_MAX - 1));
-        });
-        thrustersRef.current.forEach(light => {
-           light.intensity += (throttleTarget * THRUSTER_INTENSITY_MAX - light.intensity) * 0.1 * dt;
-        });
+        if (droneVisualsRef.current) {
+          updateDroneVisualState(droneVisualsRef.current, {
+            throttle: throttleTarget,
+            isBoosting,
+            isFiring: keys['Space'] || touchActions.current.fire,
+            hasRecentDamage: now - lastDamageTime.current < 160,
+            hasRecentFire: now - muzzleFlashTimeRef.current < 120,
+            frame: frameIdRef.current,
+            dt,
+          });
+        }
 
         // Muzzle Flash update
         if (muzzleFlashRef.current) {
@@ -523,62 +646,14 @@ export default function Game({
             setNavigationLock(null);
           }
         }
-        const invertFactor = gameLogicRef.current.invertY ? 1 : -1;
-        if (keys['KeyW']) rotation.current.x -= ROTATION_SPEED * invertFactor * dt;
-        if (keys['KeyS']) rotation.current.x += ROTATION_SPEED * invertFactor * dt;
-        if (touchJoystick.current.active) {
-          rotation.current.x -= touchJoystick.current.y * ROTATION_SPEED * invertFactor * dt;
-        }
-        
-        // Yaw (A/D or Joystick X)
-        if (keys['KeyA']) rotation.current.y += ROTATION_SPEED * dt;
-        if (keys['KeyD']) rotation.current.y -= ROTATION_SPEED * dt;
-        if (touchJoystick.current.active) {
-          rotation.current.y -= touchJoystick.current.x * ROTATION_SPEED * dt;
-          // Soft roll with yaw for better feel
-          rotation.current.z -= touchJoystick.current.x * ROTATION_SPEED * 0.5 * dt;
-        }
-
-        // Roll (Q/E)
-        if (keys['KeyQ']) rotation.current.z += ROTATION_SPEED * dt;
-        if (keys['KeyE']) rotation.current.z -= ROTATION_SPEED * dt;
-
-        // Fine Control (Pointer Drag)
-        if (fineControlRef.current.active) {
-          rotation.current.y -= fineControlRef.current.deltaX * FINE_CONTROL_SENSITIVITY * dt;
-          rotation.current.x -= fineControlRef.current.deltaY * FINE_CONTROL_SENSITIVITY * invertFactor * dt;
-          
-          // Clear deltas after applying
-          fineControlRef.current.deltaX = 0;
-          fineControlRef.current.deltaY = 0;
-        }
-
-        // Apply automatic leveling or manual leveling (R key or touch button)
-        const levelingSpeed = (keys['KeyR'] || touchActions.current.level) ? Math.pow(0.8, dt) : Math.pow(0.96, dt);
-        rotation.current.x *= levelingSpeed;
-        rotation.current.z *= levelingSpeed;
+        applyFlightRotation(rotation.current, flightControls, dt);
+        applyAutoLevel(rotation.current, shouldAutoLevel(flightControls), dt);
 
         // Update Drone Rotation
         droneRef.current.rotation.copy(rotation.current);
 
-        // Calculate Forward Vector based on rotation
-        const forward = new THREE.Vector3(0, 0, -1);
-        forward.applyQuaternion(droneRef.current.quaternion);
-        
         // Update Position
-        droneRef.current.position.addScaledVector(forward, currentSpeed);
-
-        // Update Trails
-        const trails = droneRef.current.children.filter(c => c.type === 'Mesh' && (c as THREE.Mesh).geometry.type === 'CylinderGeometry');
-        trails.forEach(t => {
-          const mesh = t as THREE.Mesh;
-          const mat = mesh.material as THREE.MeshBasicMaterial;
-          if (mat.type === 'MeshBasicMaterial') {
-            mat.opacity = (isBoosting ? 0.8 : 0.2) + Math.sin(frameIdRef.current * 0.5) * 0.1;
-            mesh.scale.y = isBoosting ? 2.5 : 1.0;
-            mat.color.setHex(isBoosting ? 0xffaa00 : 0x00ffff);
-          }
-        });
+        advancePosition(droneRef.current.position, droneRef.current.quaternion, currentSpeed);
 
         // Boundaries (Keep drone above ground and within mission zone)
         if (droneRef.current.position.y < 2) droneRef.current.position.y = 2;
@@ -598,9 +673,9 @@ export default function Game({
 
         // Weapon Firing Logic
         const updateSecondaryLock = (weapon: WeaponDefinition | null) => {
-          if (!weapon) return { enemy: null as Enemy | null, acquired: false, label: 'LOCKED' };
-          if (!weapon.lockRequired) return { enemy: null as Enemy | null, acquired: true, label: 'READY' };
-          if (!droneRef.current) return { enemy: null as Enemy | null, acquired: false, label: 'NO AIR TARGET' };
+          if (!weapon) return { enemy: null as Enemy | null, acquired: false, label: 'LOCKED', progress: 0, hasTarget: false };
+          if (!weapon.lockRequired) return { enemy: null as Enemy | null, acquired: true, label: 'READY', progress: 1, hasTarget: false };
+          if (!droneRef.current) return { enemy: null as Enemy | null, acquired: false, label: 'NO AIR TARGET', progress: 0, hasTarget: false };
 
           const range = weapon.lockRange ?? 700;
           const cone = weapon.lockCone ?? 0.8;
@@ -625,19 +700,23 @@ export default function Game({
 
           if (!bestEnemy) {
             secondaryLockRef.current = { candidateEnemyId: null, lockedEnemyId: null, startedAt: 0 };
-            return { enemy: null as Enemy | null, acquired: false, label: 'NO AIR TARGET' };
+            return { enemy: null as Enemy | null, acquired: false, label: 'NO AIR TARGET', progress: 0, hasTarget: false };
           }
 
           if (secondaryLockRef.current.candidateEnemyId !== bestEnemy.id) {
             secondaryLockRef.current = { candidateEnemyId: bestEnemy.id, lockedEnemyId: null, startedAt: now };
           }
 
-          const acquired = now - secondaryLockRef.current.startedAt >= (weapon.lockAcquireMs ?? 500);
+          const acquireMs = weapon.lockAcquireMs ?? 500;
+          const progress = THREE.MathUtils.clamp((now - secondaryLockRef.current.startedAt) / acquireMs, 0, 1);
+          const acquired = progress >= 1;
           if (acquired) secondaryLockRef.current.lockedEnemyId = bestEnemy.id;
 
           return {
             enemy: bestEnemy,
             acquired,
+            progress,
+            hasTarget: true,
             label: acquired ? `LOCKED ${bestEnemy.label.toUpperCase()}` : `LOCKING ${bestEnemy.label.toUpperCase()}`,
           };
         };
@@ -674,13 +753,13 @@ export default function Game({
         if ((keys['Space'] || touchActions.current.fire) && now - lastFireTime.current > primaryWeapon.cooldownMs && canFirePrimary) {
           lastFireTime.current = now;
           currentSystems.current.energy = Math.max(0, currentSystems.current.energy - primaryWeapon.energyCost);
-          cameraShake.current = Math.max(cameraShake.current, 0.15);
+          cameraShake.current = Math.max(cameraShake.current, 0.15 * screenShakeScale);
           muzzleFlashTimeRef.current = now;
           onSound('primary-fire');
           fireProjectile(primaryWeapon, false);
         }
 
-        if (secondaryWeapon && (keys['KeyF'] || touchActions.current.secondary) && now - lastSecondaryFireTime.current > secondaryWeapon.cooldownMs && currentSystems.current.energy > secondaryWeapon.energyCost) {
+        if (secondaryWeapon && (keys['AltLeft'] || keys['AltRight'] || touchActions.current.secondary) && now - lastSecondaryFireTime.current > secondaryWeapon.cooldownMs && currentSystems.current.energy > secondaryWeapon.energyCost) {
           if (secondaryWeapon.lockRequired && (!secondaryLock.acquired || !secondaryLock.enemy)) {
             if (now - lastSecondaryAttemptTime.current > 500) {
               lastSecondaryAttemptTime.current = now;
@@ -690,7 +769,7 @@ export default function Game({
           } else {
             lastSecondaryFireTime.current = now;
             currentSystems.current.energy = Math.max(0, currentSystems.current.energy - secondaryWeapon.energyCost);
-            cameraShake.current = Math.max(cameraShake.current, 0.35);
+            cameraShake.current = Math.max(cameraShake.current, 0.35 * screenShakeScale);
             muzzleFlashTimeRef.current = now;
             onSound('secondary-fire');
             setGameState(prev => ({ ...prev, message: `${secondaryWeapon.label.toUpperCase()} AWAY // ${secondaryLock.enemy?.label.toUpperCase() ?? 'DIRECT'}` }));
@@ -851,14 +930,16 @@ export default function Game({
             }
           }
 
+          const projectileStart = p.mesh.position.clone();
           p.mesh.position.add(p.velocity);
+          const projectileEnd = p.mesh.position.clone();
           p.life--;
           
           let collided = false;
 
           if (p.isEnemy) {
             // Check collision with player
-            if (p.mesh.position.distanceTo(droneRef.current!.position) < 5) {
+            if (segmentIntersectsSphere(projectileStart, projectileEnd, droneRef.current!.position, 5)) {
               collided = true;
               lastDamageTime.current = Date.now();
               
@@ -874,7 +955,7 @@ export default function Game({
               
               currentSystems.current.health = Math.max(0, currentSystems.current.health);
               
-              cameraShake.current = 1.0;
+              cameraShake.current = 1.0 * screenShakeScale;
               onSound('damage');
               setDamageFlash(true);
               setTimeout(() => setDamageFlash(false), 150);
@@ -893,16 +974,17 @@ export default function Game({
             targetsRef.current.forEach(target => {
               if (target.destroyed || collided) return;
               const impactRadius = p.blastRadius ?? 0;
-              const weakPointImpact = findWeakPointImpact(target, p.mesh.position, impactRadius);
               const activeWeakPoints = getActiveWeakPoints(target);
+              const directWeakPointImpact = findWeakPointImpactOnSegment(target, projectileStart, projectileEnd, impactRadius) ?? findWeakPointImpact(target, p.mesh.position, impactRadius);
               const targetCorePosition = target.position.clone().add(new THREE.Vector3(0, 40, 0));
-              const coreHit = p.mesh.position.distanceTo(targetCorePosition) < Math.max(30, impactRadius);
+              const coreHit = segmentIntersectsSphere(projectileStart, projectileEnd, targetCorePosition, Math.max(36, impactRadius));
+              const weakPointImpact = directWeakPointImpact ?? (coreHit && activeWeakPoints.length > 0 ? findNearestWeakPoint(target, targetCorePosition) : null);
 
               if (weakPointImpact || coreHit) {
                 collided = true;
                 hitTimeRef.current = Date.now();
                 onSound('hit');
-                const hitWorldPosition = weakPointImpact?.position ?? p.mesh.position;
+                const hitWorldPosition = weakPointImpact ? closestPointOnSegment(weakPointImpact.position, projectileStart, projectileEnd) : closestPointOnSegment(targetCorePosition, projectileStart, projectileEnd);
                 
                 // Hit sparks
                 const sparkGroup = new THREE.Group();
@@ -1017,7 +1099,7 @@ export default function Game({
             // Check collision with enemies
             enemiesRef.current.forEach(enemy => {
               if (enemy.destroyed || collided) return;
-              if (p.mesh.position.distanceTo(enemy.mesh.position) < (p.blastRadius ?? 10)) {
+              if (segmentIntersectsSphere(projectileStart, projectileEnd, enemy.mesh.position, Math.max(p.blastRadius ?? 10, 10))) {
                 collided = true;
                 hitTimeRef.current = Date.now();
                 onSound('hit');
@@ -1092,17 +1174,6 @@ export default function Game({
           return true;
         });
 
-        // Camera Mode Toggle (Keyboard C)
-        const isCameraKeyPressed = !!keys['KeyC'];
-        if (isCameraKeyPressed && !lastCameraKey.current) {
-          gameLogicRef.current.cameraMode = gameLogicRef.current.cameraMode === 'CHASE' ? 'COCKPIT' : 'CHASE';
-          setGameState(prev => ({
-            ...prev,
-            cameraMode: gameLogicRef.current.cameraMode
-          }));
-        }
-        lastCameraKey.current = isCameraKeyPressed;
-
         // Camera Follow Logic (Smooth & Dynamic)
         let idealOffset: THREE.Vector3;
         let lookAtTarget: THREE.Vector3;
@@ -1114,9 +1185,9 @@ export default function Game({
           lerpFactor = 0.85;
           if (droneRef.current) droneRef.current.visible = false;
         } else {
-          // Chase Mode: Aircraft sits closer to camera and lower in the frame
-          idealOffset = new THREE.Vector3(0, 2.8, 11);
-          lookAtTarget = new THREE.Vector3(0, 5.5, -45);
+          // Chase Mode: Aircraft sits close, seen from above, lower in the frame
+          idealOffset = new THREE.Vector3(0, 5.5, 3.8);
+          lookAtTarget = new THREE.Vector3(0, 3.0, -14);
           lerpFactor = CAMERA_LERP;
           if (droneRef.current) droneRef.current.visible = true;
         }
@@ -1239,7 +1310,7 @@ export default function Game({
         }
 
         // Calculate exact point where drone is aiming on screen
-        const aimDist = 200;
+        const aimDist = 260;
         const forwardAim = new THREE.Vector3(0, 0, -aimDist).applyQuaternion(droneRef.current.quaternion).add(droneRef.current.position);
         
         // Convert to screen space
@@ -1280,6 +1351,9 @@ export default function Game({
             secondaryWeaponLabel: secondaryWeapon?.label ?? 'Locked',
             secondaryReady,
             secondaryLockLabel: secondaryWeapon ? secondaryLock.label : 'LOCKED',
+            secondaryLockProgress: secondaryWeapon?.lockRequired ? secondaryLock.progress : 0,
+            secondaryLockAcquired: secondaryWeapon?.lockRequired ? secondaryLock.acquired : false,
+            secondaryLockHasTarget: secondaryWeapon?.lockRequired ? secondaryLock.hasTarget : false,
             message: activeHazard ? activeHazard.message : prev.message,
             aimScreenPos: { x: aimScreenX, y: aimScreenY },
             droneScreenPos: { x: droneScreenX, y: droneScreenY }
@@ -1302,6 +1376,9 @@ export default function Game({
     };
   }, []);
 
+  const hudScale = settings.hudScale / 100;
+  const touchControlsScale = settings.touchControlsScale / 100;
+
   return (
     <div 
       ref={containerRef} 
@@ -1310,6 +1387,7 @@ export default function Game({
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
+      onContextMenu={(event) => event.preventDefault()}
     >
       <canvas ref={canvasRef} className="block w-full h-full cursor-crosshair canvas-area" />
 
@@ -1323,7 +1401,7 @@ export default function Game({
         <div className="absolute inset-0 bg-red-600/30 z-[100] pointer-events-none transition-opacity duration-150 animate-pulse" />
       )}
 
-      <div className="absolute inset-0 pointer-events-none z-20 p-3 pt-[calc(0.75rem+env(safe-area-inset-top))] pb-[calc(0.75rem+env(safe-area-inset-bottom))] flex flex-col justify-between sm:p-5 md:p-8">
+      <div className="absolute inset-0 pointer-events-none z-20 p-3 pt-[calc(0.75rem+env(safe-area-inset-top))] pb-[calc(0.75rem+env(safe-area-inset-bottom))] flex flex-col justify-between sm:p-5 md:p-8" style={{ transform: `scale(${hudScale})`, transformOrigin: 'center center' }}>
         
         {gameState.outOfBounds && <OutOfBoundsWarning />}
         
@@ -1339,7 +1417,7 @@ export default function Game({
                 {gameState.cameraMode} VIEW
               </div>
             </div>
-            <div className="text-[8px] text-white/35 font-mono uppercase tracking-[0.12em] mt-1 sm:text-[9px] sm:tracking-[0.18em]">{settings.graphicsQuality} // {gameState.fps} FPS</div>
+            {settings.showTelemetry && <div className="text-[8px] text-white/35 font-mono uppercase tracking-[0.12em] mt-1 sm:text-[9px] sm:tracking-[0.18em]">{settings.graphicsQuality} // {gameState.fps} FPS</div>}
           </div>
 
           {/* Compass Inserted Here */}
@@ -1359,7 +1437,7 @@ export default function Game({
                 INV_Y: {gameState.settings.invertY ? '[ON]' : '[OFF]'}
               </button>
               <button 
-                onClick={() => setGameState(prev => ({ ...prev, cameraMode: prev.cameraMode === 'CHASE' ? 'COCKPIT' : 'CHASE' }))}
+                onClick={toggleCameraMode}
                 className="pointer-events-auto min-h-8 bg-black/60 border border-white/20 hover:border-orange-500 px-3 py-1 text-[8px] tracking-widest text-white uppercase font-bold transition-colors md:hidden"
               >
                 VIEW
@@ -1408,6 +1486,9 @@ export default function Game({
           recoil={gameState.recoil}
           firing={gameState.firing}
           hitConfirmed={gameState.hitConfirmed}
+          secondaryLockProgress={gameState.secondaryLockProgress}
+          secondaryLockAcquired={gameState.secondaryLockAcquired}
+          secondaryLockHasTarget={gameState.secondaryLockHasTarget}
           aimScreenPos={gameState.aimScreenPos}
           droneScreenPos={gameState.droneScreenPos}
         />
@@ -1435,7 +1516,7 @@ export default function Game({
       </div>
 
       {/* --- TOUCH CONTROLS (Overlay) --- */}
-      <div className="touch-controls absolute inset-x-0 bottom-0 pointer-events-none z-40 justify-between px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] items-end">
+      <div className="touch-controls absolute inset-x-0 bottom-0 pointer-events-none z-40 justify-between px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] items-end" style={{ transform: `scale(${touchControlsScale})`, transformOrigin: 'bottom center' }}>
         
         {/* Left Side: Joystick */}
         <div 
@@ -1508,7 +1589,20 @@ export default function Game({
               onTouchStart={() => touchActions.current.secondary = true}
               onTouchEnd={() => touchActions.current.secondary = false}
             >
-              SEC
+              MSL
+            </button>
+            <button 
+              className="touch-action-small w-11 h-11 rounded-full border border-white/10 bg-white/5 active:bg-white text-white active:text-black flex items-center justify-center font-bold tracking-widest text-[7px] transition-colors sm:w-12 sm:h-12 sm:text-[8px]"
+              onTouchStart={() => touchActions.current.brake = true}
+              onTouchEnd={() => touchActions.current.brake = false}
+            >
+              BRK
+            </button>
+            <button 
+              className="touch-action-small w-11 h-11 rounded-full border border-cyan-400/20 bg-cyan-400/10 active:bg-cyan-300 text-cyan-200 active:text-black flex items-center justify-center font-bold tracking-widest text-[7px] transition-colors sm:w-12 sm:h-12 sm:text-[8px]"
+              onClick={cycleNavigationLock}
+            >
+              LOCK
             </button>
             <button 
               className="touch-action-small w-11 h-11 rounded-full border border-white/10 bg-white/5 active:bg-white text-white active:text-black flex items-center justify-center font-bold tracking-widest text-[7px] transition-colors sm:w-12 sm:h-12 sm:text-[8px]"
@@ -1519,7 +1613,7 @@ export default function Game({
             </button>
             <button 
               className="touch-action-small w-11 h-11 rounded-full border border-white/10 bg-white/5 active:bg-white text-white active:text-black flex items-center justify-center font-bold tracking-widest text-[7px] transition-colors sm:w-12 sm:h-12 sm:text-[8px]"
-              onClick={() => setGameState(prev => ({ ...prev, cameraMode: prev.cameraMode === 'CHASE' ? 'COCKPIT' : 'CHASE' }))}
+              onClick={toggleCameraMode}
             >
               VIEW
             </button>
@@ -1530,18 +1624,19 @@ export default function Game({
       {/* Key Overlay Hint */}
       <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-[9px] text-white/20 uppercase tracking-[0.4em] font-medium z-30 pointer-events-none text-center hidden xl:block">
         <div className="flex gap-2 mb-3 justify-center">
-          {['Q', 'W', 'E', 'A', 'S', 'D', 'Space', 'F', 'Shift', 'C', 'R'].map(key => {
-            const isPressed = keysRef.current[key === 'Space' ? 'Space' : key === 'Shift' ? 'ShiftLeft' : key === 'C' ? 'KeyC' : key === 'R' ? 'KeyR' : `Key${key}`];
+          {['Q', 'W', 'E', 'A', 'S', 'D', 'Space', 'Alt', 'Shift', 'Ctrl', 'R', 'F', 'X', 'Tab', 'C'].map(key => {
+            const code = key === 'Space' ? 'Space' : key === 'Shift' ? 'ShiftLeft' : key === 'Ctrl' ? 'ControlLeft' : key === 'Alt' ? 'AltLeft' : key === 'Tab' ? 'Tab' : `Key${key}`;
+            const isPressed = keysRef.current[code];
             return (
               <div key={key} className={`px-1.5 py-0.5 border transition-all duration-75 ${
                 isPressed ? 'bg-orange-500 border-orange-500 text-black' : 'border-white/10'
               }`}>
-                {key === 'Space' ? 'FIRE' : key === 'F' ? 'SEC' : key}
+                {key === 'Space' ? 'FIRE' : key === 'Alt' ? 'MSL' : key === 'Ctrl' ? 'BRK' : key === 'R' ? 'THR+' : key === 'F' ? 'THR-' : key === 'X' ? 'LVL' : key === 'Tab' ? 'LOCK' : key}
               </div>
             );
           })}
         </div>
-        [W/S] Pitch • [A/D] Yaw • [Q/E] Roll • [SHIFT] Boost • [SPACE] Fire • [F] Secondary • [R] Level
+        [W/S] Pitch • [A/D] Bank-Turn • [Q/E] Yaw Correct • [R/F] Throttle • [CTRL] Brake • [SHIFT] Boost • [SPACE] Fire • [ALT] Missile • [TAB/T] Lock • [X] Level
       </div>
 
       {/* Decorative HUD Elements */}
@@ -1566,6 +1661,7 @@ export default function Game({
           totalTargets={mission.targets.length}
           enemiesDestroyed={gameState.enemiesDestroyed}
           onRetryMission={onRetryMission}
+          onReturnToHangar={onReturnToMenu}
         />
       )}
     </div>

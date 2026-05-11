@@ -19,7 +19,7 @@ export const WEAPONS: WeaponDefinition[] = [
     slot: 'SECONDARY',
     label: 'Ion Missile',
     role: 'Lock-on anti-air missile for interceptors, gunships, and missile platforms.',
-    trigger: 'F',
+    trigger: 'Alt / Right Mouse',
     damage: 90,
     energyCost: 24,
     cooldownMs: 2200,
