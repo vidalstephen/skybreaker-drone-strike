@@ -58,10 +58,16 @@ export function MissionComplete({ startTime, enemiesDestroyed, health, targetsDe
           </div>
 
           {result && (
-            <div className="w-full border border-white/10 bg-white/[0.03] p-3 mb-6 text-left sm:p-4 sm:mb-8">
-              <div className="text-[10px] uppercase tracking-[0.25em] text-orange-400 font-mono mb-2">Reward Unlocked</div>
-              <div className="text-sm uppercase tracking-[0.16em] text-white font-mono">{result.reward.label}</div>
-              <div className="mt-2 text-xs leading-relaxed text-white/55">{result.reward.description}</div>
+            <div className="w-full grid gap-3 mb-6 text-left sm:mb-8">
+              <div className="border border-white/10 bg-white/[0.03] p-3 sm:p-4">
+                <div className="text-[10px] uppercase tracking-[0.25em] text-orange-400 font-mono mb-2">Reward Unlocked</div>
+                <div className="text-sm uppercase tracking-[0.16em] text-white font-mono">{result.reward.label}</div>
+                <div className="mt-2 text-xs leading-relaxed text-white/55">{result.reward.description}</div>
+              </div>
+              <div className="grid grid-cols-2 gap-2 font-mono text-[10px] uppercase tracking-[0.12em] text-white/55">
+                <div className="border border-white/10 bg-white/[0.03] p-3"><span className="block text-white/35">Target Bonus</span><span className="mt-1 block text-white">{targetsDestroyed} x</span></div>
+                <div className="border border-white/10 bg-white/[0.03] p-3"><span className="block text-white/35">Enemy Bonus</span><span className="mt-1 block text-white">{enemiesDestroyed} x</span></div>
+              </div>
             </div>
           )}
 

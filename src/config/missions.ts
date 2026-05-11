@@ -1,22 +1,15 @@
-import type { MissionDefinition, MissionWeakPointDefinition } from '../types/game';
-import { IRON_VEIL_ENVIRONMENT, SIGNAL_BREAK_ENVIRONMENT } from './environments';
+import type { MissionDefinition } from '../types/game';
+import { defineMission, resolveWeakPointLayout } from './levelKits';
 
-const RADAR_TOWER_WEAK_POINTS: MissionWeakPointDefinition[] = [
-  { id: 'array-left', label: 'Left Array', offset: [-7, 44, 0], health: 50, radius: 13, required: true },
-  { id: 'array-right', label: 'Right Array', offset: [7, 44, 0], health: 50, radius: 13, required: true },
-];
-
-const RELAY_SPIRE_WEAK_POINTS: MissionWeakPointDefinition[] = [
-  { id: 'relay-core', label: 'Relay Core', offset: [0, 38, 7], health: 45, radius: 12, required: true },
-  { id: 'upper-node', label: 'Upper Node', offset: [0, 64, -6], health: 45, radius: 12, required: true },
-  { id: 'stabilizer', label: 'Stabilizer', offset: [8, 24, 0], health: 35, radius: 11, required: true },
-];
+const RADAR_TOWER_WEAK_POINTS = resolveWeakPointLayout('radar-array');
+const RELAY_SPIRE_WEAK_POINTS = resolveWeakPointLayout('relay-core');
 
 export const MISSIONS: MissionDefinition[] = [
-  {
+  defineMission({
     id: 'signal-break',
     order: 1,
     title: 'SIGNAL BREAK',
+    levelKitId: 'night-grid',
     campaignArc: 'Arc 1 // Signal War',
     difficulty: 1,
     targetLabel: 'Radar Towers',
@@ -50,7 +43,6 @@ export const MISSIONS: MissionDefinition[] = [
         { role: 'fast-interceptor', count: 2 },
       ],
     },
-    environment: SIGNAL_BREAK_ENVIRONMENT,
     failureConditions: [
       { id: 'hull-depleted', label: 'Hull Integrity', message: 'CRITICAL HULL FAILURE' },
       { id: 'out-of-bounds', label: 'Mission Boundary', message: 'RETURN TO MISSION AREA' },
@@ -69,11 +61,12 @@ export const MISSIONS: MissionDefinition[] = [
       label: 'Extraction Protocol',
       description: 'Campaign command authorizes follow-on sorties and unlocks the Ion Missile secondary weapon.',
     },
-  },
-  {
+  }),
+  defineMission({
     id: 'iron-veil',
     order: 2,
     title: 'IRON VEIL',
+    levelKitId: 'ash-ridge',
     campaignArc: 'Arc 1 // Signal War',
     difficulty: 2,
     targetLabel: 'Relay Spires',
@@ -109,7 +102,6 @@ export const MISSIONS: MissionDefinition[] = [
         { role: 'missile-platform', count: 1 },
       ],
     },
-    environment: IRON_VEIL_ENVIRONMENT,
     failureConditions: [
       { id: 'hull-depleted', label: 'Hull Integrity', message: 'CRITICAL HULL FAILURE' },
       { id: 'out-of-bounds', label: 'Mission Boundary', message: 'RETURN TO EASTERN COMBAT ZONE' },
@@ -129,11 +121,12 @@ export const MISSIONS: MissionDefinition[] = [
       description: 'Recovered routing data opens denser patrol corridors for the next campaign arc.',
     },
     unlockAfterMissionId: 'signal-break',
-  },
-  {
+  }),
+  defineMission({
     id: 'black-sky-hook',
     order: 3,
     title: 'BLACK SKY HOOK',
+    levelKitId: 'night-grid',
     campaignArc: 'Arc 1 // Signal War',
     difficulty: 3,
     targetLabel: 'Uplink Masts',
@@ -170,7 +163,6 @@ export const MISSIONS: MissionDefinition[] = [
         { role: 'heavy-gunship', count: 1 },
       ],
     },
-    environment: SIGNAL_BREAK_ENVIRONMENT,
     failureConditions: [
       { id: 'hull-depleted', label: 'Hull Integrity', message: 'CRITICAL HULL FAILURE' },
       { id: 'out-of-bounds', label: 'Mission Boundary', message: 'RETURN TO SIGNAL WAR ZONE' },
@@ -190,11 +182,12 @@ export const MISSIONS: MissionDefinition[] = [
       description: 'Command opens the Blackout Line and authorizes denser threat corridors.',
     },
     unlockAfterMissionId: 'iron-veil',
-  },
-  {
+  }),
+  defineMission({
     id: 'blackout-line',
     order: 4,
     title: 'BLACKOUT LINE',
+    levelKitId: 'ash-ridge',
     campaignArc: 'Arc 2 // Blackout Line',
     difficulty: 4,
     targetLabel: 'Jammer Pylons',
@@ -231,7 +224,6 @@ export const MISSIONS: MissionDefinition[] = [
         { role: 'fast-interceptor', count: 2 },
       ],
     },
-    environment: IRON_VEIL_ENVIRONMENT,
     failureConditions: [
       { id: 'hull-depleted', label: 'Hull Integrity', message: 'CRITICAL HULL FAILURE' },
       { id: 'out-of-bounds', label: 'Mission Boundary', message: 'RETURN TO BLACKOUT LINE' },
@@ -251,11 +243,12 @@ export const MISSIONS: MissionDefinition[] = [
       description: 'Enemy launch signatures are cataloged for deeper line strikes.',
     },
     unlockAfterMissionId: 'black-sky-hook',
-  },
-  {
+  }),
+  defineMission({
     id: 'warden-break',
     order: 5,
     title: 'WARDEN BREAK',
+    levelKitId: 'ash-ridge',
     campaignArc: 'Arc 2 // Blackout Line',
     difficulty: 5,
     targetLabel: 'Shield Nodes',
@@ -294,7 +287,6 @@ export const MISSIONS: MissionDefinition[] = [
         { role: 'fast-interceptor', count: 1 },
       ],
     },
-    environment: IRON_VEIL_ENVIRONMENT,
     failureConditions: [
       { id: 'hull-depleted', label: 'Hull Integrity', message: 'CRITICAL HULL FAILURE' },
       { id: 'out-of-bounds', label: 'Mission Boundary', message: 'RETURN TO WARDEN ZONE' },
@@ -314,11 +306,12 @@ export const MISSIONS: MissionDefinition[] = [
       description: 'Recovered shield telemetry exposes command-frigate routing.',
     },
     unlockAfterMissionId: 'blackout-line',
-  },
-  {
+  }),
+  defineMission({
     id: 'ember-crown',
     order: 6,
     title: 'EMBER CROWN',
+    levelKitId: 'ash-ridge',
     campaignArc: 'Arc 2 // Blackout Line',
     difficulty: 6,
     targetLabel: 'Crown Relays',
@@ -358,7 +351,6 @@ export const MISSIONS: MissionDefinition[] = [
         { role: 'shielded-warden', count: 1 },
       ],
     },
-    environment: IRON_VEIL_ENVIRONMENT,
     failureConditions: [
       { id: 'hull-depleted', label: 'Hull Integrity', message: 'CRITICAL HULL FAILURE' },
       { id: 'out-of-bounds', label: 'Mission Boundary', message: 'RETURN TO EMBER CROWN' },
@@ -378,11 +370,12 @@ export const MISSIONS: MissionDefinition[] = [
       description: 'Command clears Skybreaker approach lanes for the final assault arc.',
     },
     unlockAfterMissionId: 'warden-break',
-  },
-  {
+  }),
+  defineMission({
     id: 'skybreaker-gate',
     order: 7,
     title: 'SKYBREAKER GATE',
+    levelKitId: 'night-grid',
     campaignArc: 'Arc 3 // Skybreaker Finale',
     difficulty: 7,
     targetLabel: 'Gate Anchors',
@@ -423,7 +416,6 @@ export const MISSIONS: MissionDefinition[] = [
         { role: 'fast-interceptor', count: 2 },
       ],
     },
-    environment: SIGNAL_BREAK_ENVIRONMENT,
     failureConditions: [
       { id: 'hull-depleted', label: 'Hull Integrity', message: 'CRITICAL HULL FAILURE' },
       { id: 'out-of-bounds', label: 'Mission Boundary', message: 'RETURN TO SKYBREAKER GATE' },
@@ -443,11 +435,12 @@ export const MISSIONS: MissionDefinition[] = [
       description: 'The final Skybreaker core route is exposed.',
     },
     unlockAfterMissionId: 'ember-crown',
-  },
-  {
+  }),
+  defineMission({
     id: 'final-dawn',
     order: 8,
     title: 'FINAL DAWN',
+    levelKitId: 'ash-ridge',
     campaignArc: 'Arc 3 // Skybreaker Finale',
     difficulty: 8,
     targetLabel: 'Core Spires',
@@ -490,7 +483,6 @@ export const MISSIONS: MissionDefinition[] = [
         { role: 'fast-interceptor', count: 1 },
       ],
     },
-    environment: IRON_VEIL_ENVIRONMENT,
     failureConditions: [
       { id: 'hull-depleted', label: 'Hull Integrity', message: 'CRITICAL HULL FAILURE' },
       { id: 'out-of-bounds', label: 'Mission Boundary', message: 'RETURN TO FINAL DAWN' },
@@ -510,7 +502,7 @@ export const MISSIONS: MissionDefinition[] = [
       description: 'Campaign complete. Replay sorties to chase better times, scores, and ranks.',
     },
     unlockAfterMissionId: 'skybreaker-gate',
-  },
+  }),
 ];
 
 export const DEFAULT_MISSION_ID = MISSIONS[0].id;

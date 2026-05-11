@@ -6,7 +6,12 @@ import * as THREE from 'three';
 export enum GamePhase {
   BOOT = 'BOOT',
   MAIN_MENU = 'MAIN_MENU',
+  MISSION_SELECT = 'MISSION_SELECT',
   BRIEFING = 'BRIEFING',
+  LOADOUT = 'LOADOUT',
+  CAREER = 'CAREER',
+  CONTROLS = 'CONTROLS',
+  CREDITS = 'CREDITS',
   IN_MISSION = 'IN_MISSION',
   PAUSED = 'PAUSED',
   DEBRIEF = 'DEBRIEF',
@@ -22,6 +27,12 @@ export interface AppSettings {
   graphicsQuality: GraphicsQuality;
   reduceEffects: boolean;
   invertY: boolean;
+  hudScale: number;
+  touchControlsScale: number;
+  screenShake: number;
+  pointerSensitivity: number;
+  showTelemetry: boolean;
+  menuMotion: boolean;
 }
 
 export interface CampaignProgress {
@@ -123,6 +134,9 @@ export interface MissionBriefingItem {
   value: string;
 }
 
+export type LevelKitId = 'night-grid' | 'ash-ridge';
+export type WaypointStyleId = 'signal-array' | 'ash-relay';
+export type TargetWeakPointLayoutId = 'radar-array' | 'relay-core';
 export type MissionTargetArchetype = 'tower' | 'relay-spire' | 'facility-node';
 
 export interface MissionWeakPointDefinition {
@@ -182,6 +196,7 @@ export interface StructureKitDefinition {
 
 export interface MissionEnvironmentDefinition {
   id: string;
+  levelKitId?: LevelKitId;
   label: string;
   skyColor: number;
   fogColor: number;
@@ -204,6 +219,20 @@ export interface MissionEnvironmentDefinition {
   boundaryRadius: number;
   structureKit?: StructureKitDefinition;
   hazards: MissionHazardDefinition[];
+}
+
+export interface LevelKitTargetDefaults {
+  archetype: MissionTargetArchetype;
+  weakPointLayoutId?: TargetWeakPointLayoutId;
+}
+
+export interface LevelKitDefinition {
+  id: LevelKitId;
+  label: string;
+  arenaKit: string;
+  waypointStyle: WaypointStyleId;
+  defaultTarget: LevelKitTargetDefaults;
+  environment: MissionEnvironmentDefinition;
 }
 
 export interface MissionSkyDepthDefinition {
@@ -276,6 +305,7 @@ export interface MissionDefinition {
   id: string;
   order: number;
   title: string;
+  levelKitId?: LevelKitId;
   campaignArc: string;
   difficulty: number;
   targetLabel: string;

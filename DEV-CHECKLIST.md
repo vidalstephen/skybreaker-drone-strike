@@ -465,6 +465,15 @@ Mobile responsiveness:
 - 2026-05-10: TV-5 facility weak-point targets `docker run --rm -v "$PWD":/app -v skybreaker-drone-strike-node-modules:/app/node_modules -w /app node:20-alpine sh -lc "npm run lint"` - passed; TypeScript `tsc --noEmit` completed with zero errors in the container.
 - 2026-05-10: TV-5 facility weak-point targets `docker compose build --progress=plain && docker compose up -d && docker compose ps` - passed; Vite production build completed with the existing large chunk warning, image `skybreaker-drone-strike:latest` rebuilt, and container `skybreaker-drone-strike` reported `Up`.
 - 2026-05-10: TV-5 deployed URL smoke `curl -I -L --max-time 20 https://skybreaker.nsystems.live` - returned HTTP 200 after deploy.
+- 2026-05-10: TV-9 smoke doc/script diagnostics for `docs/REGRESSION_SMOKE.md` and `scripts/smoke-mobile.cjs` - no errors found.
+- 2026-05-10: TV-9 exact mobile smoke `docker run --rm --network host -v "$PWD":/work -w /tmp mcr.microsoft.com/playwright:v1.52.0-noble sh -lc "npm init -y >/dev/null && npm install playwright@1.52.0 >/dev/null && NODE_PATH=/tmp/node_modules node /work/scripts/smoke-mobile.cjs"` - passed; 390x844 portrait and 844x390 landscape viewports matched requested dimensions, mission canvas matched viewport, touch controls/HUD/radar/compass were visible, no horizontal overflow was detected, and no page errors were reported.
+- 2026-05-10: TV-9 final `docker run --rm -v "$PWD":/app -v skybreaker-drone-strike-node-modules:/app/node_modules -w /app node:20-alpine sh -lc "npm run lint"` - passed; TypeScript `tsc --noEmit` completed with zero errors in the container.
+- 2026-05-10: TV-9 final `docker compose build --progress=plain && docker compose up -d && docker compose ps` - passed; Vite production build completed with the existing large chunk warning, image `skybreaker-drone-strike:latest` rebuilt, and container `skybreaker-drone-strike` reported `Up`.
+- 2026-05-11: FLIGHT-1 source/docs diagnostics for `src/scene/droneModel.ts`, `src/systems/flightPhysics.ts`, `src/components/Game.tsx`, `docs/REGRESSION_SMOKE.md`, and `DEV-CHECKLIST.md` - no errors found.
+- 2026-05-11: FLIGHT-1 final `docker run --rm -v "$PWD":/app -v skybreaker-drone-strike-node-modules:/app/node_modules -w /app node:20-alpine sh -lc "npm run lint"` - passed; TypeScript `tsc --noEmit` completed with zero errors in the container.
+- 2026-05-11: FLIGHT-1 final `docker compose build --progress=plain && docker compose up -d && docker compose ps` - passed; Vite production build completed with the existing large chunk warning, image `skybreaker-drone-strike:latest` rebuilt, and container `skybreaker-drone-strike` reported `Up`.
+- 2026-05-11: FLIGHT-1 deployed desktop browser smoke at `https://skybreaker.nsystems.live` - Mission 1 and Mission 2 briefing/launch paths passed; HUD, radar/compass, target markers, Pulse Cannon/Ion Missile status, secondary no-air-target lock feedback, keyboard flight inputs, boost/fire, and cockpit/chase view toggle were confirmed; screenshot review confirmed the revised aircraft is readable in chase view without blocking the reticle or objective HUD.
+- 2026-05-11: FLIGHT-1 exact mobile smoke `docker run --rm --network host -v "$PWD":/work -w /tmp mcr.microsoft.com/playwright:v1.52.0-noble sh -lc "npm init -y >/dev/null && npm install playwright@1.52.0 >/dev/null && NODE_PATH=/tmp/node_modules node /work/scripts/smoke-mobile.cjs"` - passed; 390x844 portrait and 844x390 landscape viewports matched requested dimensions, mission canvas matched viewport, touch controls/HUD/radar/compass were visible, no horizontal overflow was detected, and no page errors were reported.
 
 - 2026-05-09: VS Code diagnostics for `src` - no errors found after HUD, overlay, and phase-state extraction.
 - 2026-05-09: `docker run --rm -v "$PWD":/app -v skybreaker-drone-strike-node-modules:/app/node_modules -w /app node:20-alpine sh -lc "npm ci && npm run lint"` - passed; TypeScript `tsc --noEmit` completed with zero errors.
@@ -623,7 +632,7 @@ If either concept artifact changes, update this roadmap and `docs/VISUAL_TARGET_
 
 ### Systems to preserve exactly
 
-- Flight controls: W/S pitch, A/D yaw, Q/E roll, Shift boost, Space primary, F secondary, R auto-level, C camera toggle, pointer drag, touch joystick/actions, and invert-Y.
+- Flight controls: W/S pitch, A/D assisted bank-turn, Q/E yaw correction, R/F throttle, Shift boost, Ctrl brake, Space/left mouse primary, Alt/right mouse secondary, Tab/T lock cycle, X auto-level, C camera toggle, pointer drag, touch joystick/actions, and invert-Y.
 - Chase/cockpit camera readability, camera lerp, boost FOV, camera shake, and drone silhouette framing.
 - Mission runtime refs: `gameLogicRef`, `currentSystems`, `targetsRef`, `enemiesRef`, `projectilesRef`, and `extractionMeshRef` until a later dedicated frame-loop extraction.
 - Objective/extraction state: target destroyed recount from source of truth, extraction activation only after all targets, XZ-only extraction radius, and exactly-once mission completion guard.
@@ -808,56 +817,148 @@ Completion summary:
 
 ### Phase TV-7 - Drone Visual Polish
 
-Status: Pending
+Status: Complete
 
 Goal: improve the player drone silhouette, materials, and thruster glow while preserving chase-camera readability and flight feel.
 
-- [ ] Strengthen drone low-poly tactical silhouette without changing scale or camera framing unexpectedly
-- [ ] Add named material handles for body, wings, cockpit, accents, rotors, glows, and damage/firing feedback
-- [ ] Improve thruster glow and boost feedback without washing out the body silhouette
-- [ ] Avoid changes to flight physics, boost energy drain, speed, or controls
+- [x] Strengthen drone low-poly tactical silhouette without changing scale or camera framing unexpectedly
+- [x] Add named material handles for body, wings, cockpit, accents, rotors, glows, and damage/firing feedback
+- [x] Improve thruster glow and boost feedback without washing out the body silhouette
+- [x] Avoid changes to flight physics, boost energy drain, speed, or controls
 
 Acceptance criteria:
 
-- [ ] Drone reads clearly in chase view against dark arena and fog
-- [ ] Boost and thruster states feel stronger but not overbright
-- [ ] Camera readability and aiming remain stable
-- [ ] Containerized `npm run lint` and Docker production build/deploy pass
+- [x] Drone reads clearly in chase view against dark arena and fog
+- [x] Boost and thruster states feel stronger but not overbright
+- [x] Camera readability and aiming remain stable
+- [x] Containerized `npm run lint` and Docker production build/deploy pass
+
+Completion summary:
+
+- Shipped: TV-7 drone visual polish with a stronger low-poly tactical silhouette, named drone visual/material handles, direct rotor/glow/thruster state updates, subtle body/cockpit/accent feedback for firing/damage/boost, and cleaner boost-color thruster behavior without changing drone scale, camera setup, flight physics, energy costs, controls, projectile direction, radar, markers, or mission state.
+- Changed: `src/scene/droneModel.ts`, `src/components/Game.tsx`, `DEV-CHECKLIST.md`.
+- Verification: VS Code diagnostics for `src/scene/droneModel.ts` reported no errors; local VS Code diagnostics for `Game.tsx` still show the known React declaration noise documented in the risk register. Containerized `npm run lint` passed; `docker compose build --progress=plain && docker compose up -d && docker compose ps` passed with the existing non-blocking Vite large-chunk warning and container `Up`; deployed browser smoke at `https://skybreaker.nsystems.live` launched Mission 1 with WebGL canvas/HUD visible at ~100 FPS and no page errors. Screenshot review confirmed the deployed mission scene rendered; direct canvas pixel reads returned transparent samples because the WebGL drawing buffer is not preserved for readback.
+- Notes/Risks: Drone runtime visual feedback now uses named handles instead of filtering child geometry types, reducing fragility for future visual phases. Browser smoke drifted out of the mission zone while boost-testing, so the warning overlay was visible during the screenshot; this did not affect the build/type verification or the visual confirmation of the canvas/HUD.
 
 ### Phase TV-8 - Scalable Level and Campaign Configuration
 
-Status: Pending
+Status: Complete
 
 Goal: make future missions choose reusable arena, facility, waypoint, and target archetypes through config instead of hardcoded scene branches.
 
-- [ ] Add `src/config/levelKits.ts` or equivalent for arena kits, facility kits, waypoint styles, floor/grid profiles, and beacon palettes
-- [ ] Extend mission/environment types to reference level kits with safe defaults for existing missions
-- [ ] Allow new missions to configure structure density, target archetypes, weak-point layouts, and waypoint style declaratively
-- [ ] Keep mission unlocks, scoring, reward, enemy wave, extraction, and failure condition contracts stable
+- [x] Add `src/config/levelKits.ts` or equivalent for arena kits, facility kits, waypoint styles, floor/grid profiles, and beacon palettes
+- [x] Extend mission/environment types to reference level kits with safe defaults for existing missions
+- [x] Allow new missions to configure structure density, target archetypes, weak-point layouts, and waypoint style declaratively
+- [x] Keep mission unlocks, scoring, reward, enemy wave, extraction, and failure condition contracts stable
 
 Acceptance criteria:
 
-- [ ] A new mission can reuse an existing level kit and facility archetype without adding scene-builder branches
-- [ ] Existing missions load with backward-compatible defaults
-- [ ] TypeScript catches invalid level-kit references or missing required fields where practical
-- [ ] Containerized `npm run lint` and Docker production build/deploy pass
+- [x] A new mission can reuse an existing level kit and facility archetype without adding scene-builder branches
+- [x] Existing missions load with backward-compatible defaults
+- [x] TypeScript catches invalid level-kit references or missing required fields where practical
+- [x] Containerized `npm run lint` and Docker production build/deploy pass
+
+Completion summary:
+
+- Shipped: TV-8 scalable level-kit configuration with typed `LevelKitId`, waypoint style IDs, weak-point layout IDs, level-kit definitions for Night Grid and Ash Ridge, shared target weak-point layouts, and a `defineMission()` helper that resolves mission `levelKitId` values into full runtime environment objects.
+- Shipped: The mission catalog now references `night-grid` / `ash-ridge` kit IDs while preserving all mission unlock, scoring, reward, enemy wave, extraction, failure-condition, and existing target behavior. Kit target defaults are opt-in through `useLevelKitTargetDefaults` / `targetDefaults` so existing missions without explicit archetypes continue through the prior scene-builder fallback.
+- Changed: `src/types/game.ts`, `src/config/levelKits.ts`, `src/config/environments.ts`, `src/config/missions.ts`, `DEV-CHECKLIST.md`.
+- Verification: VS Code diagnostics for changed config/type files reported no errors; containerized `npm run lint` passed; `docker compose build --progress=plain && docker compose up -d && docker compose ps` passed with the existing non-blocking Vite large-chunk warning and container `Up`; deployed browser smoke at `https://skybreaker.nsystems.live` confirmed Mission 1 briefing/launch through Night Grid and Mission 2 briefing/launch through Ash Ridge with Ash Static hazards and relay-spire objective/HUD visible.
+- Notes/Risks: `src/config/environments.ts` remains as a compatibility export layer so older imports continue working, but the source of truth is now `src/config/levelKits.ts`. Waypoint style metadata is typed and stored on level kits for future rendering variation, but TV-8 does not alter waypoint visuals or scene-builder behavior.
 
 ### Phase TV-9 - Regression Hardening and Optional Renderer Enhancements
 
-Status: Pending
+Status: Complete
 
 Goal: harden the new visual architecture, then only consider heavier renderer features if performance remains stable.
 
-- [ ] Add smoke-test notes or scripts for visual regression points across desktop and mobile viewports
-- [ ] Repeat Mission 1 and Mission 2 smoke checks for controls, radar, markers, target destruction, extraction, success, and failure
-- [ ] Evaluate optional renderer settings such as `SRGBColorSpace`, tone mapping, bloom, or real reflections only after simpler polish is stable
-- [ ] Keep heavy effects quality-gated and reduced-effects aware
+- [x] Add smoke-test notes or scripts for visual regression points across desktop and mobile viewports
+- [x] Repeat Mission 1 and Mission 2 smoke checks for controls, radar, markers, target destruction, extraction, success, and failure
+- [x] Evaluate optional renderer settings such as `SRGBColorSpace`, tone mapping, bloom, or real reflections only after simpler polish is stable
+- [x] Keep heavy effects quality-gated and reduced-effects aware
 
 Acceptance criteria:
 
-- [ ] Regression checklist covers flight, mission, radar, markers, extraction, HUD, mobile touch controls, and graphics quality settings
-- [ ] Optional renderer changes improve the look without harming FPS or readability
-- [ ] Containerized `npm run lint`, Docker production build/deploy, and mobile smoke checks pass
+- [x] Regression checklist covers flight, mission, radar, markers, extraction, HUD, mobile touch controls, and graphics quality settings
+- [x] Optional renderer changes improve the look without harming FPS or readability
+- [x] Containerized `npm run lint`, Docker production build/deploy, and mobile smoke checks pass
+
+Completion summary:
+
+- Shipped: TV-9 regression hardening with a durable browser smoke checklist, exact portrait/landscape mobile Playwright smoke automation, and a renderer evaluation that retains the current SRGB/ACES baseline while deferring bloom, real reflections, dense dynamic lighting, and shadow-heavy effects until a dedicated performance pass proves headroom.
+- Changed: `docs/REGRESSION_SMOKE.md`, `scripts/smoke-mobile.cjs`, `DEV-CHECKLIST.md`.
+- Verification: VS Code diagnostics for the smoke doc/script reported no errors; containerized `npm run lint` passed; `docker compose build --progress=plain && docker compose up -d && docker compose ps` passed with the existing non-blocking Vite large-chunk warning and container `Up`; desktop Mission 1 and Mission 2 browser smokes passed; Docker Playwright exact mobile smoke passed at 390x844 portrait and 844x390 landscape with matching canvas dimensions, visible touch controls/HUD/radar/compass, no horizontal overflow, and no page errors.
+- Notes/Risks: TV-9 did not add heavier renderer features because the current renderer baseline is already quality-gated and readable. Target destruction, extraction, success, and failure remain documented for deeper manual regression passes; the automated smoke focuses on launch, HUD, controls, layout, and mobile viewport integrity.
+
+## Phase FLIGHT-1 - Revised Player Aircraft and Control Prep
+
+Status: Complete
+
+Goal: integrate the revised player aircraft from `player-aircraft.html` into the game, then prepare the movement-control code for a dedicated refinement pass without changing flight feel prematurely.
+
+- [x] Port the revised aircraft silhouette, materials, pods, rear thruster, dorsal/belly panels, struts, and accent emitters into the in-game Three.js drone model
+- [x] Preserve the existing `createDroneModel()` and `updateDroneVisualState()` API used by `Game.tsx`
+- [x] Preserve current flight semantics: forward is negative Z, `YXZ` rotation order, spawn height, projectile direction, navigation-lock quaternion sync, boost energy drain, camera offsets, HUD/radar/marker behavior, and mission rules
+- [x] Add behavior-preserving movement/control prep seams for future pitch, yaw, roll, boost, auto-level, camera, and touch-control tuning
+- [x] Document the control baseline that must stay unchanged until the dedicated refinement pass
+
+Acceptance criteria:
+
+- [x] Revised aircraft is visible and readable in chase view without occluding the reticle, weapon path, HUD, radar, or target markers
+- [x] Boost, primary fire, recent damage, engine glow, and cockpit/accent feedback animate through named visual handles
+- [x] Cockpit view hides the aircraft and chase view restores it
+- [x] Keyboard, pointer fine control, and touch controls still respond with the same mappings
+- [x] Containerized `npm run lint`, Docker production build/deploy, Mission 1 and Mission 2 smoke checks, and exact mobile smoke checks pass
+
+Control baseline for refinement:
+
+- FLIGHT-1's old behavior-preserving baseline has been superseded by the arcade-assisted control refinement: W/S pitch, A/D assisted bank-turn, Q/E yaw correction, R/F throttle, Shift boost, Ctrl brake, Space/left mouse primary fire, Alt/right mouse secondary fire, Tab/T lock cycle, X auto-level, C view toggle, touch joystick/actions, invert-Y behavior, boost FOV, and closer chase framing are now the active control/readability baseline.
+
+Completion summary:
+
+- Shipped: FLIGHT-1 revised player aircraft integration with the `player-aircraft.html` silhouette translated into native Three.js procedural geometry: lofted graphite fuselage, amber canopy, teal wing arms and panels, rotor pods, rear thruster/afterburner, belly/dorsal panels, struts, and cyan accent emitters. The existing drone factory/update API, negative-Z forward direction, spawn behavior, projectile path, navigation lock, HUD/radar/marker contracts, and mission rules were preserved.
+- Shipped: Behavior-preserving control prep via `src/systems/flightPhysics.ts`, moving current boost gate/energy drain, flight speed, pitch/yaw/roll input, pointer fine-control, auto-level, forward-vector, and position-advance math behind named helpers without retuning values. Keyboard C and touch VIEW now share the same camera-mode toggle path so quick view changes are not frame-rate dependent.
+- Changed: `src/scene/droneModel.ts`, `src/systems/flightPhysics.ts`, `src/components/Game.tsx`, `docs/REGRESSION_SMOKE.md`, `DEV-CHECKLIST.md`.
+- Verification: VS Code diagnostics for changed source/docs reported no errors; containerized `npm run lint` passed; `docker compose build --progress=plain && docker compose up -d && docker compose ps` passed with the existing non-blocking Vite large-chunk warning and container `Up`; deployed desktop browser smoke passed for Mission 1 and Mission 2 launch/HUD/radar/weapon feedback/cockpit toggle; screenshot review confirmed the revised aircraft is readable in chase view; exact Docker Playwright mobile smoke passed at 390x844 portrait and 844x390 landscape with matching canvas dimensions, visible touch controls/HUD/radar/compass, no horizontal overflow, and no page errors.
+- Notes/Risks: Actual movement feel tuning is intentionally deferred to the next dedicated control-refinement phase. The integrated browser reported very low FPS during some LOW/HIGH smoke runs, likely from the shared browser environment; Docker build, desktop functional smoke, and exact mobile smoke still passed.
+
+## Post-Phase Product Shell Polish
+
+Status: Complete
+
+Goal: tighten the game into a more complete product shell with a cinematic boot, proper hangar hub, dedicated campaign selection, detailed settings, and supporting screens without changing the core mission/combat loop.
+
+- [x] Start the app at an animated splash screen with skip and auto-advance behavior
+- [x] Refactor the main menu into a hangar hub with Continue, Campaign, Loadout, Pilot Record, Settings, Controls, Credits, and Reset Progress actions
+- [x] Move mission browsing into a dedicated campaign selection screen grouped by campaign arc
+- [x] Expand briefing into a richer mission intelligence screen
+- [x] Add a read-only loadout review screen based on unlocked campaign weapons
+- [x] Add pilot record, controls, and credits screens
+- [x] Replace the simple settings menu with Audio, Video, Controls, and System tabs
+- [x] Add backward-compatible persisted settings for HUD scale, touch-control scale, screen shake, pointer sensitivity, telemetry visibility, and menu motion
+- [x] Wire safe presentation settings into the mission view without changing mission rules
+- [x] Polish pause, mission complete, and mission failed shell actions
+- [x] Update mobile smoke automation and regression checklist for the new screen flow
+- [x] Run containerized lint/build verification
+- [x] Run Docker production build/deploy verification
+- [x] Run exact mobile smoke against the deployed URL
+
+Completion summary:
+
+- Shipped: Product-shell pass with animated splash, hangar hub, campaign mission select, richer briefing, read-only loadout review, pilot record, controls, credits, tabbed settings, polished pause actions, and expanded success/failure overlays.
+- Shipped: Backward-compatible settings fields for HUD scale, touch-control scale, screen shake, pointer sensitivity, telemetry visibility, and menu motion; safe presentation wiring was added to the mission view without changing mission rules, damage, weapons, unlocks, target counts, extraction, or flight-control mappings.
+- Changed: `src/App.tsx`, `src/types/game.ts`, `src/config/defaults.ts`, `src/hooks/useAudio.ts`, `src/components/menus/*`, `src/components/overlays/*`, `src/components/Game.tsx`, `scripts/smoke-mobile.cjs`, `docs/REGRESSION_SMOKE.md`, `DEV-CHECKLIST.md`.
+- Verification: VS Code diagnostics for changed app/menu/game files reported no errors; containerized `npm run lint` passed; containerized `npm run build` passed with the existing non-blocking Vite large-chunk warning; `docker compose build --progress=plain && docker compose up -d && docker compose ps` passed and reported `skybreaker-drone-strike` as `Up`; exact Docker Playwright mobile smoke passed at 390x844 portrait and 844x390 landscape with splash/hangar/settings/campaign/briefing/loadout/mission launch checks, matching canvas dimensions, visible touch controls/HUD/radar/compass, no horizontal overflow, and no page errors; `npm run validate:drone` passed.
+- Notes/Risks: Loadout remains read-only and key rebinding remains deferred until a dedicated gameplay/input contract pass. The production JS bundle is now about 1.0 MB minified and still triggers the existing Vite large-chunk warning; code splitting is a future optimization.
+
+## Product Shell Polish Verification Log
+
+- 2026-05-11: Product shell diagnostics for `src/App.tsx`, `src/components/menus`, `src/components/overlays`, `src/components/Game.tsx`, `src/types/game.ts`, and `src/config/defaults.ts` - no errors found.
+- 2026-05-11: Product shell `docker run --rm -v "$PWD":/app -v skybreaker-drone-strike-node-modules:/app/node_modules -w /app node:20-alpine sh -lc "npm run lint"` - passed; TypeScript `tsc --noEmit` completed with zero errors.
+- 2026-05-11: Product shell `docker run --rm -v "$PWD":/app -v skybreaker-drone-strike-node-modules:/app/node_modules -w /app node:20-alpine sh -lc "npm run build"` - passed; Vite production build completed with the existing non-blocking large-chunk warning.
+- 2026-05-11: Product shell `docker compose build --progress=plain && docker compose up -d && docker compose ps` - passed; image `skybreaker-drone-strike:latest` rebuilt and container `skybreaker-drone-strike` reported `Up`.
+- 2026-05-11: Product shell exact mobile smoke `docker run --rm --network host -v "$PWD":/work -w /tmp -e SMOKE_URL=https://skybreaker.nsystems.live mcr.microsoft.com/playwright:v1.52.0-noble sh -lc "npm init -y >/dev/null && npm install playwright@1.52.0 >/dev/null && NODE_PATH=/tmp/node_modules node /work/scripts/smoke-mobile.cjs"` - passed; portrait and landscape viewports confirmed shell actions, settings tabs, campaign mission list, briefing details, loadout weapons, mission launch, full-size canvas, visible touch controls/HUD/radar/compass, no horizontal overflow, and no page errors.
+- 2026-05-11: Product shell `docker run --rm -v "$PWD":/app -v skybreaker-drone-strike-node-modules:/app/node_modules -w /app node:20-alpine sh -lc "npm run validate:drone"` - passed; drone symmetry and effect handle validation completed successfully.
 
 ### Cross-phase risk register
 

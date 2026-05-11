@@ -5,7 +5,18 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Game from './components/Game';
-import { BriefingScreen, MainMenu, PauseMenu, SettingsMenu } from './components/menus';
+import {
+  BriefingScreen,
+  CareerScreen,
+  ControlsScreen,
+  CreditsScreen,
+  LoadoutScreen,
+  MainMenu,
+  MissionSelectScreen,
+  PauseMenu,
+  SettingsMenu,
+  SplashScreen,
+} from './components/menus';
 import {
   DEFAULT_APP_SETTINGS,
   DEFAULT_CAMPAIGN_PROGRESS,
@@ -30,6 +41,10 @@ function clampPercent(value: unknown, fallback: number) {
   return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : fallback;
 }
 
+function clampRange(value: unknown, fallback: number, min: number, max: number) {
+  return typeof value === 'number' && Number.isFinite(value) ? Math.max(min, Math.min(max, value)) : fallback;
+}
+
 function loadStoredSettings() {
   const stored = loadStoredJson(SETTINGS_STORAGE_KEY) as Partial<AppSettings> | null;
   const graphicsQuality = stored?.graphicsQuality === 'LOW' || stored?.graphicsQuality === 'MEDIUM' || stored?.graphicsQuality === 'HIGH'
@@ -43,6 +58,12 @@ function loadStoredSettings() {
     graphicsQuality,
     reduceEffects: typeof stored?.reduceEffects === 'boolean' ? stored.reduceEffects : DEFAULT_APP_SETTINGS.reduceEffects,
     invertY: typeof stored?.invertY === 'boolean' ? stored.invertY : DEFAULT_APP_SETTINGS.invertY,
+    hudScale: clampRange(stored?.hudScale, DEFAULT_APP_SETTINGS.hudScale, 85, 115),
+    touchControlsScale: clampRange(stored?.touchControlsScale, DEFAULT_APP_SETTINGS.touchControlsScale, 85, 125),
+    screenShake: clampPercent(stored?.screenShake, DEFAULT_APP_SETTINGS.screenShake),
+    pointerSensitivity: clampRange(stored?.pointerSensitivity, DEFAULT_APP_SETTINGS.pointerSensitivity, 60, 140),
+    showTelemetry: typeof stored?.showTelemetry === 'boolean' ? stored.showTelemetry : DEFAULT_APP_SETTINGS.showTelemetry,
+    menuMotion: typeof stored?.menuMotion === 'boolean' ? stored.menuMotion : DEFAULT_APP_SETTINGS.menuMotion,
   } satisfies AppSettings;
 }
 
@@ -90,14 +111,19 @@ function loadStoredProgress() {
 }
 
 export default function App() {
-  const [phase, setPhase] = useState(GamePhase.MAIN_MENU);
+  const [phase, setPhase] = useState(GamePhase.BOOT);
   const [settingsReturnPhase, setSettingsReturnPhase] = useState(GamePhase.MAIN_MENU);
+  const [controlsReturnPhase, setControlsReturnPhase] = useState(GamePhase.MAIN_MENU);
   const [selectedMissionId, setSelectedMissionId] = useState(DEFAULT_MISSION_ID);
   const [missionRunId, setMissionRunId] = useState(0);
   const [settings, setSettings] = useState<AppSettings>(loadStoredSettings);
   const [progress, setProgress] = useState<CampaignProgress>(loadStoredProgress);
   const selectedMission = getMissionById(selectedMissionId);
   const { playCue } = useAudio(settings, phase);
+
+  const nextSortieMission = MISSIONS.find(mission => isMissionUnlocked(mission, progress) && !progress.completedMissionIds.includes(mission.id))
+    ?? MISSIONS.find(mission => mission.id === selectedMissionId)
+    ?? MISSIONS[0];
 
   useEffect(() => {
     window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
@@ -128,6 +154,18 @@ export default function App() {
     setPhase(GamePhase.IN_MISSION);
   }, [playCue, progress, selectedMission]);
 
+  const openBriefing = useCallback((missionId = selectedMission.id) => {
+    const mission = getMissionById(missionId);
+    if (!isMissionUnlocked(mission, progress)) return;
+    playCue('ui');
+    setSelectedMissionId(mission.id);
+    setPhase(GamePhase.BRIEFING);
+  }, [playCue, progress, selectedMission.id]);
+
+  const continueSortie = useCallback(() => {
+    openBriefing(nextSortieMission.id);
+  }, [nextSortieMission.id, openBriefing]);
+
   const retryMission = useCallback(() => {
     playCue('ui');
     setMissionRunId(runId => runId + 1);
@@ -143,6 +181,12 @@ export default function App() {
     playCue('ui');
     setSettingsReturnPhase(returnPhase);
     setPhase(GamePhase.SETTINGS);
+  }, [playCue]);
+
+  const openControls = useCallback((returnPhase: GamePhase) => {
+    playCue('ui');
+    setControlsReturnPhase(returnPhase);
+    setPhase(GamePhase.CONTROLS);
   }, [playCue]);
 
   const handleMissionComplete = useCallback((result: MissionCompletionResult) => {
@@ -162,7 +206,7 @@ export default function App() {
     setSelectedMissionId(DEFAULT_MISSION_ID);
   }, [playCue]);
 
-  const gamePhase = phase === GamePhase.SETTINGS && settingsReturnPhase === GamePhase.PAUSED ? GamePhase.PAUSED : phase;
+  const gamePhase = (phase === GamePhase.SETTINGS && settingsReturnPhase === GamePhase.PAUSED) || (phase === GamePhase.CONTROLS && controlsReturnPhase === GamePhase.PAUSED) ? GamePhase.PAUSED : phase;
   const shouldRenderGame = gamePhase === GamePhase.IN_MISSION || gamePhase === GamePhase.PAUSED || gamePhase === GamePhase.DEBRIEF;
 
   return (
@@ -184,25 +228,52 @@ export default function App() {
         </div>
       )}
 
+      {phase === GamePhase.BOOT && <SplashScreen motionEnabled={settings.menuMotion} onComplete={() => setPhase(GamePhase.MAIN_MENU)} />}
+
       {phase === GamePhase.MAIN_MENU && (
         <MainMenu
           missions={MISSIONS}
-          selectedMissionId={selectedMissionId}
+          nextMissionId={nextSortieMission.id}
           progress={progress}
-          onSelectMission={setSelectedMissionId}
-          onStartMission={() => setPhase(GamePhase.BRIEFING)}
+          onContinue={continueSortie}
+          onOpenCampaign={() => setPhase(GamePhase.MISSION_SELECT)}
+          onOpenLoadout={() => setPhase(GamePhase.LOADOUT)}
+          onOpenCareer={() => setPhase(GamePhase.CAREER)}
           onOpenSettings={() => openSettings(GamePhase.MAIN_MENU)}
+          onOpenControls={() => openControls(GamePhase.MAIN_MENU)}
+          onOpenCredits={() => setPhase(GamePhase.CREDITS)}
           onResetProgress={resetProgress}
         />
       )}
 
-      {phase === GamePhase.BRIEFING && <BriefingScreen mission={selectedMission} onLaunch={launchMission} onBack={() => setPhase(GamePhase.MAIN_MENU)} />}
+      {phase === GamePhase.MISSION_SELECT && (
+        <MissionSelectScreen
+          missions={MISSIONS}
+          selectedMissionId={selectedMissionId}
+          progress={progress}
+          onSelectMission={setSelectedMissionId}
+          onStartMission={() => openBriefing(selectedMissionId)}
+          onBack={() => setPhase(GamePhase.MAIN_MENU)}
+        />
+      )}
+
+      {phase === GamePhase.BRIEFING && <BriefingScreen mission={selectedMission} onContinue={() => setPhase(GamePhase.LOADOUT)} onBack={() => setPhase(GamePhase.MISSION_SELECT)} />}
+
+      {phase === GamePhase.LOADOUT && <LoadoutScreen mission={selectedMission} progress={progress} onLaunch={launchMission} onBack={() => setPhase(GamePhase.BRIEFING)} />}
+
+      {phase === GamePhase.CAREER && <CareerScreen missions={MISSIONS} progress={progress} onBack={() => setPhase(GamePhase.MAIN_MENU)} />}
+
+      {phase === GamePhase.CONTROLS && <ControlsScreen onBack={() => setPhase(controlsReturnPhase)} />}
+
+      {phase === GamePhase.CREDITS && <CreditsScreen onBack={() => setPhase(GamePhase.MAIN_MENU)} />}
 
       {phase === GamePhase.PAUSED && (
         <PauseMenu
+          mission={selectedMission}
           onResume={() => setPhase(GamePhase.IN_MISSION)}
           onRetry={retryMission}
           onOpenSettings={() => openSettings(GamePhase.PAUSED)}
+          onOpenControls={() => openControls(GamePhase.PAUSED)}
           onReturnToMenu={returnToMenu}
         />
       )}

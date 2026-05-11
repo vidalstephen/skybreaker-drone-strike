@@ -43,7 +43,17 @@ function cueProfile(cue: AudioCue) {
 
 function musicGainForPhase(phase: GamePhase) {
   if (phase === GamePhase.IN_MISSION) return 0.18;
-  if (phase === GamePhase.MAIN_MENU || phase === GamePhase.BRIEFING || phase === GamePhase.SETTINGS) return 0.1;
+  if (
+    phase === GamePhase.BOOT ||
+    phase === GamePhase.MAIN_MENU ||
+    phase === GamePhase.MISSION_SELECT ||
+    phase === GamePhase.BRIEFING ||
+    phase === GamePhase.LOADOUT ||
+    phase === GamePhase.CAREER ||
+    phase === GamePhase.CONTROLS ||
+    phase === GamePhase.CREDITS ||
+    phase === GamePhase.SETTINGS
+  ) return 0.1;
   if (phase === GamePhase.PAUSED) return 0.06;
   return 0.0;
 }
