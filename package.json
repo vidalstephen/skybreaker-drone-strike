@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
-    "validate:drone": "tsx scripts/validate-drone-symmetry.ts"
+    "validate:drone": "tsx scripts/validate-drone-symmetry.ts",
+    "validate:prototype": "tsx scripts/validate-set-piece-prototype.ts"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",

@@ -1,8 +1,44 @@
-import type { MissionDefinition } from '../types/game';
+import type { MissionDefinition, MissionWeakPointDefinition, TargetComponentDefinition } from '../types/game';
 import { defineMission, resolveWeakPointLayout } from './levelKits';
 
 const RADAR_TOWER_WEAK_POINTS = resolveWeakPointLayout('radar-array');
 const RELAY_SPIRE_WEAK_POINTS = resolveWeakPointLayout('relay-core');
+
+const SAM_SITE_COMPONENTS: TargetComponentDefinition[] = [
+  { id: 'tracking-radar', label: 'Tracking Radar', role: 'radar-array', health: 80, required: true, exposure: 'exposed', offset: [0, 50, 0], radius: 14 },
+  { id: 'launcher', label: 'Launcher', role: 'weapon', health: 130, required: true, exposure: 'exposed', offset: [13, 26, 0], radius: 18 },
+  { id: 'ammo-cache', label: 'Ammo Cache', role: 'optional-system', health: 70, required: false, exposure: 'hidden', offset: [-15, 18, 0], radius: 14 },
+];
+
+const SAM_SITE_WEAK_POINTS: MissionWeakPointDefinition[] = [
+  { id: 'tracking-radar', label: 'Tracking Radar', offset: [0, 50, 0], health: 80, radius: 14, required: true },
+  { id: 'launcher', label: 'Launcher', offset: [13, 26, 0], health: 130, radius: 18, required: true },
+  { id: 'ammo-cache', label: 'Ammo Cache', offset: [-15, 18, 0], health: 70, radius: 14, required: false },
+];
+
+const REACTOR_COMPONENTS: TargetComponentDefinition[] = [
+  { id: 'coolant-a', label: 'Coolant A', role: 'weak-point', health: 70, required: true, exposure: 'exposed', offset: [-12, 34, 4], radius: 13 },
+  { id: 'coolant-b', label: 'Coolant B', role: 'weak-point', health: 70, required: true, exposure: 'exposed', offset: [12, 34, 4], radius: 13 },
+  { id: 'reactor-core', label: 'Reactor Core', role: 'reactor', health: 220, required: true, exposure: 'phase-gated', offset: [0, 66, -2], radius: 22 },
+];
+
+const REACTOR_WEAK_POINTS: MissionWeakPointDefinition[] = [
+  { id: 'coolant-a', label: 'Coolant A', offset: [-12, 34, 4], health: 70, radius: 13, required: true },
+  { id: 'coolant-b', label: 'Coolant B', offset: [12, 34, 4], health: 70, radius: 13, required: true },
+  { id: 'reactor-core', label: 'Reactor Core', offset: [0, 66, -2], health: 220, radius: 22, required: true },
+];
+
+const CONVOY_COMPONENTS: TargetComponentDefinition[] = [
+  { id: 'lead-vehicle', label: 'Lead Vehicle', role: 'core', health: 140, required: true, exposure: 'exposed', offset: [0, 24, -16], radius: 18 },
+  { id: 'cargo-vehicle', label: 'Cargo Vehicle', role: 'cargo', health: 110, required: true, exposure: 'exposed', offset: [0, 24, 14], radius: 18 },
+  { id: 'escort-vehicle', label: 'Escort Vehicle', role: 'escort', health: 90, required: false, exposure: 'exposed', offset: [18, 20, 0], radius: 16 },
+];
+
+const CONVOY_WEAK_POINTS: MissionWeakPointDefinition[] = [
+  { id: 'lead-vehicle', label: 'Lead Vehicle', offset: [0, 24, -16], health: 140, radius: 18, required: true },
+  { id: 'cargo-vehicle', label: 'Cargo Vehicle', offset: [0, 24, 14], health: 110, radius: 18, required: true },
+  { id: 'escort-vehicle', label: 'Escort Vehicle', offset: [18, 20, 0], health: 90, radius: 16, required: false },
+];
 
 export const MISSIONS: MissionDefinition[] = [
   defineMission({
@@ -529,6 +565,112 @@ export const MISSIONS: MissionDefinition[] = [
       description: 'Campaign complete. Replay sorties to chase better times, scores, and ranks.',
     },
     unlockAfterMissionId: 'skybreaker-gate',
+  }),
+  defineMission({
+    id: 'set-piece-proving-ground',
+    order: 90,
+    title: 'SET-PIECE PROVING GROUND',
+    levelKitId: 'ash-ridge',
+    campaignArc: 'Prototype Range // Set-Piece Lab',
+    difficulty: 6,
+    combatDomain: 'MIXED',
+    missionType: 'SABOTAGE',
+    timeOfDay: 'dawn',
+    weatherId: 'crosswind',
+    targetLabel: 'Prototype Systems',
+    initialObjective: 'DISABLE PROTOTYPE SYSTEMS',
+    targetDestroyedMessage: 'PROTOTYPE SYSTEM DISABLED',
+    nextTargetMessage: 'SELECT NEXT PROTOTYPE SYSTEM...',
+    allTargetsDestroyedMessage: 'SET-PIECE SYSTEMS VERIFIED // PROCEED TO EXTRACTION',
+    briefing: [
+      { label: 'Targets', value: 'SAM / Reactor / Convoy' },
+      { label: 'Extraction', value: 'Range Gate' },
+      { label: 'Threat', value: 'Evaluation Cadre' },
+    ],
+    targets: [
+      {
+        id: 'proto_sam_site',
+        position: [520, 0, -720],
+        health: 210,
+        archetype: 'facility-node',
+        setPieceArchetypeId: 'sam-site',
+        components: SAM_SITE_COMPONENTS,
+        weakPoints: SAM_SITE_WEAK_POINTS,
+        trackingMeta: { radarLabel: 'SAM', markerLabel: 'SAM SITE', priorityBonus: 80, attentionReason: 'Prototype launcher' },
+      },
+      {
+        id: 'proto_reactor',
+        position: [-680, 0, -120],
+        health: 360,
+        archetype: 'relay-spire',
+        setPieceArchetypeId: 'reactor',
+        components: REACTOR_COMPONENTS,
+        weakPoints: REACTOR_WEAK_POINTS,
+        trackingMeta: { radarLabel: 'RCT', markerLabel: 'REACTOR', priorityBonus: 70, attentionReason: 'Phase-gated core' },
+      },
+      {
+        id: 'proto_convoy',
+        position: [-560, 0, 740],
+        health: 250,
+        archetype: 'tower',
+        setPieceArchetypeId: 'convoy',
+        components: CONVOY_COMPONENTS,
+        weakPoints: CONVOY_WEAK_POINTS,
+        movement: {
+          route: [
+            { position: [120, 0, 860], holdMs: 500 },
+            { position: [860, 0, 520] },
+            { position: [1160, 0, -120] },
+          ],
+          speed: 24,
+          loopMode: 'once',
+          endBehavior: 'fail-mission',
+          escapeMessage: 'PROTOTYPE CONVOY BREACHED THE RANGE GATE',
+        },
+        trackingMeta: { radarLabel: 'CNV', markerLabel: 'CONVOY', priorityBonus: 65, routeHint: 'Intercept before range gate' },
+      },
+    ],
+    extraction: {
+      label: 'Range Gate',
+      position: [1280, 0, 820],
+      activationObjective: 'RETREAT TO RANGE GATE',
+      approachObjective: 'RETREAT TO RANGE GATE',
+      completionObjective: 'PROTOTYPE COMPLETE',
+      radius: 105,
+      trackingMeta: { radarLabel: 'EXT', markerLabel: 'RANGE GATE', priorityBonus: 50, routeHint: 'Exit range corridor' },
+    },
+    enemyWave: {
+      triggerTargetsDestroyed: 1,
+      count: 4,
+      message: 'WARNING: EVALUATION CADRE ENTERING RANGE',
+      composition: [
+        { role: 'fast-interceptor', count: 2 },
+        { role: 'missile-platform', count: 1 },
+        { role: 'heavy-gunship', count: 1 },
+      ],
+    },
+    failureConditions: [
+      { id: 'hull-depleted', label: 'Hull Integrity', message: 'CRITICAL HULL FAILURE' },
+      { id: 'out-of-bounds', label: 'Prototype Boundary', message: 'RETURN TO PROVING GROUND' },
+    ],
+    scoring: {
+      parTimeMs: 420000,
+      baseScore: 2600,
+      targetBonus: 950,
+      enemyBonus: 400,
+      healthBonus: 10,
+      timeBonus: 1200,
+      setPieceComponentBonus: 125,
+      setPiecePhaseBonus: 250,
+      setPieceOptionalComponentBonus: 300,
+      rankThresholds: { S: 11200, A: 9000, B: 6800, C: 0 },
+    },
+    reward: {
+      id: 'set-piece-calibration',
+      label: 'Set-Piece Calibration',
+      description: 'Prototype telemetry confirms component phases, moving objectives, failure routing, and debrief scoring hooks.',
+    },
+    unlockAfterMissionId: 'final-dawn',
   }),
 ];
 

@@ -25,4 +25,12 @@ export const CAMPAIGN_ARCS: CampaignArcDefinition[] = [
     escalation: 'Moves from survival pressure into boss-pattern and mixed-objective climax missions.',
     status: 'ACTIVE',
   },
+  {
+    id: 'prototype-range',
+    label: 'Prototype Range // Set-Piece Lab',
+    missionRange: 'Prototype 90',
+    focus: 'Isolated post-campaign proving ground for set-piece components, phases, movement, failure, and debrief scoring.',
+    escalation: 'Exercises multiple objective systems without inserting prototype content into the main campaign arc.',
+    status: 'PLANNED',
+  },
 ];

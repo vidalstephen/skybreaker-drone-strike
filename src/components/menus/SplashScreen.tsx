@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
+import { PHASE_TAG } from '../../config/buildMeta';
 
 export interface SplashScreenProps {
   motionEnabled: boolean;
@@ -40,6 +41,7 @@ export function SplashScreen({ motionEnabled, onComplete }: SplashScreenProps) {
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_38%,rgba(249,115,22,0.16),transparent_34%),linear-gradient(180deg,rgba(0,0,0,0.05),rgba(0,0,0,0.9))]" />
       <div className="absolute inset-x-0 top-0 h-px bg-orange-500/70" />
       <div className="absolute inset-x-0 bottom-0 h-px bg-cyan-300/30" />
+      <div className="absolute bottom-3 right-4 z-20 text-[9px] font-mono uppercase tracking-[0.2em] text-white/25" aria-hidden="true">{PHASE_TAG}</div>
       <div className="absolute inset-0 opacity-[0.07] bg-[linear-gradient(rgba(255,255,255,0.8)_1px,transparent_1px)] bg-[length:100%_4px]" />
 
       <motion.div {...motionProps} className="relative z-10 w-full max-w-3xl text-center">

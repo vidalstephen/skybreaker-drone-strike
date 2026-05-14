@@ -6,7 +6,7 @@ This document describes the implemented game as it exists now. It is the current
 
 ## Current State Summary
 
-Skybreaker Drone Strike is a browser-based 3D arcade drone combat game built with React, TypeScript, Vite, Tailwind CSS, Motion, and Three.js. The current playable game is a compact eight-mission tactical arcade campaign, not a single-mission prototype and not a simulation-grade flight/combat sim.
+Skybreaker Drone Strike is a browser-based 3D arcade drone combat game built with React, TypeScript, Vite, Tailwind CSS, Motion, and Three.js. The current playable game is a compact eight-mission tactical arcade campaign plus one isolated post-campaign set-piece proving-ground sortie, not a single-mission prototype and not a simulation-grade flight/combat sim.
 
 The core loop is:
 
@@ -82,7 +82,7 @@ Scene construction:
 
 ## Campaign And Missions
 
-The current campaign contains eight authored missions:
+The current campaign contains eight authored missions. A separate prototype range sortie exists after the campaign for set-piece validation and tuning:
 
 | Order | Mission | Current domain/type/time data |
 |---|---|---|
@@ -94,6 +94,7 @@ The current campaign contains eight authored missions:
 | 06 | Ember Crown | `MIXED`, `STRIKE`, `dawn` |
 | 07 | Skybreaker Gate | `MIXED`, `BOSS`, `night` |
 | 08 | Final Dawn | `MIXED`, `FINALE`, `dawn` |
+| 90 | Set-Piece Proving Ground | `MIXED`, `SABOTAGE`, `dawn`, prototype range |
 
 The missions are data-defined and hand-authored. They use target arrays, extraction definitions, enemy wave definitions, failure condition labels, scoring definitions, reward definitions, unlock gates, campaign arc metadata, and Stage 2a classification fields.
 

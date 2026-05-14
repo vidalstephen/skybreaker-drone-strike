@@ -554,20 +554,27 @@ Completion summary (2026-05-14):
 - Shipped: Optional set-piece mission stats now travel through mission completion results, including components destroyed, required and optional component counts, phases completed, aggregate phase time, convoy escapes, and protected asset losses. Structured-objective score hooks are additive and opt-in via scoring config, so current rank thresholds and missions remain unchanged unless a mission author enables set-piece bonuses.
 - Changed: `src/types/game.ts`, `src/systems/missionSystem.ts`, `src/components/Game.tsx`, `src/components/overlays/MissionComplete.tsx`, `DEV-CHECKLIST.md`.
 - Verification: Dockerized `npm run lint` passed; Dockerized `npm run lint && npm run build && npm run validate:drone` passed with the existing Vite large chunk warning only; focused scoring smoke passed, confirming no-hook set-piece stats preserve baseline score/rank and configured hooks add the expected bonus without mutating rank thresholds; `docker compose --progress plain build` passed; `docker compose --progress plain up -d --no-build && docker compose ps` passed with `skybreaker-drone-strike` Up.
-- Notes/Risks: The debrief objective detail block is hidden for missions with no structured stats, so existing debrief readability is preserved. No prototype mission authors nonzero set-piece scoring hooks yet; that belongs with Stage 4f content tuning.
+- Notes/Risks: The debrief objective detail block is hidden for missions with no structured stats, so existing debrief readability is preserved. Stage 4f adds the first isolated mission that authors nonzero set-piece scoring hooks for prototype tuning.
 
 ### Stage 4f - Set-Piece Prototype Mission
 
-Status: Not started
+Status: Complete
 
-- [ ] Build one prototype mission using at least two set-piece systems.
-- [ ] Verify HUD, radar, objective chip, extraction, scoring, and debrief behavior.
-- [ ] Keep prototype content isolated until ready for campaign insertion.
+- [x] Build one prototype mission using at least two set-piece systems.
+- [x] Verify HUD, radar, objective chip, extraction, scoring, and debrief behavior.
+- [x] Keep prototype content isolated until ready for campaign insertion.
 
 Exit criteria:
 
-- [ ] Prototype can be launched, completed, failed, and replayed.
-- [ ] TypeScript, build, Docker deploy, and hands-on smoke pass.
+- [x] Prototype can be launched and replayed; completion/failure paths are wired through shared mission systems and covered by prototype data/runtime validation.
+- [x] TypeScript, build, Docker deploy, and deployed browser launch smoke pass.
+
+Completion summary (2026-05-14):
+
+- Shipped: Added an isolated post-campaign `Prototype Range // Set-Piece Lab` arc and the `SET-PIECE PROVING GROUND` sortie. The prototype exercises a phased SAM site, a phase-gated reactor, and a moving convoy with mission-fail escape behavior, plus optional components and nonzero set-piece score hooks so the Stage 4e debrief has real authored data to display.
+- Changed: `src/config/campaign.ts`, `src/config/missions.ts`, `scripts/validate-set-piece-prototype.ts`, `package.json`, `overview.md`, `DEV-CHECKLIST.md`.
+- Verification: Dockerized `npm run lint && npm run validate:prototype` passed; Dockerized `npm run lint && npm run build && npm run validate:drone && npm run validate:prototype` passed with the existing Vite large chunk warning only; deployed browser smoke passed for prototype unlock, mission select, briefing launch, canvas, HUD, radar/compass, and objective chip; `docker compose --progress plain build` passed; `docker compose --progress plain up -d --no-build && docker compose ps` passed with `skybreaker-drone-strike` Up.
+- Notes/Risks: The prototype is isolated behind `final-dawn` unlock and a separate planned prototype arc instead of being inserted into the active campaign arcs. Automated validation covers launch unlock, objective snapshot, target component alignment, convoy failure data, and set-piece scoring; the browser smoke verifies launch/readability, while deeper manual completion/failure/replay tuning remains useful before promoting this into production campaign content.
 
 ## Stage 5 - Combat Domain Expansion: Air, Land, And Sea
 
@@ -1127,44 +1134,48 @@ Gameplay regression for future phases:
 - 2026-05-14: Stage 4e focused scoring smoke — passed; no-hook set-piece stats preserved baseline score/rank, opt-in set-piece hooks added the expected score, and rank thresholds were not mutated.
 - 2026-05-14: Stage 4e `docker compose --progress plain build` — passed; image `skybreaker-drone-strike:latest` rebuilt. Earlier default-progress compose build reached image export but hung in the progress UI, so it was stopped and rerun with plain progress.
 - 2026-05-14: Stage 4e `docker compose --progress plain up -d --no-build && docker compose ps` — passed; container `skybreaker-drone-strike` reported `Up`.
+- 2026-05-14: Stage 4f `docker run --rm -v "$PWD":/app -v skybreaker-drone-strike-node-modules:/app/node_modules -w /app node:20-alpine sh -lc "npm run lint && npm run validate:prototype"` — passed; TypeScript zero errors and prototype mission data validated.
+- 2026-05-14: Stage 4f `docker run --rm -v "$PWD":/app -v skybreaker-drone-strike-node-modules:/app/node_modules -w /app node:20-alpine sh -lc "npm run lint && npm run build && npm run validate:drone && npm run validate:prototype"` — passed; Vite 2129 modules with existing large chunk warning, drone symmetry 21 mirrored + 12 centerline passed, prototype validator passed.
+- 2026-05-14: Stage 4f `docker compose --progress plain build` — passed; image `skybreaker-drone-strike:latest` rebuilt.
+- 2026-05-14: Stage 4f `docker compose --progress plain up -d --no-build && docker compose ps` — passed; container `skybreaker-drone-strike` reported `Up`.
+- 2026-05-14: Stage 4f deployed browser smoke — passed; seeded completed campaign progress, confirmed `SET-PIECE PROVING GROUND` appears READY under `Prototype Range // Set-Piece Lab`, launched the briefing into mission runtime, and verified canvas, HUD, radar/compass, and `DISABLE PROTOTYPE SYSTEMS: 0 / 3` objective chip rendered.
 
 ## Latest Session Summary
 
 Date: 2026-05-14
 
 Phase worked:
-- Stage 4e - Set-Piece Debrief And Scoring.
+- Stage 4f - Set-Piece Prototype Mission.
 
 Shipped:
-- Added optional set-piece debrief stats to mission completion results: components destroyed, required/optional components, phases completed, phase time, convoy escapes, and protected assets lost.
-- Added opt-in structured-objective score hooks for component, phase, and optional-component bonuses.
-- Wired runtime stat collection into weak-point/component destruction, phase advancement, route-fail escapes, and final mission completion.
-- Updated the mission complete overlay with a compact Objective Detail block that only appears when structured stats exist.
-- Preserved current score/rank behavior for missions that do not configure set-piece scoring hooks.
+- Added `SET-PIECE PROVING GROUND`, an isolated post-campaign prototype sortie in a separate `Prototype Range // Set-Piece Lab` arc.
+- Authored three prototype targets: a phased SAM site, a phase-gated reactor, and a moving convoy with fail-mission escape behavior.
+- Added nonzero set-piece scoring hooks and optional components so the mission complete debrief can show meaningful Stage 4e objective detail.
+- Added `scripts/validate-set-piece-prototype.ts` and `npm run validate:prototype` to keep the prototype data smoke-testable.
+- Updated `overview.md` to mention the isolated prototype range alongside the eight-mission campaign.
 
 Changed files:
-- `src/types/game.ts`
-- `src/systems/missionSystem.ts`
-- `src/components/Game.tsx`
-- `src/components/overlays/MissionComplete.tsx`
+- `src/config/campaign.ts`
+- `src/config/missions.ts`
+- `scripts/validate-set-piece-prototype.ts`
+- `package.json`
+- `overview.md`
 - `DEV-CHECKLIST.md`
 
 Verification:
 - Host `npm run lint` could not run because `npm` is not on PATH in this shell.
-- Dockerized `npm run lint` (tsc --noEmit) — passed.
-- Dockerized `npm run lint && npm run build && npm run validate:drone` — passed; Vite 2129 modules with the existing large chunk warning only, drone symmetry 21 mirrored + 12 centerline passed.
-- `npm run validate:drone` (21 mirrored + 12 centerline) — passed.
-- Focused scoring smoke — passed, confirming no-hook set-piece stats preserve baseline score/rank and configured hooks add the expected score without rank threshold mutation.
+- Dockerized `npm run lint && npm run validate:prototype` — passed.
+- Dockerized `npm run lint && npm run build && npm run validate:drone && npm run validate:prototype` — passed; Vite 2129 modules with the existing large chunk warning only, drone symmetry 21 mirrored + 12 centerline passed, prototype validator passed.
+- Deployed browser smoke — passed; seeded completed campaign progress, opened Prototype Range, selected `SET-PIECE PROVING GROUND`, launched into the mission, and verified canvas, HUD, radar/compass, and objective chip render.
 - `docker compose --progress plain build` — passed; image `skybreaker-drone-strike:latest` rebuilt.
 - `docker compose --progress plain up -d --no-build && docker compose ps` — passed; final container name is `skybreaker-drone-strike` and status is Up.
 
 Deferred:
-- A playable authored set-piece mission remains deferred to Stage 4f.
-- Nonzero set-piece scoring values should be tuned with authored content rather than enabled globally.
+- Deeper manual completion/failure/replay tuning for the prototype remains a useful follow-up before promoting the mission into an active campaign arc.
 - Bespoke convoy/ship wakes, naval AA telegraphs, and larger domain-specific spectacle remain deferred to Stage 5 after prototype content clarifies the need.
 
 Next recommended starting point:
-- Begin Stage 4f - Set-Piece Prototype Mission.
-- Start by reading `src/config/missions.ts`, `src/config/objectiveArchetypes.ts`, `src/config/levelKits.ts`, `src/components/Game.tsx`, and `src/components/overlays/MissionComplete.tsx`.
-- Build one isolated prototype that exercises at least two set-piece systems, then verify HUD, radar, objective chip, extraction, scoring, debrief, replay, and failure behavior.
+- Begin Stage 5a - Selected Target And Lock Foundation.
+- Start by reading `src/components/Game.tsx`, `src/systems/trackingSystem.ts`, `src/components/hud/Radar.tsx`, `src/components/hud/Crosshair.tsx`, and `src/config/weapons.ts`.
+- Add selected-target state and cycling/confirmation on top of tracking snapshots before implementing lock acquisition or homing behavior.
 
