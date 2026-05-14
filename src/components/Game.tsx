@@ -25,6 +25,8 @@ import {
   LOCK_CONE_DOT,
   LOCK_ACQUIRE_RATE,
   LOCK_DRAIN_RATE,
+  MISSILE_TURN_RATE,
+  MISSILE_MIN_LOCK,
 } from '../config/constants';
 import { expandEnemyWave } from '../config/enemies';
 import { DEFAULT_PRIMARY_WEAPON, getUnlockedWeapons } from '../config/weapons';
@@ -772,6 +774,11 @@ export default function Game({
 
           const projectileVelocity = new THREE.Vector3(0, 0, -weapon.projectileSpeed).applyQuaternion(droneRef.current.quaternion).multiplyScalar(dt);
 
+          // Stage 5b: capture homing target when weapon is homing and lock is fully acquired
+          const homingTargetId = weapon.homing && gameLogicRef.current.lockProgress >= MISSILE_MIN_LOCK
+            ? gameLogicRef.current.lockTargetId
+            : null;
+
           scene.add(projectile);
           projectilesRef.current.push({
             mesh: projectile,
@@ -780,6 +787,7 @@ export default function Game({
             damage: weapon.damage,
             weaponId: weapon.id,
             blastRadius: weapon.blastRadius,
+            targetId: homingTargetId,
           });
         };
 
@@ -1012,6 +1020,34 @@ export default function Game({
         // Update Projectiles (with Player Hit Detection)
         projectilesRef.current = projectilesRef.current.filter(p => {
           const projectileStart = p.mesh.position.clone();
+
+          // Stage 5b: homing guidance — steer toward locked target before moving
+          if (p.targetId && !p.isEnemy) {
+            let targetWorldPos: THREE.Vector3 | null = null;
+            const homingEnemy = enemiesRef.current.find(e => e.id === p.targetId && !e.destroyed);
+            if (homingEnemy) {
+              targetWorldPos = homingEnemy.mesh.position;
+            } else {
+              const homingTarget = targetsRef.current.find(t => t.id === p.targetId && !t.destroyed);
+              if (homingTarget) targetWorldPos = homingTarget.position.clone().add(new THREE.Vector3(0, 40, 0));
+            }
+            if (targetWorldPos) {
+              const currentDir = p.velocity.clone().normalize();
+              const toTarget = targetWorldPos.clone().sub(p.mesh.position).normalize();
+              const angle = currentDir.angleTo(toTarget);
+              if (angle > 0.001) {
+                const maxTurn = MISSILE_TURN_RATE * delta;
+                const t = Math.min(1, maxTurn / angle);
+                const newDir = new THREE.Vector3().lerpVectors(currentDir, toTarget, t).normalize();
+                const speed = p.velocity.length();
+                p.velocity.copy(newDir.multiplyScalar(speed));
+              }
+            } else {
+              // Target gone — fly straight for remaining life
+              p.targetId = null;
+            }
+          }
+
           p.mesh.position.add(p.velocity);
           const projectileEnd = p.mesh.position.clone();
           p.life--;

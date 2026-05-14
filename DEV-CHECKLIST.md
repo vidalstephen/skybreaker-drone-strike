@@ -598,17 +598,17 @@ Exit criteria:
 
 ### Stage 5b - Homing And Specialized Secondary Weapons
 
-Status: Not started
+Status: Complete
 
-- [ ] Convert or extend Ion Missile into a true homing anti-air weapon where mission rules support it.
-- [ ] Add guidance behavior, turn limits, target loss behavior, and impact/near-miss handling.
-- [ ] Add future payload hooks for anti-ground rockets and anti-sea weapons.
-- [ ] Preserve current unlocked weapon progression unless a later progression phase changes it.
+- [x] Convert or extend Ion Missile into a true homing anti-air weapon where mission rules support it.
+- [x] Add guidance behavior, turn limits, target loss behavior, and impact/near-miss handling.
+- [x] Add future payload hooks for anti-ground rockets and anti-sea weapons.
+- [x] Preserve current unlocked weapon progression unless a later progression phase changes it.
 
 Exit criteria:
 
-- [ ] Homing behavior is fair, readable, and energy/cooldown gated.
-- [ ] Current missions remain playable if no selected target exists.
+- [x] Homing behavior is fair, readable, and energy/cooldown gated.
+- [x] Current missions remain playable if no selected target exists.
 
 ### Stage 5c - Air-To-Air Intercepts
 
@@ -1211,4 +1211,36 @@ Implemented end-to-end selected target and lock acquisition system. The player n
 - Begin Stage 5b - Homing And Specialized Secondary Weapons.
 - Start by reading `src/config/weapons.ts`, `src/systems/projectileSystem.ts` (if it exists), and `Game.tsx` projectile fire logic.
 - Convert the Ion Missile secondary into a true homing weapon that uses the Stage 5a lock state when a target is locked.
+
+---
+
+## Stage 5b Completion Summary
+
+**Completed:** Stage 5b - Homing And Specialized Secondary Weapons
+
+**Summary:**
+Converted the Ion Missile into a true homing weapon. When the player has a full lock (lockProgress = 1.0) on any tracked entity, firing the secondary captures the target ID into the projectile. Each frame, the missile's velocity is steered toward the live world position of the target up to `MISSILE_TURN_RATE` radians/second using lerp-normalized angle clamping. If the target is destroyed before impact, the missile flies straight on remaining life. When no lock exists at fire time, the missile fires straight as before — preserving all existing mission behavior.
+
+**Changed files:**
+- `src/types/game.ts` — Added `homing?: boolean` to `WeaponDefinition`; added `targetId?: string | null` to `Projectile`
+- `src/config/constants.ts` — Added `MISSILE_TURN_RATE = 2.5` (rad/s), `MISSILE_MIN_LOCK = 1.0`
+- `src/config/weapons.ts` — Added `homing: true` to `ion-missile`
+- `src/components/Game.tsx` — Imports `MISSILE_TURN_RATE`, `MISSILE_MIN_LOCK`; `fireProjectile` captures `homingTargetId` when locked; projectile update loop applies per-frame guidance before position step
+- `src/config/buildMeta.ts` — PHASE_TAG → `'Phase 5b'`
+
+**Verification:**
+- Dockerized `npm run lint` — passed (0 TypeScript errors)
+- Dockerized `npm run build && npm run validate:drone && npm run validate:prototype` — passed; Vite 2131 modules, drone symmetry 21 mirrored + 12 centerline, prototype validator passed
+- `docker compose --progress plain build` — passed; image rebuilt with Phase 5b tag
+- `docker compose --progress plain up -d --no-build && docker compose ps` — passed; container Up
+
+**Deferred:**
+- Missile mesh reorientation during homing turn (cone faces travel direction) — visual polish, no gameplay impact
+- Lock breaking / countermeasure / flare mechanic — Stage 5c or later
+- Anti-ground / anti-sea payload variants using the `homing` hook — Stage 5d/5e work
+
+**Next recommended starting point:**
+- Begin Stage 5c - Air-To-Air Intercepts.
+- Start by reading `src/types/game.ts` (Enemy, EnemyDefinition), `src/components/Game.tsx` enemy AI update loop, and `src/config/enemies.ts`.
+- Add moving airborne enemy objectives with escape behavior before adding formations or ace enemy roles.
 

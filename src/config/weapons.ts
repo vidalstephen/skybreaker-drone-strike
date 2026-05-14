@@ -27,6 +27,7 @@ export const WEAPONS: WeaponDefinition[] = [
     projectileLife: 210,
     color: 0xffaa00,
     blastRadius: 18,
+    homing: true,        // Stage 5b: homes on locked target when lockProgress >= MISSILE_MIN_LOCK
     unlockRewardId: 'extraction-protocol',
   },
 ];

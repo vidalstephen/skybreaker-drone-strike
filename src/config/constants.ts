@@ -57,3 +57,7 @@ export const LOCK_RANGE        = 500;  // world units — max range to acquire l
 export const LOCK_CONE_DOT     = 0.5;  // min dot product of forward → target direction (~60° half-angle cone)
 export const LOCK_ACQUIRE_RATE = 0.65; // lock progress gained per second when eligible (~1.5 s to full lock)
 export const LOCK_DRAIN_RATE   = 1.5;  // lock progress drained per second when not eligible
+
+// --- Homing missile guidance (Stage 5b) ---
+export const MISSILE_TURN_RATE  = 2.5;  // max radians/second the missile can steer toward locked target
+export const MISSILE_MIN_LOCK   = 1.0;  // lockProgress must reach this value (0–1) to fire with guidance

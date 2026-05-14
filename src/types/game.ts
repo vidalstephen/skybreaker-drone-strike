@@ -73,6 +73,7 @@ export interface WeaponDefinition {
   projectileLife: number;
   color: number;
   blastRadius?: number;
+  homing?: boolean;       // Stage 5b: true = missile homes on locked target
   unlockRewardId?: string;
 }
 
@@ -1025,6 +1026,7 @@ export interface Projectile {
   blastRadius?: number;
   enemyRole?: EnemyRole;
   isEnemy?: boolean;
+  targetId?: string | null;  // Stage 5b: homing guidance target (null = fly straight)
 }
 
 export interface Explosion {
