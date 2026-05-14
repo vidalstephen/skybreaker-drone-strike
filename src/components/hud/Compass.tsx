@@ -18,7 +18,7 @@ export function Compass({ rotationY }: CompassProps) {
 
   return (
     <div className="flex flex-col items-center gap-1">
-      <div className="relative w-44 h-7 overflow-hidden bg-black/45 border-x border-white/20 mask-gradient-x sm:w-56 md:w-64 md:h-8">
+      <div className="relative w-44 h-7 overflow-hidden border-x border-white/20 mask-gradient-x sm:w-56 md:w-64 md:h-8">
         <div
           className="absolute top-0 flex items-end h-full transition-transform duration-75 ease-linear"
           style={{ transform: `translateX(calc(50% - ${degrees * 2}px))` }}
@@ -38,7 +38,7 @@ export function Compass({ rotationY }: CompassProps) {
         </div>
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-px h-full bg-orange-500 shadow-[0_0_8px_rgba(242,125,38,1)] z-10" />
       </div>
-      <div className="text-[9px] font-mono text-white/60 tracking-widest bg-black/40 px-2 border border-white/5 sm:text-[10px]">
+      <div className="text-[9px] font-mono text-white/60 tracking-widest px-2 sm:text-[10px]">
         {Math.round(degrees).toString().padStart(3, '0')}&deg;
       </div>
     </div>

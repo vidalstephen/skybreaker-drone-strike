@@ -17,9 +17,12 @@ export function PauseMenu({ mission, onResume, onRetry, onOpenSettings, onOpenCo
       <div className="w-full max-w-md border border-white/10 bg-black/70 p-5">
         <div className="text-[10px] uppercase tracking-[0.35em] text-orange-500 font-bold mb-2">Paused</div>
         <h2 className="text-3xl font-black italic font-serif mb-6">MISSION HOLD</h2>
-        <div className="mb-5 grid grid-cols-2 gap-2 font-mono text-[10px] uppercase tracking-[0.14em] text-white/55">
-          <div className="border border-white/10 bg-white/[0.03] p-3"><div className="text-white/35">Sortie</div><div className="mt-1 text-white">{mission.title}</div></div>
-          <div className="border border-white/10 bg-white/[0.03] p-3"><div className="text-white/35">Targets</div><div className="mt-1 text-white">{mission.targets.length}</div></div>
+        <div className="mb-5 grid gap-2 font-mono text-[10px] uppercase tracking-[0.14em] text-white/55">
+          <div className="grid grid-cols-2 gap-2">
+            <div className="border border-white/10 bg-white/[0.03] p-3"><div className="text-white/35">Sortie</div><div className="mt-1 text-white">{mission.title}</div></div>
+            <div className="border border-white/10 bg-white/[0.03] p-3"><div className="text-white/35">Targets</div><div className="mt-1 text-white">{mission.targets.length}</div></div>
+          </div>
+          <div className="border border-white/10 bg-white/[0.03] p-3"><div className="text-white/35">Primary Objective</div><div className="mt-1 text-white normal-case tracking-normal leading-snug">{mission.initialObjective}</div></div>
         </div>
         <div className="grid gap-3">
           <MenuButton variant="primary" icon={<Play size={18} />} onClick={onResume}>Resume</MenuButton>

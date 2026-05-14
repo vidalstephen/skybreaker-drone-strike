@@ -1,9 +1,10 @@
-import { ArrowLeft, Check, Monitor, RotateCcw, SlidersHorizontal, Volume2 } from 'lucide-react';
+import { ArrowLeft, Check, Cpu, Gamepad2, Monitor, RotateCcw, SlidersHorizontal, Volume2 } from 'lucide-react';
 import { useState } from 'react';
 import { DEFAULT_APP_SETTINGS } from '../../config/defaults';
 import type { AppSettings, GraphicsQuality } from '../../types/game';
 import { MenuButton } from './MenuButton';
 import { ShellPanel } from './ShellPanel';
+import { Tabs, type TabItem } from './Tabs';
 
 export interface SettingsMenuProps {
   settings: AppSettings;
@@ -11,7 +12,14 @@ export interface SettingsMenuProps {
   onBack: () => void;
 }
 
-type SettingsTab = 'AUDIO' | 'VIDEO' | 'CONTROLS' | 'SYSTEM';
+type SettingsTab = 'audio' | 'video' | 'controls' | 'system';
+
+const TABS: TabItem[] = [
+  { id: 'audio', label: 'Audio', icon: <Volume2 size={11} /> },
+  { id: 'video', label: 'Video', icon: <Monitor size={11} /> },
+  { id: 'controls', label: 'Controls', icon: <Gamepad2 size={11} /> },
+  { id: 'system', label: 'System', icon: <Cpu size={11} /> },
+];
 
 interface RangeRowProps {
   label: string;
@@ -44,21 +52,8 @@ function ToggleRow({ label, checked, onChange }: { label: string; checked: boole
   );
 }
 
-function TabButton({ active, children, onClick }: { active: boolean; children: string; onClick: () => void }) {
-  return (
-    <button
-      className={`min-h-10 border px-3 text-[10px] font-black uppercase tracking-[0.16em] transition-colors ${active ? 'border-orange-500 bg-orange-500 text-black' : 'border-white/15 bg-black/35 text-white hover:border-orange-500'}`}
-      onClick={onClick}
-      type="button"
-      aria-pressed={active}
-    >
-      {children}
-    </button>
-  );
-}
-
 export function SettingsMenu({ settings, onChange, onBack }: SettingsMenuProps) {
-  const [activeTab, setActiveTab] = useState<SettingsTab>('AUDIO');
+  const [activeTab, setActiveTab] = useState<SettingsTab>('audio');
   const qualities: GraphicsQuality[] = ['LOW', 'MEDIUM', 'HIGH'];
 
   const setSetting = <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
@@ -66,7 +61,7 @@ export function SettingsMenu({ settings, onChange, onBack }: SettingsMenuProps) 
   };
 
   const renderTab = () => {
-    if (activeTab === 'AUDIO') {
+    if (activeTab === 'audio') {
       return (
         <div className="grid gap-3 md:grid-cols-3">
           <RangeRow label="Master" value={settings.masterVolume} suffix="%" onChange={value => setSetting('masterVolume', value)} />
@@ -76,7 +71,7 @@ export function SettingsMenu({ settings, onChange, onBack }: SettingsMenuProps) 
       );
     }
 
-    if (activeTab === 'VIDEO') {
+    if (activeTab === 'video') {
       return (
         <div className="grid gap-3">
           <div className="border border-white/10 bg-black/45 p-3 sm:p-4">
@@ -105,11 +100,12 @@ export function SettingsMenu({ settings, onChange, onBack }: SettingsMenuProps) 
       );
     }
 
-    if (activeTab === 'CONTROLS') {
+    if (activeTab === 'controls') {
       return (
         <div className="grid gap-3 md:grid-cols-2">
           <ToggleRow label="Invert Y" checked={settings.invertY} onChange={() => setSetting('invertY', !settings.invertY)} />
           <RangeRow label="Pointer Sens" value={settings.pointerSensitivity} min={60} max={140} suffix="%" onChange={value => setSetting('pointerSensitivity', value)} />
+          <RangeRow label="Drag Sens" value={settings.touchDragSensitivity} min={60} max={140} suffix="%" onChange={value => setSetting('touchDragSensitivity', value)} />
           <RangeRow label="Touch Scale" value={settings.touchControlsScale} min={85} max={125} suffix="%" onChange={value => setSetting('touchControlsScale', value)} />
         </div>
       );
@@ -142,19 +138,16 @@ export function SettingsMenu({ settings, onChange, onBack }: SettingsMenuProps) 
         </div>
       }
     >
-      <div className="grid gap-4 max-w-3xl">
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <TabButton active={activeTab === 'AUDIO'} onClick={() => setActiveTab('AUDIO')}>Audio</TabButton>
-          <TabButton active={activeTab === 'VIDEO'} onClick={() => setActiveTab('VIDEO')}>Video</TabButton>
-          <TabButton active={activeTab === 'CONTROLS'} onClick={() => setActiveTab('CONTROLS')}>Controls</TabButton>
-          <TabButton active={activeTab === 'SYSTEM'} onClick={() => setActiveTab('SYSTEM')}>System</TabButton>
-        </div>
-        <div className="border border-white/10 bg-black/25 p-4 sm:p-5">
-          <div className="mb-4 flex items-center gap-3 font-mono text-[10px] uppercase tracking-[0.26em] text-orange-400">
-            {activeTab === 'AUDIO' ? <Volume2 size={16} /> : <Monitor size={16} />}
-            {activeTab}
+      <div className="flex h-full flex-col gap-3" data-menu="settings">
+        <Tabs tabs={TABS} activeId={activeTab} onChange={(id) => setActiveTab(id as SettingsTab)} ariaLabel="Settings categories" />
+        <div className="min-h-0 flex-1">
+          <div className="border border-white/10 bg-black/25 p-3 sm:p-4">
+            <div className="mb-3 flex items-center gap-3 font-mono text-[10px] uppercase tracking-[0.26em] text-orange-400">
+              {activeTab === 'audio' ? <Volume2 size={16} /> : activeTab === 'video' ? <Monitor size={16} /> : activeTab === 'controls' ? <Gamepad2 size={16} /> : <Cpu size={16} />}
+              {activeTab.toUpperCase()}
+            </div>
+            {renderTab()}
           </div>
-          {renderTab()}
         </div>
       </div>
     </ShellPanel>

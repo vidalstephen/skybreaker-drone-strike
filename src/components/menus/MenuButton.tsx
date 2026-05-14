@@ -8,13 +8,14 @@ export interface MenuButtonProps {
   onClick?: MouseEventHandler<HTMLButtonElement>;
   title?: string;
   type?: 'button' | 'submit' | 'reset';
-  variant?: 'primary' | 'secondary' | 'danger';
+  variant?: 'primary' | 'secondary' | 'tertiary' | 'danger';
 }
 
 export function MenuButton({ icon, variant = 'secondary', className = '', children, type = 'button', ...props }: MenuButtonProps) {
   const variants = {
     primary: 'bg-orange-500 text-black border-orange-500 hover:bg-white hover:border-white',
     secondary: 'bg-black/55 text-white border-white/15 hover:border-orange-500 hover:text-orange-300',
+    tertiary: 'bg-transparent text-white/40 border-white/8 hover:text-white/65 hover:border-white/20',
     danger: 'bg-red-600/20 text-red-100 border-red-500/40 hover:bg-red-600 hover:border-red-400',
   };
 

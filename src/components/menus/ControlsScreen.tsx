@@ -28,7 +28,7 @@ const pointerRows = [
 ];
 
 const touchRows = [
-  ['Joystick', 'Pitch / Bank-Turn'],
+  ['Touch Drag', 'Pitch / Bank-Turn'],
   ['FIRE', 'Primary Fire'],
   ['BOOST', 'Boost'],
   ['MSL', 'Missile'],

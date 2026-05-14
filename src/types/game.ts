@@ -31,6 +31,7 @@ export interface AppSettings {
   touchControlsScale: number;
   screenShake: number;
   pointerSensitivity: number;
+  touchDragSensitivity: number;
   showTelemetry: boolean;
   menuMotion: boolean;
 }
@@ -71,12 +72,6 @@ export interface WeaponDefinition {
   projectileSpeed: number;
   projectileLife: number;
   color: number;
-  lockRequired?: boolean;
-  antiAirOnly?: boolean;
-  lockRange?: number;
-  lockCone?: number;
-  lockAcquireMs?: number;
-  turnRate?: number;
   blastRadius?: number;
   unlockRewardId?: string;
 }
@@ -113,7 +108,23 @@ export interface MissionScoringDefinition {
   enemyBonus: number;
   healthBonus: number;
   timeBonus: number;
+  /** Optional additive score per destroyed set-piece component. Absent preserves current scoring. */
+  setPieceComponentBonus?: number;
+  /** Optional additive score per completed set-piece phase. Absent preserves current scoring. */
+  setPiecePhaseBonus?: number;
+  /** Optional additive score per destroyed optional set-piece component. Absent preserves current scoring. */
+  setPieceOptionalComponentBonus?: number;
   rankThresholds: Record<CampaignRank, number>;
+}
+
+export interface SetPieceMissionStats {
+  componentsDestroyed: number;
+  requiredComponentsDestroyed: number;
+  optionalComponentsDestroyed: number;
+  phasesCompleted: number;
+  phaseTimeMs: number;
+  movingTargetsEscaped: number;
+  protectedAssetsLost: number;
 }
 
 export interface MissionCompletionStats {
@@ -121,6 +132,14 @@ export interface MissionCompletionStats {
   targetsDestroyed: number;
   enemiesDestroyed: number;
   health: number;
+  setPieceStats?: SetPieceMissionStats;
+  setPieceScore?: number;
+  /** Number of optional objectives completed this mission (populated by Stage 2d runtime). */
+  optionalObjectivesCompleted?: number;
+  /** Ids of bonus conditions that were satisfied (populated by Stage 2d runtime). */
+  bonusConditionsEarned?: string[];
+  /** Total bonus score from satisfied bonus conditions (populated by Stage 2d runtime). */
+  bonusScore?: number;
 }
 
 export interface MissionCompletionResult extends MissionCompletionStats {
@@ -135,9 +154,413 @@ export interface MissionBriefingItem {
 }
 
 export type LevelKitId = 'night-grid' | 'ash-ridge';
+export type BiomeId =
+  | 'night-grid'
+  | 'ash-ridge'
+  | 'storm-coast'
+  | 'arctic-shelf'
+  | 'ocean-platform'
+  | 'urban-ruin';
+export type WeatherId =
+  | 'clear'
+  | 'crosswind'
+  | 'rain'
+  | 'lightning-storm'
+  | 'ash-storm'
+  | 'snow-frost'
+  | 'sea-squall'
+  | 'em-interference';
 export type WaypointStyleId = 'signal-array' | 'ash-relay';
 export type TargetWeakPointLayoutId = 'radar-array' | 'relay-core';
+
+// ---------------------------------------------------------------------------
+// Mission classification types (Stage 2 data model)
+// ---------------------------------------------------------------------------
+/** The combat theater for a mission. Used for future enemy spawning, objective types, and biome selection. */
+export type CombatDomain = 'AIR_TO_AIR' | 'AIR_TO_LAND' | 'AIR_TO_SEA' | 'MIXED';
+
+/** The structural objective role of a mission. Determines progression rules, scoring weighting, and future HUD behavior. */
+export type MissionType =
+  | 'STRIKE'
+  | 'INTERCEPT'
+  | 'DEFENSE'
+  | 'ESCORT'
+  | 'RECON'
+  | 'SABOTAGE'
+  | 'SURVIVAL'
+  | 'BOSS'
+  | 'FINALE';
+
+/** The time of day context for a mission. Will drive future lighting presets, visibility modifiers, and briefing display. */
+export type TimeOfDayId = 'dawn' | 'day' | 'dusk' | 'night';
+
+// ---------------------------------------------------------------------------
+// Objective model (Stage 2b)
+// ---------------------------------------------------------------------------
+/** Structural type of a mission objective. Drives HUD display, event routing, and future branching logic. */
+export type ObjectiveType =
+  | 'DESTROY_ALL'
+  | 'DESTROY_WEAK_POINTS'
+  | 'INTERCEPT'
+  | 'DEFEND_ZONE'
+  | 'ESCORT_ASSET'
+  | 'RECON_SCAN'
+  | 'DISABLE_SHIELDS'
+  | 'SURVIVE_UNTIL'
+  | 'ELIMINATE_BOSS'
+  | 'EXTRACT';
+
+/** Type of bonus scoring condition. Rewards high performance without blocking mission completion. */
+export type BonusConditionType =
+  | 'TIME_THRESHOLD'
+  | 'HULL_THRESHOLD'
+  | 'DESTROY_OPTIONAL'
+  | 'AVOID_HAZARD'
+  | 'PRESERVE_ALLY';
+
+/**
+ * A bonus condition that awards extra score when a performance goal is met.
+ * Bonus conditions never block mission completion — they are purely additive.
+ */
+export interface BonusCondition {
+  /** Unique identifier within the mission. */
+  id: string;
+  type: BonusConditionType;
+  /** Short label shown in debrief and briefing. */
+  label: string;
+  /** Longer description shown in mission briefing. */
+  description?: string;
+  /**
+   * Numeric goal threshold.
+   * - TIME_THRESHOLD: complete mission in fewer ms than this value.
+   * - HULL_THRESHOLD: minimum hull % remaining on extraction.
+   * - DESTROY_OPTIONAL: number of optional targets to destroy.
+   */
+  goalValue?: number;
+  /** Bonus score awarded when this condition is satisfied. */
+  scoreBonus: number;
+  /** Message shown in the centre feed when this condition is earned. */
+  earnedMessage?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Stage 2g: Multi-stage objective schema
+// ---------------------------------------------------------------------------
+/** Role of a child entity track within an objective phase. */
+export type ObjectiveChildRole = 'gate' | 'core' | 'optional' | 'escort' | 'hazard';
+
+/**
+ * Controls when child tracks in an objective phase are revealed to the player.
+ * - 'always': visible from phase entry (default).
+ * - 'on-phase-enter': revealed when the phase becomes active.
+ * - 'on-gate-destroyed': revealed when this phase's gate-role child is destroyed.
+ * - 'on-scan': requires a future recon-scan mechanic (Stage 5+).
+ */
+export type ObjectivePhaseExposureRule = 'always' | 'on-phase-enter' | 'on-gate-destroyed' | 'on-scan';
+
+/** What causes a phase to complete and advance to the next phase or finish the objective. */
+export type PhaseCompletionTrigger =
+  | 'all-required-destroyed'  // every required child track is destroyed (default)
+  | 'any-required-destroyed'  // the first required child track is destroyed
+  | 'timer-elapsed'           // a survival/escape countdown expires
+  | 'player-in-zone';         // player enters the designated zone track
+
+/** Condition that must be satisfied for a phase to complete. */
+export interface ObjectivePhaseCompletionCondition {
+  trigger: PhaseCompletionTrigger;
+  /** Duration in milliseconds for 'timer-elapsed' phases (escape windows, survival waves). */
+  timerMs?: number;
+  /** Track id of the zone to enter for 'player-in-zone' phases. */
+  zoneTrackId?: string;
+}
+
+/** A single tracked entity that participates in an objective phase. */
+export interface ObjectiveChildTrackDefinition {
+  /** Id of the entity this child references — must match a registered track id or a virtual sub-track. */
+  trackId: string;
+  /** Role of this child within the phase. */
+  role: ObjectiveChildRole;
+  /** Whether destroying/completing this child is required for phase completion. */
+  required: boolean;
+  /** Exposure rule override for this child specifically. Falls back to the phase's exposureRule when absent. */
+  exposureRule?: ObjectivePhaseExposureRule;
+  /** Tracking metadata override for this child within this phase. */
+  trackingMeta?: TrackingMetaDefinition;
+}
+
+/** A single phase within a multi-stage objective. */
+export interface ObjectivePhaseDefinition {
+  /** Unique id within the parent objective (e.g. 'shield-gate', 'reactor-core', 'escape-window'). */
+  id: string;
+  /** Short label shown in HUD chip while this phase is active. Falls back to parent objective label. */
+  label?: string;
+  /** HUD text override for this phase. Falls back to parent objective hudText when absent. */
+  hudText?: string;
+  /** Centre-feed message when this phase completes. Falls back to parent objective completionMessage. */
+  completionMessage?: string;
+  /** Default exposure rule for all child tracks in this phase. Defaults to 'always'. */
+  exposureRule?: ObjectivePhaseExposureRule;
+  /** Entities that participate in this phase. */
+  childTracks?: ObjectiveChildTrackDefinition[];
+  /** What causes this phase to end. Defaults to 'all-required-destroyed' when absent. */
+  completionCondition?: ObjectivePhaseCompletionCondition;
+}
+
+/** A single mission objective with progress tracking, HUD display, and event metadata. */
+export interface ObjectiveDefinition {
+  /** Unique identifier within the mission. */
+  id: string;
+  type: ObjectiveType;
+  /** Short label shown in HUD chip and briefing. */
+  label: string;
+  /** Optional longer description for briefing / tooltip. */
+  description?: string;
+  /** Whether the mission fails if this objective is not completed. */
+  required: boolean;
+  /** Whether this objective is optional — completing it earns bonus rewards but is not required. */
+  optional?: boolean;
+  /** Total count for progress-tracked objectives (e.g. destroy 3 of 3 targets). */
+  totalCount?: number;
+  /** Text shown in the HUD objective chip while this objective is active. */
+  hudText: string;
+  /** Message shown in the centre feed when this objective completes. */
+  completionMessage: string;
+  /** Whether completing this objective activates the extraction zone. */
+  activatesExtraction?: boolean;
+  /** Id of the next objective that becomes active after this one completes. */
+  successorObjectiveId?: string;
+  /** Optional authored tracking metadata. Controls radar label, marker label, priority, and discovery behaviour. */
+  trackingMeta?: TrackingMetaDefinition;
+  /**
+   * Ordered phase sequence for multi-stage objectives (shield gates, reactor phases, boss phases, escape windows).
+   * When absent the objective is treated as single-phase. Phases are indexed 0-based and advance in order.
+   */
+  phases?: ObjectivePhaseDefinition[];
+}
+
+/** Ordered set of primary and optional objectives for a mission, plus bonus scoring conditions. */
+export interface MissionObjectiveSet {
+  primary: ObjectiveDefinition[];
+  /** Optional side objectives that can be completed for bonus rewards but do not block completion. */
+  optional?: ObjectiveDefinition[];
+  /** Bonus conditions that award score when met without blocking mission completion. */
+  bonusConditions?: BonusCondition[];
+}
+
+// ---------------------------------------------------------------------------
+// Stage 2d: objective runtime state (serializable snapshots for React UI)
+// ---------------------------------------------------------------------------
+/** Serializable snapshot of a single objective's runtime state — safe to store in React state. */
+export interface ObjectiveRuntimeState {
+  id: string;
+  label: string;
+  hudText: string;
+  completed: boolean;
+  failed: boolean;
+  optional: boolean;
+  currentCount?: number;
+  totalCount?: number;
+  // Stage 2g phase support
+  /** Index of the currently active phase (0-based). Absent for single-phase objectives. */
+  activePhaseIndex?: number;
+  /** Total number of authored phases. Absent for single-phase objectives. */
+  totalPhases?: number;
+}
+
+/** Serializable snapshot of all objective states for a mission frame — drives HUD and debrief UI. */
+export interface MissionObjectiveSnapshot {
+  primaryObjectives: ObjectiveRuntimeState[];
+  optionalObjectives: ObjectiveRuntimeState[];
+  /** Id of the currently active primary objective. */
+  activeObjectiveId: string | null;
+  /** Ids of bonus conditions satisfied at extraction (empty until mission completes). */
+  bonusConditionsEarned: string[];
+}
+
+// ---------------------------------------------------------------------------
+// Stage 2e: Mission event bus
+// ---------------------------------------------------------------------------
+/** Discrete event types emitted during a mission session. */
+export type MissionEventType =
+  | 'OBJECTIVE_PHASE_CHANGE'
+  | 'EXTRACTION_ACTIVATED'
+  | 'REINFORCEMENTS_INBOUND'
+  | 'HAZARD_ENTERED'
+  | 'HAZARD_EXITED'
+  | 'TIMED_WARNING'
+  | 'WEATHER_CHANGED'
+  | 'MISSION_FAILURE_WINDOW';
+
+/** A single timestamped event emitted during a mission session. */
+export interface MissionEvent {
+  type: MissionEventType;
+  /** Timestamp from Date.now() when the event was emitted. */
+  timestamp: number;
+  /** Optional contextual data (hazard id, objective id, weather id, etc.). */
+  data?: Record<string, string | number | boolean>;
+}
+
+/**
+ * Accumulated mission event state — stored in a ref (never in React state).
+ * Tracks in-mission behavior needed to evaluate bonus conditions at extraction.
+ */
+export interface MissionEventAccumulator {
+  /** Ids of hazard zones the player entered this mission. Used for AVOID_HAZARD bonus conditions. */
+  hazardContactIds: Set<string>;
+  /** Number of ally entities lost this mission. Used for PRESERVE_ALLY bonus conditions. */
+  alliesLost: number;
+  /** Full ordered event log for this mission session. */
+  events: MissionEvent[];
+}
+
 export type MissionTargetArchetype = 'tower' | 'relay-spire' | 'facility-node';
+
+// ---------------------------------------------------------------------------
+// Stage 2f: Mission-authored tracking metadata
+// ---------------------------------------------------------------------------
+/**
+ * Controls when a tracked entity becomes visible on the radar and HUD markers.
+ * - 'always': visible from mission start (default).
+ * - 'hidden-until-active': hidden while state is 'inactive' or 'detected'; revealed on state advance.
+ * - 'hidden-until-scanned': same behaviour as hidden-until-active for now; future recon-scan reveal.
+ * - 'urgent-only': visible only when within danger range or at top priority score.
+ */
+export type TrackDiscoveryBehavior = 'always' | 'hidden-until-active' | 'hidden-until-scanned' | 'urgent-only';
+
+/**
+ * Optional authored tracking metadata for a mission entity.
+ * All fields are optional and fall back to system defaults when absent.
+ */
+export interface TrackingMetaDefinition {
+  /** Radar blip label override. Defaults to the entity label. */
+  radarLabel?: string;
+  /** World marker label override. Defaults to the entity label. */
+  markerLabel?: string;
+  /** Additive priority score bonus applied on top of the type-based base score. */
+  priorityBonus?: number;
+  /** Discovery and visibility rule. Defaults to 'always'. */
+  discoveryBehavior?: TrackDiscoveryBehavior;
+  /** Short message shown while the player is approaching this entity. */
+  approachHint?: string;
+  /** Human-readable attention reason shown in radar attention states. */
+  attentionReason?: string;
+  /** Direction or route hint shown when this entity is the active target. */
+  routeHint?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Stage 4a: set-piece objective archetype schema
+// ---------------------------------------------------------------------------
+export type SetPieceArchetypeId =
+  | 'legacy-tower'
+  | 'legacy-relay-spire'
+  | 'radar-network'
+  | 'shield-generator'
+  | 'convoy'
+  | 'sam-site'
+  | 'reactor'
+  | 'bridge'
+  | 'carrier'
+  | 'platform'
+  | 'frigate'
+  | 'mega-core';
+
+export type TargetComponentRole =
+  | 'core'
+  | 'weak-point'
+  | 'radar-array'
+  | 'shield-node'
+  | 'engine'
+  | 'weapon'
+  | 'reactor'
+  | 'bridge-span'
+  | 'cargo'
+  | 'escort'
+  | 'optional-system';
+
+export type TargetComponentExposureState = 'exposed' | 'hidden' | 'shielded' | 'phase-gated';
+
+export type SetPiecePhaseTrigger =
+  | 'mission-start'
+  | 'component-destroyed'
+  | 'all-required-components-destroyed'
+  | 'health-threshold'
+  | 'timer-elapsed'
+  | 'player-in-zone';
+
+export interface TargetComponentDefinition {
+  id: string;
+  label: string;
+  role: TargetComponentRole;
+  health: number;
+  required: boolean;
+  exposure: TargetComponentExposureState;
+  /** Optional local-space offset for simple static target components. */
+  offset?: [number, number, number];
+  /** Optional collision/marker radius override for this component. */
+  radius?: number;
+  /** Optional phase id that initially owns this component. */
+  phaseId?: string;
+  trackingMeta?: TrackingMetaDefinition;
+}
+
+export interface SetPiecePhaseDefinition {
+  id: string;
+  label: string;
+  trigger: SetPiecePhaseTrigger;
+  activeComponentIds: string[];
+  /** Components revealed when this phase begins or its trigger resolves. */
+  exposesComponentIds?: string[];
+  /** Components hidden or deprecated when this phase begins or its trigger resolves. */
+  hidesComponentIds?: string[];
+  /** Component ids that must resolve for component-driven triggers. */
+  requiredComponentIds?: string[];
+  /** Health percentage for health-threshold triggers. */
+  healthThreshold?: number;
+  /** Duration in milliseconds for timer-elapsed phases. */
+  timerMs?: number;
+  nextPhaseId?: string;
+}
+
+export interface SetPieceArchetypeDefinition {
+  id: SetPieceArchetypeId;
+  label: string;
+  description: string;
+  combatDomains: CombatDomain[];
+  missionTypes: MissionType[];
+  /** Runtime visual fallback used until Stage 4b+ implements bespoke renderers. */
+  renderArchetype?: MissionTargetArchetype;
+  /** Current simple target archetypes this definition can represent. */
+  compatibleTargetArchetypes?: MissionTargetArchetype[];
+  components: TargetComponentDefinition[];
+  phases: SetPiecePhaseDefinition[];
+  defaultTrackingMeta?: TrackingMetaDefinition;
+}
+
+export interface TargetComponentRuntimeState {
+  id: string;
+  label: string;
+  role: TargetComponentRole;
+  health: number;
+  maxHealth: number;
+  required: boolean;
+  exposure: TargetComponentExposureState;
+  active: boolean;
+  destroyed: boolean;
+  offset?: [number, number, number];
+  radius?: number;
+  phaseId?: string;
+  trackingMeta?: TrackingMetaDefinition;
+}
+
+export interface TargetSetPieceRuntimeState {
+  archetypeId: SetPieceArchetypeId;
+  label: string;
+  components: TargetComponentRuntimeState[];
+  phases: SetPiecePhaseDefinition[];
+  activePhaseIndex: number;
+  completedPhaseIds: string[];
+}
 
 export interface MissionWeakPointDefinition {
   id: string;
@@ -148,12 +571,77 @@ export interface MissionWeakPointDefinition {
   required?: boolean;
 }
 
+export type TargetMovementLoopMode = 'once' | 'loop' | 'ping-pong';
+
+export type TargetMovementEndBehavior = 'stop' | 'fail-mission';
+
+export interface TargetRouteWaypointDefinition {
+  position: [number, number, number];
+  holdMs?: number;
+  speed?: number;
+}
+
+export interface MissionTargetMovementDefinition {
+  route: TargetRouteWaypointDefinition[];
+  speed?: number;
+  loopMode?: TargetMovementLoopMode;
+  startDelayMs?: number;
+  endBehavior?: TargetMovementEndBehavior;
+  escapeMessage?: string;
+}
+
 export interface MissionTargetDefinition {
   id: string;
   position: [number, number, number];
   health: number;
   archetype?: MissionTargetArchetype;
+  /** Optional set-piece archetype for Stage 4+ component/phase semantics. */
+  setPieceArchetypeId?: SetPieceArchetypeId;
+  /** Optional per-target component overrides. Stage 4a data-only; Stage 4b wires runtime behavior. */
+  components?: TargetComponentDefinition[];
   weakPoints?: MissionWeakPointDefinition[];
+  movement?: MissionTargetMovementDefinition;
+  /** Optional authored tracking metadata for this target. */
+  trackingMeta?: TrackingMetaDefinition;
+}
+
+// ---------------------------------------------------------------------------
+// Stage 2h: Extraction policy
+// ---------------------------------------------------------------------------
+/**
+ * What happens when the player leaves the extraction radius after entering it.
+ * - 'none': no warning; player can leave freely (default).
+ * - 'warn': show a warning message but do not abort.
+ * - 'countdown': start an abort countdown; mission fails if it reaches zero.
+ * - 'abort': mission fails immediately on leaving the radius.
+ */
+export type ExtractionWarningBehavior = 'none' | 'warn' | 'countdown' | 'abort';
+
+/**
+ * Governs what makes the extraction succeed.
+ * - 'enter-radius': mission completes on first frame inside radius (default).
+ * - 'dwell': player must remain inside the radius for `dwellMs` milliseconds.
+ * - 'confirm': player must press a confirm input while inside the radius (future).
+ */
+export type ExtractionCompletionMode = 'enter-radius' | 'dwell' | 'confirm';
+
+/**
+ * Authored extraction policy attached to a mission's extraction definition.
+ * All fields are optional and fall back to safe defaults when absent.
+ */
+export interface ExtractionPolicyDefinition {
+  /** Approach threshold in world units — distance at which the state changes to 'approaching'. Defaults to 3x radius. */
+  approachThreshold?: number;
+  /** What happens when the player exits the radius after entering it. Defaults to 'none'. */
+  warningBehavior?: ExtractionWarningBehavior;
+  /** Countdown duration in milliseconds for 'countdown' warningBehavior. */
+  countdownMs?: number;
+  /** Warning message shown when the player leaves the radius. */
+  leaveMessage?: string;
+  /** How the extraction is confirmed. Defaults to 'enter-radius'. */
+  completionMode?: ExtractionCompletionMode;
+  /** Dwell duration in milliseconds for 'dwell' completionMode. */
+  dwellMs?: number;
 }
 
 export interface MissionExtractionDefinition {
@@ -163,6 +651,10 @@ export interface MissionExtractionDefinition {
   approachObjective: string;
   completionObjective: string;
   radius: number;
+  /** Optional authored tracking metadata for the extraction zone. */
+  trackingMeta?: TrackingMetaDefinition;
+  /** Optional extraction policy. Controls approach detection, completion mode, and warning behavior. */
+  policy?: ExtractionPolicyDefinition;
 }
 
 export interface MissionEnemyWaveDefinition {
@@ -194,6 +686,131 @@ export interface StructureKitDefinition {
   maxDist?: number; // radial max from origin; defaults to 660
 }
 
+// ---------------------------------------------------------------------------
+// Stage 3a: Biome registry types
+// ---------------------------------------------------------------------------
+
+/**
+ * Sky, fog, and lighting parameters that constitute an atmosphere.
+ * Used as a biome's default atmosphere and as a base for time-of-day presets.
+ */
+export interface AtmosphereDefinition {
+  skyColor: number;
+  fogColor: number;
+  fogNear: number;
+  fogFar: number;
+  skyDepth: MissionSkyDepthDefinition;
+  fogProfile: MissionFogProfileDefinition;
+  ambientLight: MissionLightDefinition;
+  sunLight: MissionDirectionalLightDefinition;
+}
+
+/**
+ * A lighting preset keyed by time of day.
+ * Carries per-biome atmosphere overrides so each biome can have correctly tuned
+ * sky/fog/lighting per time of day.  Falls back to the biome's defaultAtmosphere
+ * when no override is present for that biome.
+ */
+export interface TimeOfDayPreset {
+  id: TimeOfDayId;
+  label: string;
+  /** Per-biome atmosphere overrides.  Falls back to biome.defaultAtmosphere when absent. */
+  atmospheres: Partial<Record<BiomeId, AtmosphereDefinition>>;
+}
+
+/**
+ * Biome spatial and color identity — independent of sky/lighting.
+ * Contains a defaultAtmosphere used when no time-of-day or weather override is provided.
+ * Composes with an AtmosphereDefinition via composeEnvironment() to produce a MissionEnvironmentDefinition.
+ */
+export interface BiomeDefinition {
+  id: BiomeId;
+  label: string;
+  /** Accent grid color tied to the biome's visual identity. */
+  gridColor: number;
+  surfaceColor: number;
+  structureColor: number;
+  plateauColor: number;
+  beaconPalette: MissionBeaconPaletteDefinition;
+  floorMaterial: MissionFloorMaterialDefinition;
+  /** Grid layout profile. The color field should match gridColor. */
+  gridProfile: MissionGridProfileDefinition;
+  landmarkStyle: 'monoliths' | 'ridges' | 'buoys' | 'ice-formations' | 'platforms' | 'ruins';
+  landmarkCount: number;
+  plateauCount: number;
+  boundaryRadius: number;
+  structureKit?: StructureKitDefinition;
+  hazards: MissionHazardDefinition[];
+  /** Default atmosphere used when no explicit time-of-day or weather override is provided. */
+  defaultAtmosphere: AtmosphereDefinition;
+}
+
+// ---------------------------------------------------------------------------
+// Stage 3c: Weather definition types
+// ---------------------------------------------------------------------------
+
+/** Visual atmosphere overrides applied on top of the biome+TOD environment when weather is active. */
+export interface WeatherVisualParams {
+  /** Multiplier applied to both fogNear and fogFar (< 1 = denser fog). Absent = no change. */
+  fogMultiplier?: number;
+  /** Particle effect type to spawn. */
+  particleEffect?: 'rain' | 'snow' | 'ash' | 'lightning' | 'none';
+  /** Density of particle effect, 0–1. */
+  particleDensity?: number;
+  /** Additive RGB tint applied to sky color (hex). */
+  skyColorShift?: number;
+  /** Multiplier on ambient light intensity. */
+  ambientIntensityMultiplier?: number;
+  /** Screen overlay opacity for storm lightning flash effects (0–1). */
+  lightningFlashOpacity?: number;
+}
+
+/** Gameplay modifiers applied to the player aircraft and projectiles while weather is active. */
+export interface WeatherGameplayModifiers {
+  /** Lateral force applied to projectiles and player aircraft (units per second). */
+  windDrift?: number;
+  /** Multiplier on effective visibility / weapon lock range. */
+  visibilityMultiplier?: number;
+  /** Multiplier on boost energy recovery rate. */
+  boostRecoveryMultiplier?: number;
+  /** Multiplier on shield recharge rate. */
+  shieldRechargeMultiplier?: number;
+  /** Persistent energy drain per second from electromagnetic or environmental effects. */
+  energyDrainPerSecond?: number;
+}
+
+/** Sensor and radar modifiers applied while weather is active. */
+export interface WeatherSensorModifiers {
+  /** Multiplier on effective radar detection range. */
+  radarRangeMultiplier?: number;
+  /** Multiplier on target lock acquisition speed. */
+  lockSpeedMultiplier?: number;
+  /** Sensor noise level 0–1; can drive static on radar or HUD. */
+  sensorNoiseLevel?: number;
+}
+
+/**
+ * Full weather condition definition.
+ * Added to a mission via MissionDefinition.weatherId.  Absent or 'clear' = no effect.
+ * Stage 3d wires gameplay/sensor modifiers into the runtime; Stage 3f validates readability.
+ */
+export interface WeatherDefinition {
+  id: WeatherId;
+  label: string;
+  /** Short warning text displayed in-mission when weather is active (e.g. "CROSSWIND ACTIVE"). */
+  warningText: string;
+  /** Optional sentence for briefing display (e.g. "Crosswind conditions expected during approach"). */
+  briefingNote?: string;
+  /** Visual atmosphere overrides layered on top of biome + TOD environment. */
+  visual: WeatherVisualParams;
+  /** Gameplay modifiers applied while weather is active. */
+  gameplay: WeatherGameplayModifiers;
+  /** Sensor and radar modifiers applied while weather is active. */
+  sensors: WeatherSensorModifiers;
+  /** Reduced visual parameters used when graphics quality is low or reduced-effects mode is active. */
+  reducedEffects?: WeatherVisualParams;
+}
+
 export interface MissionEnvironmentDefinition {
   id: string;
   levelKitId?: LevelKitId;
@@ -213,7 +830,7 @@ export interface MissionEnvironmentDefinition {
   beaconPalette: MissionBeaconPaletteDefinition;
   ambientLight: MissionLightDefinition;
   sunLight: MissionDirectionalLightDefinition;
-  landmarkStyle: 'monoliths' | 'ridges';
+  landmarkStyle: 'monoliths' | 'ridges' | 'buoys' | 'ice-formations' | 'platforms' | 'ruins';
   landmarkCount: number;
   plateauCount: number;
   boundaryRadius: number;
@@ -223,6 +840,7 @@ export interface MissionEnvironmentDefinition {
 
 export interface LevelKitTargetDefaults {
   archetype: MissionTargetArchetype;
+  setPieceArchetypeId?: SetPieceArchetypeId;
   weakPointLayoutId?: TargetWeakPointLayoutId;
 }
 
@@ -293,6 +911,8 @@ export interface MissionHazardDefinition {
   color: number;
   shieldDrainPerSecond: number;
   energyDrainPerSecond: number;
+  /** Optional authored tracking metadata for this hazard zone. */
+  trackingMeta?: TrackingMetaDefinition;
 }
 
 export interface MissionFailureConditionDefinition {
@@ -308,6 +928,16 @@ export interface MissionDefinition {
   levelKitId?: LevelKitId;
   campaignArc: string;
   difficulty: number;
+  /** Combat theater: air-to-air, air-to-land, air-to-sea, or mixed. */
+  combatDomain?: CombatDomain;
+  /** Structural mission role: strike, intercept, boss, finale, etc. */
+  missionType?: MissionType;
+  /** Time-of-day context for future lighting and visibility modifiers. */
+  timeOfDay?: TimeOfDayId;
+  /** Weather condition for this mission. Absent or 'clear' = no gameplay or visual modification. */
+  weatherId?: WeatherId;
+  /** Structured objective definitions. When absent, the runtime derives objectives from existing mission fields. */
+  objectiveSet?: MissionObjectiveSet;
   targetLabel: string;
   initialObjective: string;
   targetDestroyedMessage: string;
@@ -336,16 +966,27 @@ export interface Target {
   id: string;
   position: THREE.Vector3;
   health: number;
+  maxHealth: number;
   mesh: THREE.Group;
   destroyed: boolean;
   weakPoints?: TargetWeakPoint[];
-  screenPos?: {
-    x: number;
-    y: number;
-    visible: boolean;
-    offScreen?: boolean;
-    angle?: number;
-  };
+  setPiece?: TargetSetPieceRuntimeState;
+  movement?: TargetMovementRuntimeState;
+}
+
+export interface TargetMovementRuntimeState {
+  route: THREE.Vector3[];
+  routeHoldMs: number[];
+  speed: number;
+  loopMode: TargetMovementLoopMode;
+  startDelayMs: number;
+  endBehavior: TargetMovementEndBehavior;
+  escapeMessage?: string;
+  currentWaypointIndex: number;
+  direction: 1 | -1;
+  holdMsRemaining: number;
+  elapsedMs: number;
+  completed: boolean;
 }
 
 export interface TargetWeakPoint {
@@ -381,9 +1022,6 @@ export interface Projectile {
   life: number;
   damage: number;
   weaponId?: WeaponId;
-  targetEnemyId?: string;
-  trackingSpeed?: number;
-  turnRate?: number;
   blastRadius?: number;
   enemyRole?: EnemyRole;
   isEnemy?: boolean;
@@ -396,12 +1034,78 @@ export interface Explosion {
 }
 
 // ---------------------------------------------------------------------------
+// Tracking System — Stage 1c
+// Serializable HUD snapshots — no Three.js refs; safe to pass to React state
+// ---------------------------------------------------------------------------
+
+export enum TrackedEntityType {
+  OBJECTIVE  = 'OBJECTIVE',
+  WEAK_POINT = 'WEAK_POINT',
+  ENEMY      = 'ENEMY',
+  EXTRACTION = 'EXTRACTION',
+  HAZARD     = 'HAZARD',
+}
+
+export type TrackedEntityState =
+  | 'inactive'
+  | 'detected'
+  | 'active'
+  | 'priority'
+  | 'damaged'
+  | 'completed'
+  | 'destroyed'
+  // Stage 2h: extraction-specific states
+  /** Extraction activated this frame — brief transitional state before 'active'. */
+  | 'activating'
+  /** Player is within the approach threshold but not yet inside the radius. */
+  | 'approaching'
+  /** Player is inside the extraction radius (mission completing). */
+  | 'inside-radius'
+  /** Extraction point is contested — used when enemies are within the radius. Future use. */
+  | 'contested'
+  /** An alternate extraction point has been designated. Future use. */
+  | 'alternate'
+  /** Extraction point is relocating. Future use. */
+  | 'moving'
+  /** Emergency extraction with modified policy. Future use. */
+  | 'emergency';
+
+/** Serializable snapshot passed to HUD components — updated each frame tick */
+export interface TrackedEntitySnapshot {
+  id:               string;
+  type:             TrackedEntityType;
+  label:            string;
+  worldX:           number;
+  worldY:           number;
+  worldZ:           number;
+  state:            TrackedEntityState;
+  priorityScore:    number;
+  isSelected:       boolean;
+  radarPulse:       boolean;
+  isRequired:       boolean;
+  health?:          number;
+  maxHealth?:       number;
+  shields?:         number;
+  maxShield?:       number;
+  distanceToPlayer: number;
+  // Stage 2f authored tracking metadata (optional; absent = system defaults apply)
+  radarLabel?:        string;
+  markerLabel?:       string;
+  priorityBonus?:     number;
+  discoveryBehavior?: TrackDiscoveryBehavior;
+  approachHint?:      string;
+  attentionReason?:   string;
+  routeHint?:         string;
+}
+
+// ---------------------------------------------------------------------------
 // Player systems (health, shields, energy)
 // ---------------------------------------------------------------------------
 export interface PlayerSystems {
   health: number;
   shields: number;
-  energy: number;
+  energy: number;       // weapon energy — costs per shot
+  boostEnergy: number;  // boost/afterburner energy — separate cooldown
 }
 
 // ---------------------------------------------------------------------------
@@ -413,6 +1117,16 @@ export interface GameLogic {
   gameOver: boolean;
   invertY: boolean;
   cameraMode: CameraMode;
+  /** Set of objective ids that have been marked complete this mission. */
+  completedObjectiveIds: Set<string>;
+  /** Per-objective phase progress: maps objective id → current phase index (0-based). */
+  objectivePhaseIndices: Map<string, number>;
+  /** Mission event accumulator — tracks hazard contacts, ally losses, and event history. */
+  missionEvents: MissionEventAccumulator;
+  setPieceStats: SetPieceMissionStats;
+  destroyedComponentKeys: Set<string>;
+  completedPhaseKeys: Set<string>;
+  phaseStartedAtMs: Map<string, number>;
 }
 
 // ---------------------------------------------------------------------------
@@ -437,20 +1151,18 @@ export interface GameState {
   gameOver: boolean;
   missionResult: MissionCompletionResult | null;
   shields: number;
-  energy: number;
+  energy: number;       // weapon energy
+  boostEnergy: number;  // boost/afterburner energy
   enemiesDestroyed: number;
   activeWeaponLabel: string;
   secondaryWeaponLabel: string;
   secondaryReady: boolean;
-  secondaryLockLabel: string;
-  secondaryLockProgress: number;
-  secondaryLockAcquired: boolean;
-  secondaryLockHasTarget: boolean;
   startTime: number;
-  lockedTargetId: string | null;
   aimScreenPos?: { x: number; y: number };
   droneScreenPos?: { x: number; y: number };
   settings: {
     invertY: boolean;
   };
+  /** Serializable snapshot of mission objective state. Null until first game tick. */
+  objectiveSnapshot: MissionObjectiveSnapshot | null;
 }

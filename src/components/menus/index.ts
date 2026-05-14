@@ -8,3 +8,7 @@ export { MissionSelectScreen } from './MissionSelectScreen';
 export { PauseMenu } from './PauseMenu';
 export { SettingsMenu } from './SettingsMenu';
 export { SplashScreen } from './SplashScreen';
+export { Tabs, TabPanel } from './Tabs';
+export type { TabItem, TabsProps } from './Tabs';
+export { Carousel } from './Carousel';
+export type { CarouselProps } from './Carousel';

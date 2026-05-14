@@ -28,6 +28,9 @@ export const STREAK_INNER_RADIUS = 9;
 export const STREAK_OUTER_RADIUS = 20;
 export const BOOST_FOV = 82;
 export const NORMAL_FOV = 75;
+// Reference aspect ratio for FOV calibration. NORMAL_FOV/BOOST_FOV are tuned for 16:9.
+// On wider screens the vertical FOV is reduced so horizontal FOV stays constant.
+export const CAMERA_REF_ASPECT = 16 / 9;
 export const ENGINE_GLOW_BOOST_OPACITY = 0.65;
 export const ENGINE_GLOW_SCALE_MAX = 1.25;
 export const THRUSTER_INTENSITY_MAX = 0.9;
@@ -35,7 +38,6 @@ export const EXPLOSION_RADIUS_MIN = 1;
 export const EXPLOSION_RADIUS_MAX = 4;
 export const EXPLOSION_SCATTER = 10;
 export const HIT_FLASH_EMISSIVE = 0.8;
-export const MIN_MARKER_SPACING = 60;
 
 // --- Radar ---
 export const RADAR_RANGE = 700; // world units shown at full radar radius
@@ -49,5 +51,3 @@ export const AIM_PATH_FADE_MS         = 150;  // ms for path to return to idle a
 export const RETICLE_PULSE_MS         = 200;  // ms for reticle pulse on fire
 export const CENTER_MARKER_SIZE       = 8;    // reference size for center aim dot (px)
 export const AIM_CONVERGENCE_MARKERS  = 3;    // small path brackets near reticle
-export const LOCK_RING_RADIUS         = 45;   // svg units for secondary lock progress arc
-export const LOCK_RING_STROKE         = 2.2;  // svg stroke width for secondary lock arc

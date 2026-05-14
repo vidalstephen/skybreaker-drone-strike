@@ -51,14 +51,14 @@ export interface BoostState {
   isBoosting: boolean;
 }
 
-export function getBoostState(control: FlightControlState, energy: number): BoostState {
+export function getBoostState(control: FlightControlState, boostEnergy: number): BoostState {
   const wantsBoost = control.keys['ShiftLeft'] || control.keys['ShiftRight'] || control.actions.boost;
-  const canBoost = energy > 5;
+  const canBoost = boostEnergy > 5;
   return { wantsBoost, canBoost, isBoosting: wantsBoost && canBoost };
 }
 
-export function consumeBoostEnergy(energy: number, isBoosting: boolean, dt: number): number {
-  return isBoosting ? Math.max(0, energy - 0.5 * dt) : energy;
+export function consumeBoostEnergy(boostEnergy: number, isBoosting: boolean, dt: number): number {
+  return isBoosting ? Math.max(0, boostEnergy - 0.5 * dt) : boostEnergy;
 }
 
 export function isBrakeActive(control: FlightControlState): boolean {

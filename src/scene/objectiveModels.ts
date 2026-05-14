@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import type { MissionTargetDefinition, MissionWeakPointDefinition, Target, TargetWeakPoint } from '../types/game';
+import { buildTargetSetPieceRuntime } from '../systems/setPieceSystem';
+import { buildTargetMovementRuntime } from '../systems/targetMovementSystem';
 import {
   createExtractionWaypointIllustration,
   createTargetWaypointIllustration,
@@ -175,7 +177,7 @@ export function createMissionTarget(scene: THREE.Scene, pos: THREE.Vector3, defi
   group.position.y = 0;
   scene.add(group);
 
-  return { id: definition.id, position: pos, health: definition.health, mesh: group, destroyed: false, weakPoints };
+  return { id: definition.id, position: pos, health: definition.health, maxHealth: definition.health, mesh: group, destroyed: false, weakPoints, setPiece: buildTargetSetPieceRuntime(definition), movement: buildTargetMovementRuntime(definition) };
 }
 
 export function createExtractionZone(scene: THREE.Scene, position: [number, number, number]) {
