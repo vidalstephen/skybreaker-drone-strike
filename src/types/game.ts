@@ -58,7 +58,7 @@ export type CampaignRank = 'S' | 'A' | 'B' | 'C';
 
 export type WeaponSlot = 'PRIMARY' | 'SECONDARY';
 export type WeaponId = 'pulse-cannon' | 'ion-missile';
-export type EnemyRole = 'fast-interceptor' | 'heavy-gunship' | 'missile-platform' | 'shielded-warden' | 'mini-boss';
+export type EnemyRole = 'fast-interceptor' | 'heavy-gunship' | 'missile-platform' | 'shielded-warden' | 'mini-boss' | 'ace-interceptor';
 
 export interface WeaponDefinition {
   id: WeaponId;
@@ -414,7 +414,7 @@ export interface MissionEventAccumulator {
   events: MissionEvent[];
 }
 
-export type MissionTargetArchetype = 'tower' | 'relay-spire' | 'facility-node';
+export type MissionTargetArchetype = 'tower' | 'relay-spire' | 'facility-node' | 'bomber' | 'transport';
 
 // ---------------------------------------------------------------------------
 // Stage 2f: Mission-authored tracking metadata

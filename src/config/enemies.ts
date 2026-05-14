@@ -91,6 +91,25 @@ export const ENEMY_DEFINITIONS: Record<EnemyRole, EnemyDefinition> = {
     emissive: 0xff5500,
     scale: [2.2, 1.4, 2.8],
   },
+  // Stage 5c: ace enemy for air-to-air intercept missions
+  'ace-interceptor': {
+    role: 'ace-interceptor',
+    label: 'Ace Fighter',
+    silhouette: 'needle-frame',
+    health: 160,
+    shields: 80,
+    speed: 0.72,
+    minRange: 40,
+    maxRange: 110,
+    drift: 0.42,
+    fireCooldownMs: 1400,
+    projectileSpeed: 3.4,
+    projectileDamage: 11,
+    scoreValue: 900,
+    color: 0xff4466,
+    emissive: 0xff0033,
+    scale: [0.85, 0.85, 0.85],
+  },
 };
 
 export const ENEMY_PROGRESSION_PLAN: MissionEnemyWaveEntry[] = [

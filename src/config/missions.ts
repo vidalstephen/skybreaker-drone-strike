@@ -672,6 +672,84 @@ export const MISSIONS: MissionDefinition[] = [
     },
     unlockAfterMissionId: 'final-dawn',
   }),
+  // Stage 5c: air-to-air intercept prototype
+  defineMission({
+    id: 'raven-break-prototype',
+    order: 91,
+    title: 'RAVEN BREAK',
+    levelKitId: 'ash-ridge',
+    campaignArc: 'Prototype Range // Intercept Lab',
+    difficulty: 7,
+    combatDomain: 'AIR_TO_AIR',
+    missionType: 'INTERCEPT',
+    timeOfDay: 'dusk',
+    weatherId: 'clear',
+    targetLabel: 'Raven Bomber',
+    initialObjective: 'INTERCEPT RAVEN FLIGHT BEFORE EGRESS',
+    targetDestroyedMessage: 'RAVEN BOMBER DESTROYED',
+    nextTargetMessage: 'TRACK REMAINING AIRCRAFT...',
+    allTargetsDestroyedMessage: 'RAVEN FLIGHT DOWN // PROCEED TO EXFIL',
+    briefing: [
+      { label: 'Objective', value: 'Intercept heavy bomber before zone exit' },
+      { label: 'Threat', value: 'Ace fighter escort — high speed, evasive' },
+      { label: 'Time Limit', value: '~60s to intercept before bomber clears zone' },
+    ],
+    targets: [
+      {
+        id: 'raven_bomber',
+        position: [0, 200, -1200],
+        health: 280,
+        archetype: 'bomber',
+        movement: {
+          route: [
+            { position: [0, 200, 1500] },
+          ],
+          speed: 50,
+          loopMode: 'once',
+          endBehavior: 'fail-mission',
+          startDelayMs: 2000,
+          escapeMessage: 'RAVEN FLIGHT EXFILTRATED — INTERCEPT FAILED',
+        },
+        trackingMeta: { radarLabel: 'RVN', markerLabel: 'RAVEN BOMBER', priorityBonus: 100, attentionReason: 'Primary intercept target', routeHint: 'Bomber heading north — intercept before zone exit' },
+      },
+    ],
+    extraction: {
+      label: 'Exfil Zone',
+      position: [0, 0, -1200],
+      activationObjective: 'RETURN TO EXFIL ZONE',
+      approachObjective: 'APPROACH EXFIL ZONE',
+      completionObjective: 'RAVEN BREAK COMPLETE',
+      radius: 350,
+      trackingMeta: { radarLabel: 'EXF', markerLabel: 'EXFIL ZONE', priorityBonus: 50 },
+    },
+    enemyWave: {
+      triggerTargetsDestroyed: 0,
+      count: 2,
+      message: 'RAVEN ESCORT FIGHTERS INBOUND',
+      composition: [
+        { role: 'ace-interceptor', count: 2 },
+      ],
+    },
+    failureConditions: [
+      { id: 'hull-depleted', label: 'Hull Integrity', message: 'CRITICAL HULL FAILURE' },
+      { id: 'out-of-bounds', label: 'Intercept Boundary', message: 'RETURN TO INTERCEPT ZONE' },
+    ],
+    scoring: {
+      parTimeMs: 120000,
+      baseScore: 1800,
+      targetBonus: 1200,
+      enemyBonus: 600,
+      healthBonus: 12,
+      timeBonus: 800,
+      rankThresholds: { S: 6000, A: 4500, B: 3000, C: 0 },
+    },
+    reward: {
+      id: 'intercept-calibration',
+      label: 'Intercept Calibration',
+      description: 'Prototype intercept sortie validates airborne targets, ace escort, and bomber escape failure path.',
+    },
+    unlockAfterMissionId: 'final-dawn',
+  }),
 ];
 
 export const DEFAULT_MISSION_ID = MISSIONS[0].id;

@@ -97,9 +97,115 @@ function addFacilityTargetDetails(group: THREE.Group, archetype: MissionTargetDe
   return finalMeshes;
 }
 
-export function createMissionTarget(scene: THREE.Scene, pos: THREE.Vector3, definition: MissionTargetDefinition): Target {
+/** Stage 5c: Builds a bomber-silhouette mesh for airborne mission targets. */
+function createBomberTargetModel(): THREE.Group {
   const group = new THREE.Group();
+
+  // Fuselage — long tapered body
+  const fuselageGeo = new THREE.BoxGeometry(8, 6, 50);
+  const bodyMat = new THREE.MeshStandardMaterial({ color: 0x555577, roughness: 0.6 });
+  const fuselage = new THREE.Mesh(fuselageGeo, bodyMat);
+  group.add(fuselage);
+
+  // Nose cone
+  const noseGeo = new THREE.ConeGeometry(3.5, 12, 6);
+  noseGeo.rotateX(Math.PI / 2);
+  const nose = new THREE.Mesh(noseGeo, bodyMat);
+  nose.position.z = -31;
+  group.add(nose);
+
+  // Wings — wide delta shape approximated as a flat box
+  const wingGeo = new THREE.BoxGeometry(90, 2, 22);
+  const wingMat = new THREE.MeshStandardMaterial({ color: 0x444466, roughness: 0.7 });
+  const wings = new THREE.Mesh(wingGeo, wingMat);
+  wings.position.z = 4;
+  group.add(wings);
+
+  // Tail fins (horizontal)
+  const tailGeo = new THREE.BoxGeometry(30, 2, 8);
+  const tail = new THREE.Mesh(tailGeo, wingMat);
+  tail.position.z = 22;
+  group.add(tail);
+
+  // Vertical tail fin
+  const vFinGeo = new THREE.BoxGeometry(2, 12, 8);
+  const vFin = new THREE.Mesh(vFinGeo, wingMat);
+  vFin.position.set(0, 7, 21);
+  group.add(vFin);
+
+  // Engine nacelles (left + right under wings)
+  const nacelleMat = new THREE.MeshStandardMaterial({ color: 0x333344, roughness: 0.5 });
+  const nacelleGeo = new THREE.CylinderGeometry(3, 2.5, 16, 6);
+  nacelleGeo.rotateX(Math.PI / 2);
+  for (const side of [-1, 1]) {
+    const nacelle = new THREE.Mesh(nacelleGeo, nacelleMat);
+    nacelle.position.set(side * 28, -4, 2);
+    group.add(nacelle);
+
+    // Engine glow
+    const glowGeo = new THREE.CircleGeometry(2.5, 8);
+    const glowMat = new THREE.MeshBasicMaterial({ color: 0xff4400, side: THREE.DoubleSide });
+    const glow = new THREE.Mesh(glowGeo, glowMat);
+    glow.rotation.y = Math.PI / 2;
+    glow.position.set(side * 28, -4, 10);
+    group.add(glow);
+  }
+
+  // Emissive underbelly stripe (threat indicator)
+  const stripeGeo = new THREE.BoxGeometry(4, 1, 40);
+  const stripeMat = new THREE.MeshBasicMaterial({ color: 0xff2222 });
+  const stripe = new THREE.Mesh(stripeGeo, stripeMat);
+  stripe.position.set(0, -3.5, 0);
+  group.add(stripe);
+
+  return group;
+}
+
+/** Stage 5c: Creates an airborne mission target (bomber / transport) that preserves Y altitude. */
+function createAirborneMissionTarget(
+  scene: THREE.Scene,
+  pos: THREE.Vector3,
+  definition: MissionTargetDefinition,
+  _archetype: string,
+): Target {
+  const group = new THREE.Group();
+  const bomberModel = createBomberTargetModel();
+  group.add(bomberModel);
+
+  // Health bar (reuse existing helper via group userData path)
+  const weakPoints: TargetWeakPoint[] = [];
+
+  const waypoint = createTargetWaypointIllustration(0xff2200);
+  group.add(waypoint.group);
+  group.userData.waypoint = waypoint;
+  group.userData.targetHandles = { weakPoints };
+
+  // Preserve full XYZ from the route position — bomber flies at altitude
+  group.position.copy(pos);
+  scene.add(group);
+
+  return {
+    id: definition.id,
+    position: pos,
+    health: definition.health,
+    maxHealth: definition.health,
+    mesh: group,
+    destroyed: false,
+    weakPoints,
+    setPiece: buildTargetSetPieceRuntime(definition),
+    movement: buildTargetMovementRuntime(definition),
+  };
+}
+
+export function createMissionTarget(scene: THREE.Scene, pos: THREE.Vector3, definition: MissionTargetDefinition): Target {
   const archetype = definition.archetype ?? 'tower';
+  const isAirborne = archetype === 'bomber' || archetype === 'transport';
+
+  if (isAirborne) {
+    return createAirborneMissionTarget(scene, pos, definition, archetype);
+  }
+
+  const group = new THREE.Group();
 
   const baseGeo = new THREE.CylinderGeometry(10, 15, 20, 4);
   const baseMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.86, metalness: 0.08 });

@@ -612,17 +612,27 @@ Exit criteria:
 
 ### Stage 5c - Air-To-Air Intercepts
 
-Status: Not started
+Status: Complete — Phase 5c deployed
 
-- [ ] Add moving airborne objective/enemy entities with escape or attack goals.
-- [ ] Add bomber/transport roles and escort formations.
-- [ ] Add ace enemy prototype with readable evasive movement.
-- [ ] Add intercept scoring bonuses and failure conditions.
+- [x] Add moving airborne objective/enemy entities with escape or attack goals.
+- [x] Add bomber/transport roles and escort formations.
+- [x] Add ace enemy prototype with readable evasive movement.
+- [x] Add intercept scoring bonuses and failure conditions.
 
 Exit criteria:
 
-- [ ] A prototype intercept mission can be won or failed based on airborne objective behavior.
-- [ ] Radar/HUD clearly distinguishes intercept targets from normal enemies.
+- [x] A prototype intercept mission can be won or failed based on airborne objective behavior.
+- [x] Radar/HUD clearly distinguishes intercept targets from normal enemies.
+
+**Completion summary (Stage 5c):**
+- `src/types/game.ts`: Added `bomber | transport` to `MissionTargetArchetype`; added `ace-interceptor` to `EnemyRole`
+- `src/config/enemies.ts`: Added `ace-interceptor` definition — health 160, shields 80, speed 0.72, drift 0.42, fireCooldownMs 1400, scoreValue 900
+- `src/scene/objectiveModels.ts`: Added `createBomberTargetModel()` (fuselage + swept wings + nacelles + engine glow + threat stripe); added `createAirborneMissionTarget()` that preserves Y altitude; branched `createMissionTarget()` so airborne archetypes skip the ground-only `y=0` clamp
+- `src/config/campaign.ts`: Added `prototype-intercept` arc ("Prototype Range // Intercept Lab", Prototype 91)
+- `src/config/missions.ts`: Added `raven-break-prototype` — single bomber at altitude 200, escape route with `fail-mission` end behavior, 2 ace-interceptor escort spawning at mission start, extraction below bomber start zone
+- `scripts/validate-intercept-prototype.ts`: New validator for intercept mission invariants
+- `package.json`: Added `validate:intercept` script
+- `src/config/buildMeta.ts`: `PHASE_TAG = 'Phase 5c'`
 
 ### Stage 5d - Air-To-Land Threat Systems
 
@@ -1239,8 +1249,39 @@ Converted the Ion Missile into a true homing weapon. When the player has a full 
 - Lock breaking / countermeasure / flare mechanic — Stage 5c or later
 - Anti-ground / anti-sea payload variants using the `homing` hook — Stage 5d/5e work
 
+---
+
+## Stage 5c Completion Summary
+
+**Completed:** Stage 5c - Air-To-Air Intercepts
+
+**Summary:**
+Introduced airborne mission objectives with escape failure, a new ace-interceptor enemy class, and a post-campaign intercept prototype mission (RAVEN BREAK). Bombers now spawn at altitude and move along a route using the existing `targetMovementSystem` and `fail-mission` end behavior — no changes to Game.tsx required. A `createBomberTargetModel()` function builds a readable aircraft silhouette (fuselage, swept wings, nacelles, engine glow, threat stripe). The `createMissionTarget()` factory branches on `bomber`/`transport` archetypes so those targets preserve their Y altitude instead of being clamped to ground. The ace-interceptor is a fast, high-drift escort with significant shields added as a wave composition entry. A new `validate:intercept` script confirms all intercept mission invariants.
+
+**Changed files:**
+- `src/types/game.ts` — Added `'bomber' | 'transport'` to `MissionTargetArchetype`; added `'ace-interceptor'` to `EnemyRole`
+- `src/config/enemies.ts` — Added `ace-interceptor` definition (health 160, shields 80, speed 0.72, drift 0.42, fireCooldownMs 1400, scoreValue 900)
+- `src/scene/objectiveModels.ts` — Added `createBomberTargetModel()` aircraft mesh helper; added `createAirborneMissionTarget()` for altitude-preserving targets; branched `createMissionTarget()` to use airborne path for `bomber`/`transport`
+- `src/config/campaign.ts` — Added `prototype-intercept` arc (Prototype 91, PLANNED)
+- `src/config/missions.ts` — Added `raven-break-prototype`: bomber at Y=200 with escape route, 2 ace-interceptor escort spawning at mission start, extraction at bomber start zone below
+- `scripts/validate-intercept-prototype.ts` — New validator for intercept mission invariants
+- `package.json` — Added `validate:intercept` script
+- `src/config/buildMeta.ts` — PHASE_TAG → `'Phase 5c'`
+
+**Verification:**
+- Dockerized `npm run lint` — passed (0 TypeScript errors)
+- Dockerized `npm run build && npm run validate:drone && npm run validate:prototype && npm run validate:intercept` — all passed
+- `docker compose --progress plain build` — passed; image rebuilt with Phase 5c tag
+- `docker compose --progress plain up -d --no-build && docker compose ps` — passed; container Up
+
+**Deferred:**
+- HUD/radar icon distinction for airborne targets vs ground targets — Stage 5f
+- Ace-interceptor per-enemy phase offset for visually distinct drift patterns — cosmetic, deferred
+- Multi-bomber formations or transport convoy variants — extend this pattern in a later stage
+
 **Next recommended starting point:**
-- Begin Stage 5c - Air-To-Air Intercepts.
-- Start by reading `src/types/game.ts` (Enemy, EnemyDefinition), `src/components/Game.tsx` enemy AI update loop, and `src/config/enemies.ts`.
-- Add moving airborne enemy objectives with escape behavior before adding formations or ace enemy roles.
+- Begin Stage 5d - Air-To-Land Threat Systems.
+- Start by reading `src/config/enemies.ts` (existing ground-capable roles) and `src/scene/objectiveModels.ts` (add SAM, turret, railgun mesh helpers).
+- Add ground threat archetypes that fire at the player and have weak points (barrel, radar dish, generator).
+
 

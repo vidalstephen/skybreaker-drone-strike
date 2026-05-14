@@ -33,4 +33,13 @@ export const CAMPAIGN_ARCS: CampaignArcDefinition[] = [
     escalation: 'Exercises multiple objective systems without inserting prototype content into the main campaign arc.',
     status: 'PLANNED',
   },
+  // Stage 5c: air-to-air intercept prototype arc
+  {
+    id: 'prototype-intercept',
+    label: 'Prototype Range // Intercept Lab',
+    missionRange: 'Prototype 91',
+    focus: 'Isolated intercept prototype for moving airborne objectives, ace escort, and fail-mission end behavior.',
+    escalation: 'Single bomber with ace escort; validates AIR_TO_AIR domain and bomber archetype without inserting into main campaign.',
+    status: 'PLANNED',
+  },
 ];
