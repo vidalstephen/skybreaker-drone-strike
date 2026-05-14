@@ -10,7 +10,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { Compass, Crosshair, Objectives, Radar, SpeedDisplay, TargetMarkers, Vitals } from './hud';
+import { Compass, Crosshair, Objectives, Radar, SpeedDisplay, Vitals } from './hud';
 import { GameOver, MissionComplete, OutOfBoundsWarning } from './overlays';
 
 // --- Phase 1: types and constants live in dedicated modules ---
@@ -19,11 +19,8 @@ import {
   CAMERA_LERP,
   BOOST_FOV,
   NORMAL_FOV,
-  EXPLOSION_RADIUS_MIN,
-  EXPLOSION_RADIUS_MAX,
-  EXPLOSION_SCATTER,
+  CAMERA_REF_ASPECT,
   HIT_FLASH_EMISSIVE,
-  MIN_MARKER_SPACING,
 } from '../config/constants';
 import { expandEnemyWave } from '../config/enemies';
 import { DEFAULT_PRIMARY_WEAPON, getUnlockedWeapons } from '../config/weapons';
@@ -31,6 +28,9 @@ import type { AudioCue } from '../hooks/useAudio';
 import {
   SPEED_STREAK_OPACITY,
   createCombatResources,
+  createSetPieceComponentBreakEffect,
+  createSetPieceFinalDestructionEffect,
+  createSetPiecePhaseChangeEffect,
   createDroneModel,
   createEnemyModel,
   createExtractionZone,
@@ -63,16 +63,20 @@ import {
   updateThrottle,
   type FlightControlState,
 } from '../systems/flightPhysics';
-import { calculateMissionResult, formatMissionObjective } from '../systems/missionSystem';
-import { calculateScreenPosition } from '../systems/targetingProjection';
-import { GamePhase, type AppSettings, type CampaignProgress, type MissionCompletionResult, type MissionDefinition, type Target, type TargetWeakPoint, type Enemy, type Projectile, type Explosion, type GameState, type WeaponDefinition } from '../types/game';
+import { calculateMissionResult, buildObjectiveSnapshot, evaluateBonusConditions, formatMissionObjective, getActiveObjective } from '../systems/missionSystem';
+import { advanceTargetSetPiecePhase, applyTargetSetPieceVisibility, isTargetComponentDamageable, syncTargetSetPieceRuntime } from '../systems/setPieceSystem';
+import { updateTargetMovement } from '../systems/targetMovementSystem';
+import { GamePhase, TrackedEntityType, type AppSettings, type CampaignProgress, type MissionCompletionResult, type MissionDefinition, type Target, type TargetWeakPoint, type Enemy, type Projectile, type Explosion, type GameState, type WeaponDefinition, type MissionEvent, type ObjectiveRuntimeState, type SetPieceMissionStats, type TargetComponentRuntimeState, type TrackedEntityState } from '../types/game';
+import { createTrackingSystem } from '../systems/trackingSystem';
+import { RADAR_RANGE } from '../config/constants';
+import { resolveMissionWeather } from '../config/weather';
 
 function getTargetVisualHandles(target: Target): TargetVisualHandles | undefined {
   return target.mesh.userData.targetHandles as TargetVisualHandles | undefined;
 }
 
 function getActiveWeakPoints(target: Target): TargetWeakPoint[] {
-  return target.weakPoints?.filter(weakPoint => !weakPoint.destroyed) ?? [];
+  return target.weakPoints?.filter(weakPoint => !weakPoint.destroyed && isTargetComponentDamageable(target, weakPoint.id)) ?? [];
 }
 
 function findWeakPointImpact(target: Target, projectilePosition: THREE.Vector3, impactRadius: number): TargetWeakPoint | null {
@@ -145,11 +149,35 @@ function updateAggregateTargetHealth(target: Target): void {
   const requiredWeakPoints = target.weakPoints?.filter(weakPoint => weakPoint.required) ?? [];
   if (requiredWeakPoints.length === 0) return;
   target.health = requiredWeakPoints.reduce((remainingHealth, weakPoint) => remainingHealth + (weakPoint.destroyed ? 0 : Math.max(0, weakPoint.health)), 0);
+  syncTargetSetPieceRuntime(target);
 }
 
 function areRequiredWeakPointsDestroyed(target: Target): boolean {
   const requiredWeakPoints = target.weakPoints?.filter(weakPoint => weakPoint.required) ?? [];
   return requiredWeakPoints.length > 0 && requiredWeakPoints.every(weakPoint => weakPoint.destroyed);
+}
+
+function getTargetTrackingState(target: Target): TrackedEntityState | undefined {
+  if (target.health < target.maxHealth) return 'damaged';
+  if (target.movement && !target.movement.completed) return 'moving';
+  return undefined;
+}
+
+function addEffect(scene: THREE.Scene, explosions: Explosion[], effect: THREE.Group, life: number): void {
+  scene.add(effect);
+  explosions.push({ mesh: effect, life, maxLife: life });
+}
+
+function createEmptySetPieceStats(): SetPieceMissionStats {
+  return {
+    componentsDestroyed: 0,
+    requiredComponentsDestroyed: 0,
+    optionalComponentsDestroyed: 0,
+    phasesCompleted: 0,
+    phaseTimeMs: 0,
+    movingTargetsEscaped: 0,
+    protectedAssetsLost: 0,
+  };
 }
 
 function getGraphicsProfile(settings: AppSettings): GraphicsProfile {
@@ -195,6 +223,12 @@ export default function Game({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const phaseRef = useRef(phase);
   const settingsRef = useRef(settings);
+
+  // Resolve weather definition once for this mission (immutable for mission duration).
+  const weatherDef = resolveMissionWeather(mission.weatherId);
+  // Derive effective radar range so the Radar HUD component can scale accordingly.
+  const effectiveRadarRange = RADAR_RANGE * (weatherDef.sensors.radarRangeMultiplier ?? 1);
+
   const initialWeapons = getUnlockedWeapons(progress);
   const initialPrimaryWeapon = initialWeapons.find(weapon => weapon.slot === 'PRIMARY') ?? DEFAULT_PRIMARY_WEAPON;
   const initialSecondaryWeapon = initialWeapons.find(weapon => weapon.slot === 'SECONDARY') ?? null;
@@ -204,6 +238,7 @@ export default function Game({
     health: 100,
     shields: 100,
     energy: 100,
+    boostEnergy: 100,
     speed: 0,
     fps: 60,
     boosting: false,
@@ -212,7 +247,7 @@ export default function Game({
     targetsDestroyed: 0,
     outOfBounds: false,
     cameraMode: 'CHASE',
-    message: 'READY FOR SORTIE',
+    message: weatherDef.warningText || 'READY FOR SORTIE',
     missionComplete: false,
     gameOver: false,
     missionResult: null,
@@ -220,15 +255,11 @@ export default function Game({
     activeWeaponLabel: initialPrimaryWeapon.label,
     secondaryWeaponLabel: initialSecondaryWeapon?.label ?? 'Locked',
     secondaryReady: !!initialSecondaryWeapon,
-    secondaryLockLabel: initialSecondaryWeapon?.lockRequired ? 'NO AIR TARGET' : 'READY',
-    secondaryLockProgress: 0,
-    secondaryLockAcquired: !initialSecondaryWeapon?.lockRequired,
-    secondaryLockHasTarget: false,
     startTime: Date.now(),
-    lockedTargetId: null,
     settings: {
       invertY: settings.invertY,
     },
+    objectiveSnapshot: buildObjectiveSnapshot(mission, 0, new Set()),
   });
 
   // --- Input & Simulation Refs ---
@@ -240,7 +271,46 @@ export default function Game({
     targetsDestroyed: 0,
     enemiesDestroyed: 0,
     invertY: settings.invertY,
+    completedObjectiveIds: new Set<string>(),
+    objectivePhaseIndices: new Map<string, number>(),
+    missionEvents: {
+      hazardContactIds: new Set<string>(),
+      alliesLost: 0,
+      events: [] as MissionEvent[],
+    },
+    setPieceStats: createEmptySetPieceStats(),
+    destroyedComponentKeys: new Set<string>(),
+    completedPhaseKeys: new Set<string>(),
+    phaseStartedAtMs: new Map<string, number>(),
   });
+
+  const recordSetPieceComponentDestroyed = (target: Target, component?: TargetComponentRuntimeState): void => {
+    if (!component) return;
+    const key = `${target.id}:${component.id}`;
+    if (gameLogicRef.current.destroyedComponentKeys.has(key)) return;
+    gameLogicRef.current.destroyedComponentKeys.add(key);
+    gameLogicRef.current.setPieceStats.componentsDestroyed += 1;
+    if (component.required) {
+      gameLogicRef.current.setPieceStats.requiredComponentsDestroyed += 1;
+    } else {
+      gameLogicRef.current.setPieceStats.optionalComponentsDestroyed += 1;
+    }
+  };
+
+  const recordSetPiecePhaseCompleted = (target: Target, phaseId: string): void => {
+    const key = `${target.id}:${phaseId}`;
+    if (gameLogicRef.current.completedPhaseKeys.has(key)) return;
+    gameLogicRef.current.completedPhaseKeys.add(key);
+    const now = Date.now();
+    const startedAt = gameLogicRef.current.phaseStartedAtMs.get(key) ?? gameState.startTime;
+    gameLogicRef.current.setPieceStats.phasesCompleted += 1;
+    gameLogicRef.current.setPieceStats.phaseTimeMs += Math.max(0, now - startedAt);
+
+    const nextPhase = target.setPiece?.phases[target.setPiece.activePhaseIndex];
+    if (nextPhase && nextPhase.id !== phaseId) {
+      gameLogicRef.current.phaseStartedAtMs.set(`${target.id}:${nextPhase.id}`, now);
+    }
+  };
 
   // Three.js Refs
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -255,12 +325,6 @@ export default function Game({
   const speedStreaksRef = useRef<THREE.Group | null>(null);
   const enemiesRef = useRef<Enemy[]>([]);
   const enemySequenceRef = useRef(0);
-  const navigationLockRef = useRef<string | null>(null);
-  const secondaryLockRef = useRef<{ candidateEnemyId: string | null; lockedEnemyId: string | null; startedAt: number }>({
-    candidateEnemyId: null,
-    lockedEnemyId: null,
-    startedAt: 0,
-  });
   const lastFireTime = useRef(0);
   const lastSecondaryFireTime = useRef(0);
   const lastSecondaryAttemptTime = useRef(0);
@@ -268,47 +332,24 @@ export default function Game({
   const muzzleFlashTimeRef = useRef(0);
   const muzzleFlashRef = useRef<THREE.Mesh | null>(null);
   const targetsRef = useRef<Target[]>([]);
+  const tracksRef = useRef(createTrackingSystem());
   const boundaryRef = useRef<number>(1500);
   const enemiesSpawned = useRef(false);
   const extractionMeshRef = useRef<THREE.Group | null>(null);
-  const extractionScreenPosRef = useRef<{x: number, y: number, visible: boolean, offScreen: boolean, angle: number}>({ x: 0, y: 0, visible: false, offScreen: false, angle: 0 });
   const lastDamageTime = useRef(0);
   const fpsSample = useRef({ frames: 0, elapsed: 0, value: 60 });
-  const currentSystems = useRef({ shields: 100, energy: 100, health: 100 });
+  const currentSystems = useRef({ shields: 100, energy: 100, boostEnergy: 100, health: 100 });
   const cameraShake = useRef(0);
   const [damageFlash, setDamageFlash] = useState(false);
 
   // Flight variables
   const velocity = useRef(new THREE.Vector3(0, 0, -BASE_SPEED));
   const rotation = useRef(new THREE.Euler(0, 0, 0, 'YXZ'));
-  const touchJoystick = useRef({ x: 0, y: 0, active: false, identifier: -1 });
+  const touchDrag = useRef({ x: 0, y: 0, active: false, identifier: -1, originX: 0, originY: 0 });
   const touchActions = useRef({ boost: false, brake: false, fire: false, secondary: false, level: false });
   const fineControlRef = useRef({ active: false, lastX: 0, lastY: 0, deltaX: 0, deltaY: 0 });
   const wasBoosting = useRef(false);
   const throttleRef = useRef(1);
-
-  const setNavigationLock = (id: string | null) => {
-    navigationLockRef.current = id;
-    setGameState(prev => ({ ...prev, lockedTargetId: id }));
-  };
-
-  const cycleNavigationLock = () => {
-    const availableLocks = targetsRef.current
-      .filter(target => !target.destroyed)
-      .map(target => target.id);
-
-    if (gameLogicRef.current.targetsDestroyed >= mission.targets.length && extractionMeshRef.current) {
-      availableLocks.push('EXTRACTION');
-    }
-
-    if (availableLocks.length === 0) {
-      setNavigationLock(null);
-      return;
-    }
-
-    const currentIndex = navigationLockRef.current ? availableLocks.indexOf(navigationLockRef.current) : -1;
-    setNavigationLock(availableLocks[(currentIndex + 1) % availableLocks.length]);
-  };
 
   const toggleCameraMode = () => {
     gameLogicRef.current.cameraMode = gameLogicRef.current.cameraMode === 'CHASE' ? 'COCKPIT' : 'CHASE';
@@ -332,43 +373,42 @@ export default function Game({
   }, [settings.invertY]);
 
   // ... (existing helper functions if any)
-  const [joystickPos, setJoystickPos] = useState({ x: 0, y: 0 });
+  const [dragOriginPos, setDragOriginPos] = useState<{ x: number; y: number } | null>(null);
+  const MAX_DRAG_RADIUS = 80;
 
-  const handleJoystick = (e: React.TouchEvent | React.MouseEvent) => {
+  const handleTouchDragStart = (e: React.TouchEvent) => {
     e.stopPropagation();
-    if (!touchJoystick.current.active) return;
-    
-    let clientX, clientY;
-    
-    if ('touches' in e) {
-      // Find the specific touch that started on the joystick
-      const touch = Array.from(e.touches).find(t => (t as React.Touch).identifier === touchJoystick.current.identifier) as React.Touch | undefined;
-      if (!touch) return;
-      clientX = touch.clientX;
-      clientY = touch.clientY;
-    } else {
-      clientX = e.clientX;
-      clientY = e.clientY;
-    }
-    
-    const rect = e.currentTarget.getBoundingClientRect();
-    const centerX = rect.left + rect.width / 2;
-    const centerY = rect.top + rect.height / 2;
-    
-    let dx = clientX - centerX;
-    let dy = clientY - centerY;
-    
-    const radius = rect.width / 2;
+    if (touchDrag.current.active) return;
+    const touch = e.changedTouches[0];
+    touchDrag.current.active = true;
+    touchDrag.current.identifier = touch.identifier;
+    touchDrag.current.originX = touch.clientX;
+    touchDrag.current.originY = touch.clientY;
+    touchDrag.current.x = 0;
+    touchDrag.current.y = 0;
+    setDragOriginPos({ x: touch.clientX, y: touch.clientY });
+  };
+
+  const handleTouchDragMove = (e: React.TouchEvent) => {
+    const touch = Array.from(e.changedTouches).find(t => (t as React.Touch).identifier === touchDrag.current.identifier) as React.Touch | undefined;
+    if (!touch || !touchDrag.current.active) return;
+    const dx = touch.clientX - touchDrag.current.originX;
+    const dy = touch.clientY - touchDrag.current.originY;
     const distance = Math.sqrt(dx * dx + dy * dy);
-    
-    if (distance > radius) {
-      dx *= radius / distance;
-      dy *= radius / distance;
-    }
-    
-    setJoystickPos({ x: dx, y: dy });
-    touchJoystick.current.x = dx / radius;
-    touchJoystick.current.y = dy / radius;
+    const dragRadius = MAX_DRAG_RADIUS * (100 / (settingsRef.current.touchDragSensitivity ?? 100));
+    const strength = Math.min(1, distance / dragRadius);
+    const curved = Math.pow(strength, 1.25);
+    touchDrag.current.x = distance > 0 ? (dx / distance) * curved : 0;
+    touchDrag.current.y = distance > 0 ? (dy / distance) * curved : 0;
+  };
+
+  const handleTouchDragEnd = (e: React.TouchEvent) => {
+    if (!Array.from(e.changedTouches).some(t => (t as React.Touch).identifier === touchDrag.current.identifier)) return;
+    touchDrag.current.active = false;
+    touchDrag.current.identifier = -1;
+    touchDrag.current.x = 0;
+    touchDrag.current.y = 0;
+    setDragOriginPos(null);
   };
 
   // Shared Resources (Pre-created for performance)
@@ -420,10 +460,6 @@ export default function Game({
       if (e.code === 'KeyC' && !e.repeat && phaseRef.current === GamePhase.IN_MISSION && !gameLogicRef.current.missionComplete && !gameLogicRef.current.gameOver) {
         toggleCameraMode();
       }
-      if ((e.code === 'Tab' || e.code === 'KeyT') && !e.repeat && phaseRef.current === GamePhase.IN_MISSION && !gameLogicRef.current.missionComplete && !gameLogicRef.current.gameOver) {
-        e.preventDefault();
-        cycleNavigationLock();
-      }
       keysRef.current[e.code] = true;
     };
     const handleKeyUp = (e: KeyboardEvent) => { keysRef.current[e.code] = false; };
@@ -441,6 +477,7 @@ export default function Game({
 
   useEffect(() => {
     if (!containerRef.current || !canvasRef.current) return;
+    tracksRef.current.reset();
     const hullFailure = mission.failureConditions.find(condition => condition.id === 'hull-depleted');
     const unlockedWeapons = getUnlockedWeapons(progress);
     const primaryWeapon = unlockedWeapons.find(weapon => weapon.slot === 'PRIMARY') ?? DEFAULT_PRIMARY_WEAPON;
@@ -485,9 +522,59 @@ export default function Game({
     targetsRef.current = mission.targets.map(target => (
       createMissionTarget(scene, new THREE.Vector3(...target.position), target)
     ));
+    targetsRef.current.forEach(target => applyTargetSetPieceVisibility(target));
+    // Register targets with tracking system
+    mission.targets.forEach((targetDef, index) => {
+      const target = targetsRef.current[index];
+      tracksRef.current.registerTrack(
+        target.id,
+        TrackedEntityType.OBJECTIVE,
+        mission.targetLabel,
+        {
+          worldX: targetDef.position[0],
+          worldY: targetDef.position[1],
+          worldZ: targetDef.position[2],
+          health: targetDef.health,
+          maxHealth: targetDef.health,
+          state: 'detected',
+        },
+        true, // isRequired
+        targetDef.trackingMeta,
+      );
+    });
+    // Register hazards
+    mission.environment.hazards.forEach(hazard => {
+      tracksRef.current.registerTrack(
+        hazard.id,
+        TrackedEntityType.HAZARD,
+        hazard.label,
+        {
+          worldX: hazard.position[0],
+          worldY: hazard.position[1],
+          worldZ: hazard.position[2],
+          state: 'detected',
+        },
+        false,
+        hazard.trackingMeta,
+      );
+    });
 
     // --- Extraction Zone ---
     extractionMeshRef.current = createExtractionZone(scene, mission.extraction.position);
+    // Register extraction track as inactive (activates when all targets destroyed)
+    tracksRef.current.registerTrack(
+      'extraction',
+      TrackedEntityType.EXTRACTION,
+      mission.extraction.label,
+      {
+        worldX: mission.extraction.position[0],
+        worldY: 0,
+        worldZ: mission.extraction.position[2],
+        state: 'inactive',
+      },
+      false,
+      mission.extraction.trackingMeta,
+    );
 
     // --- Resize Handler ---
     const handleResize = () => {
@@ -541,21 +628,23 @@ export default function Game({
         
         // Shield Regeneration (after 5 seconds of peace)
         if (now - lastDamageTime.current > 5000 && currentSystems.current.shields < 100) {
-          currentSystems.current.shields = Math.min(100, currentSystems.current.shields + 0.1 * dt);
+          currentSystems.current.shields = Math.min(100, currentSystems.current.shields + 0.1 * (weatherDef.gameplay.shieldRechargeMultiplier ?? 1) * dt);
         }
 
-        // Energy Regeneration
+        // Weapon Energy Regeneration
         currentSystems.current.energy = Math.min(100, currentSystems.current.energy + 0.2 * dt);
+        // Boost Energy Regeneration (slightly faster when not boosting)
+        currentSystems.current.boostEnergy = Math.min(100, currentSystems.current.boostEnergy + 0.3 * (weatherDef.gameplay.boostRecoveryMultiplier ?? 1) * dt);
 
         // --- Controls & Energy Consumption ---
         const flightControls: FlightControlState = {
           keys,
-          joystick: touchJoystick.current,
+          joystick: touchDrag.current,
           actions: touchActions.current,
           fineControl: fineControlRef.current,
           invertY: gameLogicRef.current.invertY,
         };
-        const { isBoosting } = getBoostState(flightControls, currentSystems.current.energy);
+        const { isBoosting } = getBoostState(flightControls, currentSystems.current.boostEnergy);
         const isBraking = isBrakeActive(flightControls);
 
         const screenShakeScale = settingsRef.current.screenShake / 100;
@@ -566,7 +655,7 @@ export default function Game({
         }
         wasBoosting.current = isBoosting;
 
-        currentSystems.current.energy = consumeBoostEnergy(currentSystems.current.energy, isBoosting, dt);
+        currentSystems.current.boostEnergy = consumeBoostEnergy(currentSystems.current.boostEnergy, isBoosting, dt);
   throttleRef.current = updateThrottle(throttleRef.current, flightControls, dt);
 
   const currentSpeed = getFlightSpeed(isBoosting, dt, throttleRef.current, isBraking);
@@ -611,41 +700,6 @@ export default function Game({
             });
         }
 
-        // --- Autopilot Logic: Guide to Locked Target ---
-        const navigationLockId = navigationLockRef.current;
-        if (navigationLockId) {
-          let targetPos: THREE.Vector3 | null = null;
-          if (navigationLockId === 'EXTRACTION') {
-            targetPos = extractionMeshRef.current?.position || null;
-          } else {
-            const target = targetsRef.current.find(t => t.id === navigationLockId && !t.destroyed);
-            targetPos = target?.position || null;
-          }
-
-          if (targetPos) {
-            const dronePos = droneRef.current.position;
-            const targetDir = targetPos.clone().sub(dronePos).normalize();
-            
-            // Create a dummy matrix to extract target rotation
-            const dummy = new THREE.Object3D();
-            dummy.position.copy(dronePos);
-            dummy.lookAt(targetPos);
-            
-            // SLowly lerp current rotation towards target dir
-            droneRef.current.quaternion.slerp(dummy.quaternion, 0.02 * dt);
-            
-            // Sync internal rotation ref to new orientation
-            rotation.current.setFromQuaternion(droneRef.current.quaternion, 'YXZ');
-
-            // If we are facing the target closely, unlock
-            const currentDir = new THREE.Vector3(0, 0, -1).applyQuaternion(droneRef.current.quaternion);
-            if (currentDir.dot(targetDir) > 0.99) {
-              setNavigationLock(null);
-            }
-          } else {
-            setNavigationLock(null);
-          }
-        }
         applyFlightRotation(rotation.current, flightControls, dt);
         applyAutoLevel(rotation.current, shouldAutoLevel(flightControls), dt);
 
@@ -667,63 +721,29 @@ export default function Game({
         });
 
         if (activeHazard) {
+          // Track first contact with each hazard zone for AVOID_HAZARD bonus condition evaluation.
+          if (!gameLogicRef.current.missionEvents.hazardContactIds.has(activeHazard.id)) {
+            gameLogicRef.current.missionEvents.hazardContactIds.add(activeHazard.id);
+            gameLogicRef.current.missionEvents.events.push({
+              type: 'HAZARD_ENTERED',
+              timestamp: Date.now(),
+              data: { hazardId: activeHazard.id },
+            });
+          }
           currentSystems.current.shields = Math.max(0, currentSystems.current.shields - activeHazard.shieldDrainPerSecond * delta);
           currentSystems.current.energy = Math.max(0, currentSystems.current.energy - activeHazard.energyDrainPerSecond * delta);
         }
 
-        // Weapon Firing Logic
-        const updateSecondaryLock = (weapon: WeaponDefinition | null) => {
-          if (!weapon) return { enemy: null as Enemy | null, acquired: false, label: 'LOCKED', progress: 0, hasTarget: false };
-          if (!weapon.lockRequired) return { enemy: null as Enemy | null, acquired: true, label: 'READY', progress: 1, hasTarget: false };
-          if (!droneRef.current) return { enemy: null as Enemy | null, acquired: false, label: 'NO AIR TARGET', progress: 0, hasTarget: false };
+        // Weather: persistent energy drain and wind drift
+        if (weatherDef.gameplay.energyDrainPerSecond) {
+          currentSystems.current.energy = Math.max(0, currentSystems.current.energy - weatherDef.gameplay.energyDrainPerSecond * delta);
+        }
+        if (weatherDef.gameplay.windDrift && droneRef.current) {
+          // Constant world-space lateral push (+X axis) — player must compensate on attack runs.
+          droneRef.current.position.x += weatherDef.gameplay.windDrift * delta;
+        }
 
-          const range = weapon.lockRange ?? 700;
-          const cone = weapon.lockCone ?? 0.8;
-          const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(droneRef.current.quaternion).normalize();
-          const dronePosition = droneRef.current.position;
-          let bestEnemy: Enemy | null = null;
-          let bestScore = -Infinity;
-
-          enemiesRef.current.forEach(enemy => {
-            if (enemy.destroyed) return;
-            const toEnemy = enemy.mesh.position.clone().sub(dronePosition);
-            const distance = toEnemy.length();
-            if (distance > range || distance <= 0) return;
-            const dot = forward.dot(toEnemy.normalize());
-            if (dot < cone) return;
-            const score = dot - (distance / range) * 0.18;
-            if (score > bestScore) {
-              bestScore = score;
-              bestEnemy = enemy;
-            }
-          });
-
-          if (!bestEnemy) {
-            secondaryLockRef.current = { candidateEnemyId: null, lockedEnemyId: null, startedAt: 0 };
-            return { enemy: null as Enemy | null, acquired: false, label: 'NO AIR TARGET', progress: 0, hasTarget: false };
-          }
-
-          if (secondaryLockRef.current.candidateEnemyId !== bestEnemy.id) {
-            secondaryLockRef.current = { candidateEnemyId: bestEnemy.id, lockedEnemyId: null, startedAt: now };
-          }
-
-          const acquireMs = weapon.lockAcquireMs ?? 500;
-          const progress = THREE.MathUtils.clamp((now - secondaryLockRef.current.startedAt) / acquireMs, 0, 1);
-          const acquired = progress >= 1;
-          if (acquired) secondaryLockRef.current.lockedEnemyId = bestEnemy.id;
-
-          return {
-            enemy: bestEnemy,
-            acquired,
-            progress,
-            hasTarget: true,
-            label: acquired ? `LOCKED ${bestEnemy.label.toUpperCase()}` : `LOCKING ${bestEnemy.label.toUpperCase()}`,
-          };
-        };
-
-        const secondaryLock = updateSecondaryLock(secondaryWeapon);
-
-        const fireProjectile = (weapon: WeaponDefinition, secondary: boolean, targetEnemy?: Enemy | null) => {
+        const fireProjectile = (weapon: WeaponDefinition, secondary: boolean) => {
           if (!sharedResources.current || !droneRef.current) return;
           const projectile = new THREE.Mesh(
             secondary ? sharedResources.current.missileGeo : sharedResources.current.boltGeo,
@@ -742,9 +762,6 @@ export default function Game({
             life: weapon.projectileLife / dt,
             damage: weapon.damage,
             weaponId: weapon.id,
-            targetEnemyId: targetEnemy?.id,
-            trackingSpeed: targetEnemy ? weapon.projectileSpeed : undefined,
-            turnRate: targetEnemy ? weapon.turnRate : undefined,
             blastRadius: weapon.blastRadius,
           });
         };
@@ -760,27 +777,24 @@ export default function Game({
         }
 
         if (secondaryWeapon && (keys['AltLeft'] || keys['AltRight'] || touchActions.current.secondary) && now - lastSecondaryFireTime.current > secondaryWeapon.cooldownMs && currentSystems.current.energy > secondaryWeapon.energyCost) {
-          if (secondaryWeapon.lockRequired && (!secondaryLock.acquired || !secondaryLock.enemy)) {
-            if (now - lastSecondaryAttemptTime.current > 500) {
-              lastSecondaryAttemptTime.current = now;
-              setGameState(prev => ({ ...prev, message: secondaryLock.enemy ? 'MISSILE SEEKER ACQUIRING' : 'NO AIR TARGET LOCK' }));
-            }
-            touchActions.current.secondary = false;
-          } else {
-            lastSecondaryFireTime.current = now;
-            currentSystems.current.energy = Math.max(0, currentSystems.current.energy - secondaryWeapon.energyCost);
-            cameraShake.current = Math.max(cameraShake.current, 0.35 * screenShakeScale);
-            muzzleFlashTimeRef.current = now;
-            onSound('secondary-fire');
-            setGameState(prev => ({ ...prev, message: `${secondaryWeapon.label.toUpperCase()} AWAY // ${secondaryLock.enemy?.label.toUpperCase() ?? 'DIRECT'}` }));
-            fireProjectile(secondaryWeapon, true, secondaryLock.enemy);
-            touchActions.current.secondary = false;
-          }
+          lastSecondaryFireTime.current = now;
+          currentSystems.current.energy = Math.max(0, currentSystems.current.energy - secondaryWeapon.energyCost);
+          cameraShake.current = Math.max(cameraShake.current, 0.35 * screenShakeScale);
+          muzzleFlashTimeRef.current = now;
+          onSound('secondary-fire');
+          setGameState(prev => ({ ...prev, message: `${secondaryWeapon.label.toUpperCase()} AWAY` }));
+          fireProjectile(secondaryWeapon, true);
+          touchActions.current.secondary = false;
         }
 
         // Spawn Enemies Trigger
         if (gameLogicRef.current.targetsDestroyed >= mission.enemyWave.triggerTargetsDestroyed && !enemiesSpawned.current) {
           enemiesSpawned.current = true;
+          gameLogicRef.current.missionEvents.events.push({
+            type: 'REINFORCEMENTS_INBOUND',
+            timestamp: Date.now(),
+            data: { count: mission.enemyWave.count },
+          });
           setGameState(prev => ({ ...prev, message: mission.enemyWave.message }));
           
           const waveDefinitions = expandEnemyWave(mission.enemyWave.composition).slice(0, mission.enemyWave.count);
@@ -793,8 +807,9 @@ export default function Game({
             ));
             enemyGroup.position.copy(spawnPos);
             scene.add(enemyGroup);
+            const enemyId = `enemy_${enemySequenceRef.current++}`;
             enemiesRef.current.push({
-              id: `enemy_${enemySequenceRef.current++}`,
+              id: enemyId,
               role: enemyDefinition.role,
               label: enemyDefinition.label,
               mesh: enemyGroup,
@@ -805,6 +820,22 @@ export default function Game({
               lastFireTime: 0,
               definition: enemyDefinition,
             });
+            tracksRef.current.registerTrack(
+              enemyId,
+              TrackedEntityType.ENEMY,
+              enemyDefinition.label,
+              {
+                worldX: spawnPos.x,
+                worldY: spawnPos.y,
+                worldZ: spawnPos.z,
+                distanceToPlayer: spawnPos.distanceTo(droneRef.current!.position),
+                health: enemyDefinition.health,
+                maxHealth: enemyDefinition.health,
+                shields: enemyDefinition.shields,
+                maxShield: enemyDefinition.shields,
+                state: 'detected',
+              }
+            );
           });
         }
 
@@ -853,6 +884,12 @@ export default function Game({
         if (gameLogicRef.current.targetsDestroyed >= mission.targets.length && extractionMeshRef.current) {
           if (!extractionMeshRef.current.visible) {
             extractionMeshRef.current.visible = true;
+            // Mark as 'activating' this frame; subsequent frames will resolve to 'active' or 'approaching'.
+            tracksRef.current.updateTrack('extraction', { state: 'activating' });
+            gameLogicRef.current.missionEvents.events.push({
+              type: 'EXTRACTION_ACTIVATED',
+              timestamp: Date.now(),
+            });
             console.log('[Mission] Extraction zone activated');
           }
 
@@ -873,11 +910,36 @@ export default function Game({
             if (distToExtraction < mission.extraction.radius) {
               gameLogicRef.current.missionComplete = true;
               const elapsedMs = Date.now() - gameState.startTime;
+              const healthAtExtraction = Math.round(currentSystems.current.health);
+              // Evaluate bonus conditions against final stats
+              const bonusConditions = mission.objectiveSet?.bonusConditions ?? [];
+              const { earnedIds, totalBonus } = evaluateBonusConditions(bonusConditions, {
+                elapsedMs,
+                health: healthAtExtraction,
+                targetsDestroyed: gameLogicRef.current.targetsDestroyed,
+              }, gameLogicRef.current.missionEvents);
+              // Mark the extract objective complete
+              const extractObj = getActiveObjective(mission, mission.targets.length);
+              if (extractObj) gameLogicRef.current.completedObjectiveIds.add(extractObj.id);
+              const missionCompleteSnapshot = buildObjectiveSnapshot(
+                mission,
+                gameLogicRef.current.targetsDestroyed,
+                gameLogicRef.current.completedObjectiveIds,
+                earnedIds,
+                gameLogicRef.current.objectivePhaseIndices,
+              );
+              const setPieceStats = {
+                ...gameLogicRef.current.setPieceStats,
+                protectedAssetsLost: gameLogicRef.current.missionEvents.alliesLost,
+              };
               const result = calculateMissionResult(mission, {
                 elapsedMs,
                 targetsDestroyed: gameLogicRef.current.targetsDestroyed,
                 enemiesDestroyed: gameLogicRef.current.enemiesDestroyed,
-                health: Math.round(currentSystems.current.health),
+                health: healthAtExtraction,
+                bonusConditionsEarned: earnedIds,
+                bonusScore: totalBonus,
+                setPieceStats,
               });
               console.log('[Mission] Extraction complete — mission success');
               setGameState(prev => ({
@@ -887,6 +949,7 @@ export default function Game({
                 missionResult: result,
                 message: 'EXTRACTION CONFIRMED',
                 objective: mission.extraction.completionObjective,
+                objectiveSnapshot: missionCompleteSnapshot,
               }));
               onMissionComplete(result);
             }
@@ -906,6 +969,17 @@ export default function Game({
         }
 
         targetsRef.current.forEach(target => {
+          const movementUpdate = updateTargetMovement(target, delta);
+          if (movementUpdate.failedMission && !gameLogicRef.current.gameOver) {
+            gameLogicRef.current.gameOver = true;
+            gameLogicRef.current.setPieceStats.movingTargetsEscaped += 1;
+            tracksRef.current.updateTrack(target.id, { state: 'completed' });
+            onSound('failure');
+            setGameState(prev => ({ ...prev, gameOver: true, message: movementUpdate.message ?? `${target.id.toUpperCase()} ESCAPED` }));
+            onMissionFailed();
+            return;
+          }
+
           const waypoint = target.mesh.userData.waypoint as WaypointIllustrationHandles | undefined;
           if (!waypoint) return;
           waypoint.group.visible = !target.destroyed;
@@ -920,16 +994,6 @@ export default function Game({
 
         // Update Projectiles (with Player Hit Detection)
         projectilesRef.current = projectilesRef.current.filter(p => {
-          if (!p.isEnemy && p.targetEnemyId && p.trackingSpeed) {
-            const trackedEnemy = enemiesRef.current.find(enemy => enemy.id === p.targetEnemyId && !enemy.destroyed);
-            if (trackedEnemy) {
-              const desiredVelocity = trackedEnemy.mesh.position.clone().sub(p.mesh.position).normalize().multiplyScalar(p.trackingSpeed * dt);
-              p.velocity.lerp(desiredVelocity, Math.min(1, (p.turnRate ?? 0.08) * dt));
-              p.mesh.lookAt(trackedEnemy.mesh.position);
-              p.mesh.rotateX(Math.PI / 2);
-            }
-          }
-
           const projectileStart = p.mesh.position.clone();
           p.mesh.position.add(p.velocity);
           const projectileEnd = p.mesh.position.clone();
@@ -1023,16 +1087,22 @@ export default function Game({
                     weakPointImpact.destroyed = true;
                     weakPointImpact.health = 0;
                     weakPointImpact.mesh.visible = false;
-                    const weakPointExplosion = new THREE.Group();
-                    for (let i = 0; i < 5; i++) {
-                      const partGeo = new THREE.SphereGeometry(Math.random() * 2 + 1.4, 4, 4);
-                      const part = new THREE.Mesh(partGeo, sharedResources.current?.explosionMat || new THREE.MeshBasicMaterial({ color: 0xff7700 }));
-                      part.position.set((Math.random()-0.5)*14, (Math.random()-0.5)*14, (Math.random()-0.5)*14);
-                      weakPointExplosion.add(part);
+                    syncTargetSetPieceRuntime(target);
+                    const completedPhase = advanceTargetSetPiecePhase(target);
+                    if (completedPhase) {
+                      tracksRef.current.updateTrack(target.id, { state: 'priority' });
+                      onSound('phase-change');
+                      addEffect(scene, explosionsRef.current, createSetPiecePhaseChangeEffect(target.position.clone().add(new THREE.Vector3(0, 48, 0)), graphicsProfile.effectScale), 24);
+                      recordSetPiecePhaseCompleted(target, completedPhase.id);
+                      gameLogicRef.current.missionEvents.events.push({
+                        type: 'OBJECTIVE_PHASE_CHANGE',
+                        timestamp: Date.now(),
+                        data: { targetId: target.id, phaseId: completedPhase.id },
+                      });
                     }
-                    weakPointExplosion.position.copy(weakPointImpact.position);
-                    scene.add(weakPointExplosion);
-                    explosionsRef.current.push({ mesh: weakPointExplosion, life: 18, maxLife: 18 });
+                    recordSetPieceComponentDestroyed(target, target.setPiece?.components.find(component => component.id === weakPointImpact.id));
+                    onSound('component-break');
+                    addEffect(scene, explosionsRef.current, createSetPieceComponentBreakEffect(weakPointImpact.position, graphicsProfile.effectScale), 18);
 
                     if (!areRequiredWeakPointsDestroyed(target)) {
                       setGameState(prev => ({ ...prev, message: `${weakPointImpact.label.toUpperCase()} DISABLED` }));
@@ -1047,6 +1117,19 @@ export default function Game({
                   }, 50);
                 } else {
                   target.health -= p.damage;
+                  syncTargetSetPieceRuntime(target);
+                  const completedPhase = advanceTargetSetPiecePhase(target);
+                  if (completedPhase) {
+                    tracksRef.current.updateTrack(target.id, { state: 'priority' });
+                    onSound('phase-change');
+                    addEffect(scene, explosionsRef.current, createSetPiecePhaseChangeEffect(target.position.clone().add(new THREE.Vector3(0, 48, 0)), graphicsProfile.effectScale), 24);
+                    recordSetPiecePhaseCompleted(target, completedPhase.id);
+                    gameLogicRef.current.missionEvents.events.push({
+                      type: 'OBJECTIVE_PHASE_CHANGE',
+                      timestamp: Date.now(),
+                      data: { targetId: target.id, phaseId: completedPhase.id },
+                    });
+                  }
                   setTimeout(() => {
                     if (!target.destroyed && targetHandles?.damageMesh) {
                       targetHandles.damageMesh.material = targetHandles.damageDefaultMaterial;
@@ -1056,21 +1139,15 @@ export default function Game({
 
                 if ((target.health <= 0 || areRequiredWeakPointsDestroyed(target)) && !target.destroyed) {
                   // Guard: only destroy once — prevents double-count from simultaneous hits
-                  target.destroyed = true;
-                  onSound('success');
-                  target.health = 0;
-                  const explosionGroup = new THREE.Group();
-                  for(let i=0; i<8; i++) {
-                    const partGeo = new THREE.SphereGeometry(Math.random() * (EXPLOSION_RADIUS_MAX - EXPLOSION_RADIUS_MIN) + EXPLOSION_RADIUS_MIN, 4, 4);
-                    // Use shared material
-                    const part = new THREE.Mesh(partGeo, sharedResources.current?.explosionMat || new THREE.MeshBasicMaterial({ color: 0xff7700 }));
-                    part.position.set((Math.random()-0.5)*EXPLOSION_SCATTER*2, (Math.random()-0.5)*EXPLOSION_SCATTER*2, (Math.random()-0.5)*EXPLOSION_SCATTER*2);
-                    explosionGroup.add(part);
+                  if (!target.weakPoints?.length) {
+                    const completedCore = target.setPiece?.components.find(component => component.required && (component.destroyed || component.health <= 0)) ?? target.setPiece?.components.find(component => component.required);
+                    recordSetPieceComponentDestroyed(target, completedCore);
                   }
-                  explosionGroup.position.copy(target.mesh.position);
-                  explosionGroup.position.y += 40;
-                  scene.add(explosionGroup);
-                  explosionsRef.current.push({ mesh: explosionGroup, life: 30, maxLife: 30 });
+                  target.destroyed = true;
+                  tracksRef.current.markDestroyed(target.id);
+                  onSound('set-piece-destroyed');
+                  target.health = 0;
+                  addEffect(scene, explosionsRef.current, createSetPieceFinalDestructionEffect(target.mesh.position.clone().add(new THREE.Vector3(0, 38, 0)), graphicsProfile.effectScale), 32);
                   const finalMeshes = targetHandles?.finalMeshes ?? [target.mesh.children[1], target.mesh.children[2], target.mesh.children[3]];
                   finalMeshes.forEach(finalMesh => { finalMesh.visible = false; });
                   const waypoint = target.mesh.userData.waypoint as WaypointIllustrationHandles | undefined;
@@ -1082,8 +1159,17 @@ export default function Game({
                   console.log(`[Mission] Target destroyed: ${target.id} | Total: ${newCount}/${mission.targets.length}`);
                   
                   if (newCount >= mission.targets.length) {
+                    // Mark the active destroy objective complete in the ref-side tracker
+                    gameLogicRef.current.missionEvents.events.push({
+                      type: 'OBJECTIVE_PHASE_CHANGE',
+                      timestamp: Date.now(),
+                      data: { from: 'DESTROY_ALL', to: 'EXTRACT' },
+                    });
+                    const completedDestroyObj = getActiveObjective(mission, newCount - 1);
+                    if (completedDestroyObj) gameLogicRef.current.completedObjectiveIds.add(completedDestroyObj.id);
+                    const allDestroyedSnapshot = buildObjectiveSnapshot(mission, newCount, gameLogicRef.current.completedObjectiveIds, [], gameLogicRef.current.objectivePhaseIndices);
                     const msg = mission.allTargetsDestroyedMessage;
-                    setGameState(prev => ({ ...prev, targetsDestroyed: newCount, objective: mission.extraction.activationObjective, message: msg }));
+                    setGameState(prev => ({ ...prev, targetsDestroyed: newCount, objective: mission.extraction.activationObjective, message: msg, objectiveSnapshot: allDestroyedSnapshot }));
                     console.log('[Mission] All objectives complete — extraction active');
                   } else {
                     setGameState(prev => ({ ...prev, targetsDestroyed: newCount, objective: formatMissionObjective(mission, newCount), message: mission.targetDestroyedMessage }));
@@ -1125,6 +1211,7 @@ export default function Game({
                 explosionsRef.current.push({ mesh: sparkGroup, life: 10, maxLife: 10 });
                 if (enemy.health <= 0) {
                   enemy.destroyed = true;
+                  tracksRef.current.markDestroyed(enemy.id);
                   onSound('success');
                   const exp = new THREE.Group();
                   for(let i=0; i<5; i++) {
@@ -1136,9 +1223,6 @@ export default function Game({
                   scene.add(exp);
                   explosionsRef.current.push({ mesh: exp, life: 20, maxLife: 20 });
                   scene.remove(enemy.mesh);
-                  if (secondaryLockRef.current.lockedEnemyId === enemy.id || secondaryLockRef.current.candidateEnemyId === enemy.id) {
-                    secondaryLockRef.current = { candidateEnemyId: null, lockedEnemyId: null, startedAt: 0 };
-                  }
                   gameLogicRef.current.enemiesDestroyed++;
                   setGameState(prev => ({ 
                     ...prev, 
@@ -1208,93 +1292,16 @@ export default function Game({
         const worldLookAt = lookAtTarget.applyQuaternion(droneRef.current.quaternion).add(droneRef.current.position);
         cameraRef.current.lookAt(worldLookAt);
  
-        // Dynamic FOV for boost
-        const targetFov = isBoosting ? BOOST_FOV : NORMAL_FOV;
+        // Dynamic FOV for boost — on wide screens (mobile landscape) scale vFOV down so
+        // hFOV stays constant at the 16:9 design value, preventing edge fisheye distortion.
+        const aspect = cameraRef.current.aspect;
+        const baseTargetFov = isBoosting ? BOOST_FOV : NORMAL_FOV;
+        const targetFov =
+          aspect > CAMERA_REF_ASPECT
+            ? (2 * Math.atan(Math.tan(((baseTargetFov * Math.PI) / 180) / 2) * (CAMERA_REF_ASPECT / aspect)) * 180) / Math.PI
+            : baseTargetFov;
         cameraRef.current.fov += (targetFov - cameraRef.current.fov) * Math.min(1, 0.05 * dt);
         cameraRef.current.updateProjectionMatrix();
-
-        // --- HUD Indicator Projection ---
-        const widthHalf = window.innerWidth / 2;
-        const heightHalf = window.innerHeight / 2;
-
-        const allMarkers: { id: string, pos: { x: number, y: number, offScreen: boolean, angle: number } }[] = [];
-
-        targetsRef.current.forEach(t => {
-          if (t.destroyed) {
-            t.screenPos = { x: 0, y: 0, visible: false };
-            return;
-          }
-          
-          const targetWorldPos = t.position.clone().add(new THREE.Vector3(0, 40, 0));
-          const posInfo = calculateScreenPosition(targetWorldPos, cameraRef.current!, 40, t.screenPos?.offScreen, t.screenPos?.angle);
-
-          let screenX = posInfo.x;
-          let screenY = posInfo.y;
-
-          if (t.screenPos?.visible) {
-             const didSwitch = posInfo.offScreen !== t.screenPos.offScreen;
-             screenX = didSwitch ? posInfo.x : t.screenPos.x + (posInfo.x - t.screenPos.x) * 0.5;
-             screenY = didSwitch ? posInfo.y : t.screenPos.y + (posInfo.y - t.screenPos.y) * 0.5;
-          }
-          
-          t.screenPos = { ...posInfo, x: screenX, y: screenY, visible: true };
-          allMarkers.push({ id: t.id, pos: t.screenPos });
-        });
-
-        // Compute extraction point
-        if (gameLogicRef.current.targetsDestroyed >= mission.targets.length && extractionMeshRef.current) {
-          const extWorldPos = extractionMeshRef.current.position;
-          const extPrev = extractionScreenPosRef.current;
-          const posInfo = calculateScreenPosition(extWorldPos, cameraRef.current!, 40, extPrev?.offScreen, extPrev?.angle);
-
-          let screenX = posInfo.x;
-          let screenY = posInfo.y;
-
-          if (extPrev?.visible) {
-             const didSwitch = posInfo.offScreen !== extPrev.offScreen;
-             screenX = didSwitch ? posInfo.x : extPrev.x + (posInfo.x - extPrev.x) * 0.5;
-             screenY = didSwitch ? posInfo.y : extPrev.y + (posInfo.y - extPrev.y) * 0.5;
-          }
-          
-          extractionScreenPosRef.current = { ...posInfo, x: screenX, y: screenY, visible: true };
-          allMarkers.push({ id: 'EXTRACTION', pos: extractionScreenPosRef.current });
-        } else {
-          extractionScreenPosRef.current = { x: 0, y: 0, visible: false, offScreen: false, angle: 0 };
-        }
-
-        // Overlap Avoidance for Off-Screen Markers
-        const offScreenMarkers = allMarkers.filter(m => m.pos.offScreen);
-        for (let i = 0; i < offScreenMarkers.length; i++) {
-          for (let j = i + 1; j < offScreenMarkers.length; j++) {
-            const m1 = offScreenMarkers[i];
-            const m2 = offScreenMarkers[j];
-            
-            const dx = m1.pos.x - m2.pos.x;
-            const dy = m1.pos.y - m2.pos.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-            
-            const minSpacing = MIN_MARKER_SPACING;
-            if (dist < minSpacing && dist > 0.01) {
-              // Extraction gets priority, meaning objective markers push away from it
-              const pushFactor = (minSpacing - dist) / 2;
-              const pushX = (dx / dist) * pushFactor;
-              const pushY = (dy / dist) * pushFactor;
-              
-              if (m1.id === 'EXTRACTION') {
-                m2.pos.x -= pushX * 2;
-                m2.pos.y -= pushY * 2;
-              } else if (m2.id === 'EXTRACTION') {
-                m1.pos.x += pushX * 2;
-                m1.pos.y += pushY * 2;
-              } else {
-                m1.pos.x += pushX;
-                m1.pos.y += pushY;
-                m2.pos.x -= pushX;
-                m2.pos.y -= pushY;
-              }
-            }
-          }
-        }
 
         const isFiring = (keys['Space'] || touchActions.current.fire) && currentSystems.current.energy > 0;
         
@@ -1310,6 +1317,8 @@ export default function Game({
         }
 
         // Calculate exact point where drone is aiming on screen
+        const widthHalf = window.innerWidth / 2;
+        const heightHalf = window.innerHeight / 2;
         const aimDist = 260;
         const forwardAim = new THREE.Vector3(0, 0, -aimDist).applyQuaternion(droneRef.current.quaternion).add(droneRef.current.position);
         
@@ -1333,7 +1342,68 @@ export default function Game({
 
           // Update HUD display data
         if (frameIdRef.current % 4 === 0) {
-            const secondaryReady = !!secondaryWeapon && now - lastSecondaryFireTime.current > secondaryWeapon.cooldownMs && currentSystems.current.energy > secondaryWeapon.energyCost && (!secondaryWeapon.lockRequired || secondaryLock.acquired);
+            const secondaryReady = !!secondaryWeapon && now - lastSecondaryFireTime.current > secondaryWeapon.cooldownMs && currentSystems.current.energy > secondaryWeapon.energyCost;
+
+          // Update tracking system with current entity positions and states
+          const dronePos = droneRef.current!.position;
+          targetsRef.current.forEach(target => {
+            if (!target.destroyed) {
+              tracksRef.current.updateTrack(target.id, {
+                worldX: target.position.x,
+                worldY: target.position.y,
+                worldZ: target.position.z,
+                health: target.health,
+                distanceToPlayer: target.position.distanceTo(dronePos),
+                state: getTargetTrackingState(target),
+              });
+            }
+          });
+          enemiesRef.current.forEach(enemy => {
+            if (!enemy.destroyed) {
+              tracksRef.current.updateTrack(enemy.id, {
+                worldX: enemy.mesh.position.x,
+                worldY: enemy.mesh.position.y,
+                worldZ: enemy.mesh.position.z,
+                health: enemy.health,
+                shields: enemy.shields,
+                distanceToPlayer: enemy.mesh.position.distanceTo(dronePos),
+              });
+            }
+          });
+          if (extractionMeshRef.current) {
+            const extractionActive = gameLogicRef.current.targetsDestroyed >= mission.targets.length;
+            if (extractionActive) {
+              const extPos3D = extractionMeshRef.current.position;
+              const distToExt = extPos3D.distanceTo(dronePos);
+              const approachThreshold =
+                mission.extraction.policy?.approachThreshold ?? mission.extraction.radius * 3;
+              let extractState: import('../types/game').TrackedEntityState;
+              if (distToExt < mission.extraction.radius) {
+                extractState = 'inside-radius';
+              } else if (distToExt < approachThreshold) {
+                extractState = 'approaching';
+              } else {
+                extractState = 'active';
+              }
+              tracksRef.current.updateTrack('extraction', {
+                worldX: extPos3D.x,
+                worldY: extPos3D.y,
+                worldZ: extPos3D.z,
+                distanceToPlayer: distToExt,
+                state: extractState,
+              });
+            } else {
+              tracksRef.current.updateTrack('extraction', {
+                worldX: extractionMeshRef.current.position.x,
+                worldY: extractionMeshRef.current.position.y,
+                worldZ: extractionMeshRef.current.position.z,
+                distanceToPlayer: extractionMeshRef.current.position.distanceTo(dronePos),
+                state: 'inactive',
+              });
+            }
+          }
+          tracksRef.current.recomputePriority();
+
           setGameState(prev => ({
             ...prev,
             speed: Math.round(currentSpeed * 960),
@@ -1347,13 +1417,10 @@ export default function Game({
             health: Math.round(currentSystems.current.health),
             shields: Math.round(currentSystems.current.shields),
             energy: Math.round(currentSystems.current.energy),
+            boostEnergy: Math.round(currentSystems.current.boostEnergy),
             activeWeaponLabel: primaryWeapon.label,
             secondaryWeaponLabel: secondaryWeapon?.label ?? 'Locked',
             secondaryReady,
-            secondaryLockLabel: secondaryWeapon ? secondaryLock.label : 'LOCKED',
-            secondaryLockProgress: secondaryWeapon?.lockRequired ? secondaryLock.progress : 0,
-            secondaryLockAcquired: secondaryWeapon?.lockRequired ? secondaryLock.acquired : false,
-            secondaryLockHasTarget: secondaryWeapon?.lockRequired ? secondaryLock.hasTarget : false,
             message: activeHazard ? activeHazard.message : prev.message,
             aimScreenPos: { x: aimScreenX, y: aimScreenY },
             droneScreenPos: { x: droneScreenX, y: droneScreenY }
@@ -1401,83 +1468,58 @@ export default function Game({
         <div className="absolute inset-0 bg-red-600/30 z-[100] pointer-events-none transition-opacity duration-150 animate-pulse" />
       )}
 
-      <div className="absolute inset-0 pointer-events-none z-20 p-3 pt-[calc(0.75rem+env(safe-area-inset-top))] pb-[calc(0.75rem+env(safe-area-inset-bottom))] flex flex-col justify-between sm:p-5 md:p-8" style={{ transform: `scale(${hudScale})`, transformOrigin: 'center center' }}>
+      <div className="absolute inset-0 pointer-events-none z-20 p-3 pt-[calc(0.75rem+env(safe-area-inset-top))] pb-[calc(0.75rem+env(safe-area-inset-bottom))] flex flex-col justify-between sm:p-5 md:p-8" data-hud-root style={{ transform: `scale(${hudScale})`, transformOrigin: 'center center' }}>
         
         {gameState.outOfBounds && <OutOfBoundsWarning />}
         
         {/* HUD: Top Bar */}
-        <div className="flex justify-between items-start gap-3">
-          <div className="flex min-w-0 max-w-[46vw] flex-col gap-1 sm:max-w-none">
-            <div className="text-[8px] uppercase tracking-[0.18em] text-orange-500 font-bold sm:text-[10px] sm:tracking-[0.3em]">System Status: Active</div>
-            <h1 className="hidden text-3xl font-light tracking-tighter italic font-serif sm:block">
-              SKYBREAKER <span className="font-black tracking-normal text-orange-500">DRONE STRIKE</span>
-            </h1>
-            <div className="flex gap-2 mt-1">
-              <div className="text-[9px] uppercase tracking-widest bg-orange-500 text-black px-2 font-bold select-none">
-                {gameState.cameraMode} VIEW
-              </div>
-            </div>
-            {settings.showTelemetry && <div className="text-[8px] text-white/35 font-mono uppercase tracking-[0.12em] mt-1 sm:text-[9px] sm:tracking-[0.18em]">{settings.graphicsQuality} // {gameState.fps} FPS</div>}
+        <div className="flex justify-between items-start gap-3" data-hud-region="top">
+          <div className="flex min-w-0 max-w-[46vw] flex-col gap-1 sm:max-w-none" data-hud-region="top-left">
+            <button
+              onClick={toggleCameraMode}
+              className="pointer-events-auto self-start bg-black/60 border border-white/20 hover:border-orange-500 px-2 py-0.5 text-[8px] uppercase tracking-widest text-white/70 font-bold transition-colors"
+              title="Toggle camera view"
+            >
+              {gameState.cameraMode} VIEW
+            </button>
+            {settings.showTelemetry && <div className="text-[8px] text-white/35 font-mono uppercase tracking-[0.12em] sm:text-[9px] sm:tracking-[0.18em]">{settings.graphicsQuality} // {gameState.fps} FPS</div>}
           </div>
 
           {/* Compass Inserted Here */}
-          <div className="absolute left-1/2 -translate-x-1/2 top-[calc(0.75rem+env(safe-area-inset-top))] sm:top-6 md:top-12 z-50">
+          <div className="absolute left-1/2 -translate-x-1/2 top-[calc(0.75rem+env(safe-area-inset-top))] sm:top-6 md:top-12 z-50" data-hud-region="top-center">
             <Compass rotationY={rotation.current.y} />
+            {weatherDef.warningText && (
+              <div className="mt-1 text-center text-[7px] sm:text-[8px] font-bold uppercase tracking-[0.3em] text-amber-400/90 pointer-events-none select-none">
+                {weatherDef.warningText}
+              </div>
+            )}
           </div>
 
-          <div className="flex flex-col items-end gap-2">
+          <div className="flex flex-col items-end gap-2" data-hud-region="top-right">
             <div className="flex gap-1 mb-1 sm:gap-2 sm:mb-2">
               <button 
                 onClick={() => {
                   onSettingsChange({ ...settings, invertY: !settings.invertY });
                 }}
                 className="pointer-events-auto min-h-8 bg-black/60 border border-white/20 hover:border-orange-500 px-2 py-1 text-[7px] tracking-[0.12em] text-white uppercase font-bold transition-colors sm:px-3 sm:text-[8px] sm:tracking-widest"
-                title="Toggle Joystick Inversion"
+                title="Toggle Pitch Inversion"
               >
                 INV_Y: {gameState.settings.invertY ? '[ON]' : '[OFF]'}
               </button>
-              <button 
-                onClick={toggleCameraMode}
-                className="pointer-events-auto min-h-8 bg-black/60 border border-white/20 hover:border-orange-500 px-3 py-1 text-[8px] tracking-widest text-white uppercase font-bold transition-colors md:hidden"
-              >
-                VIEW
-              </button>
-            </div>
-            <div className="hidden items-center gap-4 bg-black/40 border border-white/10 px-4 py-2 backdrop-blur-md rounded-sm sm:flex">
-              <div className="flex flex-col items-end">
-                <span className="text-[9px] uppercase tracking-widest text-white/50 font-mono">Connection</span>
-                <span className="text-xs font-mono text-emerald-400">STABLE (14ms)</span>
-              </div>
-              <div className="w-px h-6 bg-white/20"></div>
-              <div className="flex flex-col items-end">
-                <span className="text-[9px] uppercase tracking-widest text-white/50 font-mono">Battery</span>
-                <span className="text-xs font-mono">88%</span>
-              </div>
             </div>
             
             {/* Relocated Radar */}
             <div className="mt-1 origin-top-right scale-[0.68] md:mt-2 md:scale-100">
-              <Radar 
-                dronePos={droneRef.current?.position || new THREE.Vector3()} 
-                targets={targetsRef.current} 
-                enemies={enemiesRef.current} 
+              <Radar
+                dronePos={droneRef.current?.position ?? new THREE.Vector3()}
+                tracks={tracksRef.current.getSnapshots()}
                 rotationY={rotation.current.y}
-                extractionPos={extractionMeshRef.current?.position}
-                extractionActive={gameState.targetsDestroyed >= mission.targets.length}
+                reduceEffects={settings.reduceEffects}
+                radarRange={effectiveRadarRange}
               />
             </div>
           </div>
         </div>
-
-        <TargetMarkers
-          targets={targetsRef.current}
-          dronePosition={droneRef.current?.position}
-          lockedTargetId={gameState.lockedTargetId}
-          extractionActive={gameLogicRef.current.targetsDestroyed >= mission.targets.length}
-          extractionScreenPosition={extractionScreenPosRef.current}
-          extractionPosition={extractionMeshRef.current?.position}
-          onToggleLock={(id) => setNavigationLock(navigationLockRef.current === id ? null : id)}
-        />
 
         <Crosshair
           cameraMode={gameLogicRef.current.cameraMode}
@@ -1486,30 +1528,29 @@ export default function Game({
           recoil={gameState.recoil}
           firing={gameState.firing}
           hitConfirmed={gameState.hitConfirmed}
-          secondaryLockProgress={gameState.secondaryLockProgress}
-          secondaryLockAcquired={gameState.secondaryLockAcquired}
-          secondaryLockHasTarget={gameState.secondaryLockHasTarget}
           aimScreenPos={gameState.aimScreenPos}
           droneScreenPos={gameState.droneScreenPos}
         />
 
         {/* HUD: Bottom Layout */}
-        <div className="mission-bottom-hud absolute inset-x-3 bottom-[calc(8.25rem+env(safe-area-inset-bottom))] pointer-events-none z-20 sm:inset-x-5 sm:bottom-40 md:inset-x-12 md:bottom-12">
+        <div className="mission-bottom-hud absolute inset-x-3 bottom-[calc(8.25rem+env(safe-area-inset-bottom))] pointer-events-none z-20 sm:inset-x-5 sm:bottom-40 md:inset-x-12 md:bottom-12" data-hud-region="bottom">
           <div className="flex w-full flex-col items-stretch gap-2 md:flex-row md:items-end md:justify-between">
-            <div className="flex items-end justify-between gap-2 md:flex-col md:items-start md:gap-6">
+            <div className="flex items-end justify-between gap-2 md:flex-col md:items-start md:gap-6" data-hud-region="bottom-left">
               <SpeedDisplay speed={gameState.speed} boosting={gameState.boosting} />
-              <Vitals shields={currentSystems.current.shields} energy={currentSystems.current.energy} health={currentSystems.current.health} />
+              <Vitals shields={currentSystems.current.shields} energy={currentSystems.current.energy} boostEnergy={currentSystems.current.boostEnergy} health={currentSystems.current.health} />
             </div>
 
-            <Objectives
-              objective={gameState.objective}
-              enemiesDestroyed={gameState.enemiesDestroyed}
-              message={gameState.message}
-              activeWeaponLabel={gameState.activeWeaponLabel}
-              secondaryWeaponLabel={gameState.secondaryWeaponLabel}
-              secondaryReady={gameState.secondaryReady}
-              secondaryLockLabel={gameState.secondaryLockLabel}
-            />
+            <div className="pointer-events-auto" data-hud-region="bottom-right">
+              <Objectives
+                objective={gameState.objective}
+                enemiesDestroyed={gameState.enemiesDestroyed}
+                message={gameState.message}
+                activeWeaponLabel={gameState.activeWeaponLabel}
+                secondaryWeaponLabel={gameState.secondaryWeaponLabel}
+                secondaryReady={gameState.secondaryReady}
+                optionalObjectives={gameState.objectiveSnapshot?.optionalObjectives as ObjectiveRuntimeState[] | undefined}
+              />
+            </div>
           </div>
         </div>
 
@@ -1518,52 +1559,15 @@ export default function Game({
       {/* --- TOUCH CONTROLS (Overlay) --- */}
       <div className="touch-controls absolute inset-x-0 bottom-0 pointer-events-none z-40 justify-between px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] items-end" style={{ transform: `scale(${touchControlsScale})`, transformOrigin: 'bottom center' }}>
         
-        {/* Left Side: Joystick */}
-        <div 
-          className="touch-joystick pointer-events-auto relative w-24 h-24 rounded-full border border-white/10 bg-white/5 backdrop-blur-sm flex items-center justify-center sm:w-32 sm:h-32"
-          onTouchStart={(e) => { 
-            const touch = e.touches[e.touches.length - 1];
-            touchJoystick.current.active = true; 
-            touchJoystick.current.identifier = touch.identifier;
-            handleJoystick(e); 
-          }}
-          onTouchMove={handleJoystick}
-          onTouchEnd={(e) => { 
-            // Only stop if the specific touch ended
-            const touchEnded = Array.from(e.changedTouches).some(t => (t as React.Touch).identifier === touchJoystick.current.identifier);
-            if (touchEnded) {
-              touchJoystick.current.active = false; 
-              touchJoystick.current.identifier = -1;
-              touchJoystick.current.x = 0; 
-              touchJoystick.current.y = 0; 
-              setJoystickPos({ x: 0, y: 0 }); 
-            }
-          }}
-          onMouseDown={(e) => { touchJoystick.current.active = true; handleJoystick(e as any); }}
-          onMouseMove={(e) => { if (touchJoystick.current.active) handleJoystick(e as any); }}
-          onMouseUp={() => { 
-            touchJoystick.current.active = false; 
-            touchJoystick.current.x = 0; 
-            touchJoystick.current.y = 0; 
-            setJoystickPos({ x: 0, y: 0 }); 
-          }}
-          onMouseLeave={() => {
-            if (touchJoystick.current.active) {
-              touchJoystick.current.active = false;
-              touchJoystick.current.x = 0;
-              touchJoystick.current.y = 0;
-              setJoystickPos({ x: 0, y: 0 });
-            }
-          }}
-        >
-          <div 
-            className="touch-joystick-knob w-9 h-9 rounded-full bg-orange-500 shadow-[0_0_15px_rgba(242,125,38,0.5)] border border-white/20 transition-transform duration-75 sm:w-12 sm:h-12"
-            style={{ transform: `translate(${joystickPos.x}px, ${joystickPos.y}px)` }}
-          />
-          {/* Guides */}
-          <div className="absolute w-full h-[1px] bg-white/5" />
-          <div className="absolute h-full w-[1px] bg-white/5" />
-        </div>
+        {/* Left Side: Touch Drag Zone */}
+        <div
+          className="touch-drag-zone pointer-events-auto flex-1 self-stretch min-h-[7rem]"
+          onTouchStart={handleTouchDragStart}
+          onTouchMove={handleTouchDragMove}
+          onTouchEnd={handleTouchDragEnd}
+          onTouchCancel={handleTouchDragEnd}
+          aria-label="Drag to steer"
+        />
 
         {/* Right Side: Action Buttons */}
         <div className="touch-action-cluster flex flex-col gap-2 pointer-events-auto sm:gap-4">
@@ -1599,12 +1603,6 @@ export default function Game({
               BRK
             </button>
             <button 
-              className="touch-action-small w-11 h-11 rounded-full border border-cyan-400/20 bg-cyan-400/10 active:bg-cyan-300 text-cyan-200 active:text-black flex items-center justify-center font-bold tracking-widest text-[7px] transition-colors sm:w-12 sm:h-12 sm:text-[8px]"
-              onClick={cycleNavigationLock}
-            >
-              LOCK
-            </button>
-            <button 
               className="touch-action-small w-11 h-11 rounded-full border border-white/10 bg-white/5 active:bg-white text-white active:text-black flex items-center justify-center font-bold tracking-widest text-[7px] transition-colors sm:w-12 sm:h-12 sm:text-[8px]"
               onTouchStart={() => touchActions.current.level = true}
               onTouchEnd={() => touchActions.current.level = false}
@@ -1619,6 +1617,12 @@ export default function Game({
             </button>
           </div>
         </div>
+        {dragOriginPos && (
+          <div
+            className="pointer-events-none fixed z-50 w-10 h-10 rounded-full border border-orange-400/25 -translate-x-1/2 -translate-y-1/2"
+            style={{ left: dragOriginPos.x, top: dragOriginPos.y }}
+          />
+        )}
       </div>
 
       {/* Key Overlay Hint */}
@@ -1651,6 +1655,7 @@ export default function Game({
           targetsDestroyed={gameState.targetsDestroyed}
           totalTargets={mission.targets.length}
           result={gameState.missionResult}
+          bonusConditions={mission.objectiveSet?.bonusConditions}
           onReturnToHangar={onReturnToMenu}
         />
       )}

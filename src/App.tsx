@@ -62,6 +62,7 @@ function loadStoredSettings() {
     touchControlsScale: clampRange(stored?.touchControlsScale, DEFAULT_APP_SETTINGS.touchControlsScale, 85, 125),
     screenShake: clampPercent(stored?.screenShake, DEFAULT_APP_SETTINGS.screenShake),
     pointerSensitivity: clampRange(stored?.pointerSensitivity, DEFAULT_APP_SETTINGS.pointerSensitivity, 60, 140),
+    touchDragSensitivity: clampRange(stored?.touchDragSensitivity, DEFAULT_APP_SETTINGS.touchDragSensitivity, 60, 140),
     showTelemetry: typeof stored?.showTelemetry === 'boolean' ? stored.showTelemetry : DEFAULT_APP_SETTINGS.showTelemetry,
     menuMotion: typeof stored?.menuMotion === 'boolean' ? stored.menuMotion : DEFAULT_APP_SETTINGS.menuMotion,
   } satisfies AppSettings;
@@ -118,8 +119,33 @@ export default function App() {
   const [missionRunId, setMissionRunId] = useState(0);
   const [settings, setSettings] = useState<AppSettings>(loadStoredSettings);
   const [progress, setProgress] = useState<CampaignProgress>(loadStoredProgress);
+  // Portrait lock: true when width < height on a touch device
+  const [showPortraitOverlay, setShowPortraitOverlay] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia('(pointer: coarse)').matches && window.innerWidth < window.innerHeight;
+  });
   const selectedMission = getMissionById(selectedMissionId);
   const { playCue } = useAudio(settings, phase);
+
+  // Attempt landscape orientation lock + track portrait state on touch devices
+  useEffect(() => {
+    const isTouchDevice = window.matchMedia('(pointer: coarse)').matches;
+    if (!isTouchDevice) return;
+
+    // Try native orientation lock (requires user gesture / PWA context)
+    const orient = window.screen?.orientation as (ScreenOrientation & { lock?: (o: 'landscape' | 'portrait' | 'any' | 'natural' | 'portrait-primary' | 'portrait-secondary' | 'landscape-primary' | 'landscape-secondary') => Promise<void> }) | undefined;
+    orient?.lock?.('landscape').catch(() => { /* not available in all browsers */ });
+
+    const update = () => {
+      setShowPortraitOverlay(window.innerWidth < window.innerHeight);
+    };
+    window.addEventListener('resize', update);
+    window.screen.orientation?.addEventListener('change', update);
+    return () => {
+      window.removeEventListener('resize', update);
+      window.screen.orientation?.removeEventListener('change', update);
+    };
+  }, []);
 
   const nextSortieMission = MISSIONS.find(mission => isMissionUnlocked(mission, progress) && !progress.completedMissionIds.includes(mission.id))
     ?? MISSIONS.find(mission => mission.id === selectedMissionId)
@@ -211,6 +237,21 @@ export default function App() {
 
   return (
     <div className="w-full h-screen bg-black">
+      {/* Portrait orientation overlay — shown on touch devices when height > width */}
+      {showPortraitOverlay && (
+        <div className="absolute inset-0 z-[200] bg-[#030303] flex flex-col items-center justify-center gap-6 p-8 text-white">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(249,115,22,0.12),transparent_60%)]" />
+          <div className="absolute inset-x-0 top-0 h-px bg-orange-500/50" />
+          <div className="relative z-10 flex flex-col items-center gap-5 text-center">
+            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-orange-400 animate-[spin_2s_ease-in-out_infinite]" style={{animationName:'none',transform:'rotate(90deg)'}}>
+              <rect x="5" y="2" width="14" height="20" rx="2" /><path d="M12 18h.01"/>
+            </svg>
+            <div className="text-[9px] font-mono uppercase tracking-[0.4em] text-orange-400">Skybreaker Drone Strike</div>
+            <div className="text-xl font-black uppercase tracking-[0.18em]">Rotate Device</div>
+            <div className="text-[11px] font-mono uppercase tracking-[0.2em] text-white/45">Landscape mode required</div>
+          </div>
+        </div>
+      )}
       {shouldRenderGame && (
         <div key={`${selectedMission.id}-${missionRunId}`} className="w-full h-full">
           <Game
@@ -257,7 +298,7 @@ export default function App() {
         />
       )}
 
-      {phase === GamePhase.BRIEFING && <BriefingScreen mission={selectedMission} onContinue={() => setPhase(GamePhase.LOADOUT)} onBack={() => setPhase(GamePhase.MISSION_SELECT)} />}
+      {phase === GamePhase.BRIEFING && <BriefingScreen mission={selectedMission} onContinue={launchMission} onLoadout={() => setPhase(GamePhase.LOADOUT)} onBack={() => setPhase(GamePhase.MISSION_SELECT)} />}
 
       {phase === GamePhase.LOADOUT && <LoadoutScreen mission={selectedMission} progress={progress} onLaunch={launchMission} onBack={() => setPhase(GamePhase.BRIEFING)} />}
 

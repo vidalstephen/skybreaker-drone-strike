@@ -35,11 +35,15 @@ function createMissionAtmosphere(scene: THREE.Scene, environment: MissionEnviron
 
       void main() {
         float heightMix = clamp(vSkyDirection.y * 0.5 + 0.5, 0.0, 1.0);
-        vec3 lowerSky = mix(bottomColor, horizonColor, smoothstep(0.25, 0.58, heightMix));
-        vec3 upperSky = mix(horizonColor, topColor, smoothstep(0.48, 1.0, heightMix));
-        vec3 skyColor = mix(lowerSky, upperSky, smoothstep(0.42, 0.72, heightMix));
-        float horizonGlow = pow(1.0 - abs(vSkyDirection.y), 5.0) * horizonIntensity;
-        skyColor += horizonColor * horizonGlow * 0.22;
+        // Smoother, deeper sky gradient
+        vec3 lowerSky = mix(bottomColor, horizonColor, smoothstep(0.2, 0.55, heightMix));
+        vec3 upperSky = mix(horizonColor, topColor, smoothstep(0.4, 0.9, heightMix));
+        vec3 skyColor = mix(lowerSky, upperSky, smoothstep(0.35, 0.65, heightMix));
+        
+        // Brighter horizon glow
+        float horizonGlow = pow(1.0 - abs(vSkyDirection.y), 4.0) * horizonIntensity;
+        skyColor += horizonColor * horizonGlow * 0.35;
+        
         gl_FragColor = vec4(skyColor, 1.0);
       }
     `,
@@ -133,8 +137,8 @@ export function createMissionEnvironment(
   const floorGeometry = new THREE.PlaneGeometry(environment.gridProfile.size, environment.gridProfile.size);
   const floorMaterial = new THREE.MeshStandardMaterial({
     color: environment.floorMaterial.color,
-    roughness: environment.floorMaterial.roughness,
-    metalness: environment.floorMaterial.metalness,
+    roughness: Math.max(0.1, environment.floorMaterial.roughness - 0.15), // Make it more glossy
+    metalness: Math.min(1.0, environment.floorMaterial.metalness + 0.2), // Make it more metallic
   });
   const floor = new THREE.Mesh(floorGeometry, floorMaterial);
   floor.rotation.x = -Math.PI / 2;

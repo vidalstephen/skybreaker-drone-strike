@@ -1,415 +1,1050 @@
-# Skybreaker Drone Strike Development Checklist
+# Skybreaker Drone Strike Development Checklist - Active Roadmap
 
-Use this file to track the staged work required to evolve the current prototype into a complete arcade drone combat game without breaking the existing playable slice.
+Use this file to track current and future development work. Completed historical build logs have been archived to `docs/DEV-CHECKLIST.v1-phases-0-to-stage2a.archive.md`.
+
+Current-state source of truth: `overview.md`.
+
+Future-plan source of truth: `roadmap.md`.
+
+Non-regression anchor: `BASELINE.md`.
+
+If this checklist conflicts with `overview.md`, treat `overview.md` as the current implementation state and update this checklist before starting new work.
 
 ## Status Key
 
 - [ ] Not started
 - [~] In progress
 - [x] Complete
-
-## Product Target
-
-- Mid-size arcade campaign: 8-12 missions
-- Preserve the current chase camera readability, clean HUD language, tactical radar, and reliable mission loop
-- Keep the game playable after every phase
+- [>] Deferred
+- [!] Blocked
+- [r] Needs review
 
 ## Current Baseline
 
-- [x] Core flight model playable
-- [x] Combat loop playable
-- [x] HUD and radar readable
-- [x] Mission 1 vertical slice complete
-- [x] Mission complete and mission failed overlays working
-- [x] Docker build and deploy path working
-- [x] Non-regression checklist written down in project docs (this file + DEV-CHECKLIST.md)
+- [x] Eight-mission compact arcade campaign is playable.
+- [x] Full app shell exists: splash, hangar, mission select, briefing, optional loadout review, career, settings, controls, credits, pause, debrief, game over.
+- [x] Core mission loop works: destroy required targets, survive enemy response, extract.
+- [x] Campaign progress and settings persist through localStorage.
+- [x] Tactical HUD includes compass, radar, reticle, projected weapon path, vitals, speed, collapsible objective chip, world markers, and warnings.
+- [x] Shared tracking system feeds radar snapshots for targets, enemies, hazards, and extraction.
+- [x] Direct mobile touch-drag control is implemented with action buttons.
+- [x] Stage 2a mission classification fields are implemented and shown in briefing chips.
+- [x] Current Ion Missile is a straight secondary projectile with blast radius; true lock/homing behavior is future work.
+- [x] Out-of-bounds currently shows warning state only; fail policy is future work.
+- [!] Known issue: mobile play shows a fisheye-like apparent-distance shift when turning toward targets near the screen edge; desktop should be checked too.
 
-## Phase 0 - Baseline Lock
+## Product Target
+
+- Grow from the compact eight-mission campaign into a larger tactical arcade campaign with roughly 18-24 main missions.
+- Add structured objectives, optional objectives, mission event hooks, multi-stage set pieces, varied biomes, time-of-day, weather, and air/land/sea combat domains.
+- Preserve chase camera readability, flight feel, HUD clarity, tactical radar identity, target readability, and reliable extraction flow.
+- Keep the game playable after every phase.
+- Prefer backward-compatible data model changes so existing saves and missions keep working.
+
+## Non-Regression Rules
+
+Source of truth for regression behavior: `BASELINE.md`, reconciled with `overview.md` when old baseline wording is stale.
+
+Do not regress these systems unless a phase explicitly targets them:
+
+- Flight controls, pointer control, direct touch-drag control, boost, brake, throttle, auto-level, and camera toggle.
+- Chase/cockpit camera readability, boost FOV, apparent target distance, camera shake scaling, and drone silhouette framing.
+- Hull, shields, weapon energy, boost energy, regen timing, boost gating, and fire gating.
+- HUD identity, reticle, radar, vitals, objective chip, target/extraction markers, warnings, and mobile safe-area layout.
+- Radar heading behavior, tracked entity categories, extraction visibility, priority pulse, and edge-pin behavior.
+- Target/weak-point destruction, shield-before-hull damage, projectile collision guards, and no double-counted destruction.
+- Extraction activation only after required targets are destroyed, XZ-radius completion, and exactly-once mission completion.
+- Settings and campaign progress persistence.
+- Docker production build/deploy path.
+
+## Stage 0 - Roadmap Baseline And State Reconciliation
 
 Status: Complete
 
-Goal: protect the current prototype before larger refactors.
+Goal: remove stale root checklist history, rebuild the planning docs around current implementation truth, and leave a clean active tracker.
 
-- [x] Document the current controls, mission rules, and expected flows (tracked in session notes)
-- [x] Write a standalone BASELINE.md covering controls, mission rules, expected flows, and UI readability rules
-- [x] Document non-regression rules for camera readability, HUD clarity, radar readability, and extraction flow
-- [x] Record current mission acceptance checks for local validation
-- [x] Define what must not change during architecture work
+- [x] Archive historical checklist to `docs/DEV-CHECKLIST.v1-phases-0-to-stage2a.archive.md`.
+- [x] Rebuild `overview.md` as the current-state source of truth.
+- [x] Rebuild `roadmap.md` as the future-plan source of truth with the same major planning headers.
+- [x] Rebuild root `DEV-CHECKLIST.md` as the active phase-worker tracker.
+- [x] Correct current-state contradictions around touch-drag, Stage 2a classification, missile lock/homing behavior, and out-of-bounds behavior.
 
 Exit criteria:
 
-- [x] BASELINE.md exists in the project root with controls reference, mission walkthrough, and non-regression rules
-- [x] Baseline behavior is documented before major refactors start
+- [x] Historical detail is preserved outside the root active checklist.
+- [x] Overview, roadmap, and checklist agree on the current baseline.
+- [x] The next implementation phase is clearly identified.
 
 Completion summary:
 
-- Shipped: Baseline lock documentation for controls, Mission 1 rules, HUD readability expectations, camera behavior, and non-regression constraints.
-- Changed: `BASELINE.md`, `DEV-CHECKLIST.md`.
-- Verification: Documentation review against the current playable prototype behavior.
-- Notes/Risks: Future architecture and content phases must preserve the documented flight, HUD, radar, extraction, and terminal overlay behavior unless a later phase explicitly changes it.
+- Shipped: Documentation reset that archives the historical checklist and creates focused current-state, roadmap, and active-checklist docs.
+- Changed: `docs/DEV-CHECKLIST.v1-phases-0-to-stage2a.archive.md`, `overview.md`, `roadmap.md`, `DEV-CHECKLIST.md`.
+- Verification: `npm run lint`, `npm run build`, `npm run validate:drone`, `docker compose build`, and `docker compose up -d && docker compose ps` passed on 2026-05-13. Vite reported the existing large chunk warning only.
+- Notes/Risks: `README.md` and `BASELINE.md` still contain some stale wording and should be refreshed in a separate docs pass.
 
-## Phase 1 - Architecture Stabilization
-
-Status: Complete
-
-Goal: stop scaling the game through a single monolithic gameplay file. Work is broken into steps. Complete each step and verify the build passes before moving to the next.
-
-### Step 1.1 — Target folder structure
-
-Create the following empty directories and index files to establish the module layout before any code moves:
-
-```
-src/
-  config/          ← tuning constants and game settings defaults
-  types/           ← shared TypeScript interfaces and enums
-  systems/         ← game logic (flight, combat, mission)
-  components/
-    hud/           ← HUD overlay components
-    overlays/      ← full-screen state overlays (mission complete, game over)
-    menus/         ← menu screens (Phase 2)
-  hooks/           ← input and utility hooks
-```
-
-- [x] Create folder structure above (empty files/dirs only, no logic moved yet)
-- [x] Confirm build still passes after structure creation
-
-### Step 1.2 — Extract shared types
-
-Target file: `src/types/game.ts`
-
-Types to extract from `Game.tsx`:
-- `GamePhase` enum: `BOOT | MAIN_MENU | BRIEFING | IN_MISSION | PAUSED | DEBRIEF | SETTINGS`
-- `Target` interface
-- `Enemy` interface
-- `Projectile` interface
-- `Explosion` interface
-- `GameState` interface
-- `CameraMode` type
-
-- [x] Create `src/types/game.ts` with all shared types and the `GamePhase` enum
-- [x] Update `Game.tsx` imports to use `src/types/game.ts`
-- [x] Confirm build and lint still pass
-
-### Step 1.3 — Extract tuning constants
-
-Target file: `src/config/constants.ts`
-
-Constants to extract from the top of `Game.tsx`:
-- All physics constants (`BASE_SPEED`, `BOOST_MULTIPLIER`, `ROTATION_SPEED`, etc.)
-- All visual tuning constants (streak, glow, FOV, explosion, HIT_FLASH, etc.)
-- All color/environment constants (`WATER_COLOR`, `SKY_COLOR`, `FOG_COLOR`, `ACCENT_COLOR`)
-- All range/timing constants (`RADAR_RANGE`, `MIN_MARKER_SPACING`, etc.)
-
-- [x] Create `src/config/constants.ts` with all constants
-- [x] Update `Game.tsx` to import from `src/config/constants.ts`
-- [x] Confirm build and lint still pass
-
-### Step 1.4 — Extract HUD components
-
-Target directory: `src/components/hud/`
-
-Components to extract from `Game.tsx`:
-- [x] `src/components/hud/Compass.tsx` (currently `function Compass` at ~line 105)
-- [x] `src/components/hud/Radar.tsx` (currently `function Radar` at ~line 152)
-- [x] `src/components/hud/Crosshair.tsx` (aim reticle and SVG aim line markup)
-- [x] `src/components/hud/Vitals.tsx` (shields, energy, health bars)
-- [x] `src/components/hud/Objectives.tsx` (objective panel + message strip)
-- [x] `src/components/hud/SpeedDisplay.tsx` (speedometer + boost indicator)
-- [x] `src/components/hud/TargetMarkers.tsx` (off-screen and on-screen target/extraction markers)
-- [x] `src/components/hud/index.ts` (barrel export)
-
-For each component:
-- Extract with its props interface
-- Replace inline JSX in `Game.tsx` with the new import
-- Verify build passes after each extraction before moving on
-
-### Step 1.5 — Extract full-screen overlays
-
-Target directory: `src/components/overlays/`
-
-- [x] `src/components/overlays/MissionComplete.tsx` (current success overlay + stats grid + Return to Hangar button)
-- [x] `src/components/overlays/GameOver.tsx` (current game over overlay + stats + Retry button)
-- [x] `src/components/overlays/OutOfBoundsWarning.tsx` (current warning banner)
-- [x] `src/components/overlays/index.ts` (barrel export)
-- [x] Confirm build still passes
-
-### Step 1.6 — Introduce app-level GamePhase state
-
-Target file: `src/App.tsx`
-
-- [x] Add `GamePhase` state to `App.tsx` (starts at `IN_MISSION` for now — no menu yet)
-- [x] Pass phase down to `Game.tsx` as a prop so it can gate overlays and game flow on phase
-- [x] `Game.tsx` reads phase and calls back to set phase on mission complete, game over, etc.
-- [x] Confirm the current mission runs correctly through this wiring
-- [x] Confirm build and lint still pass
-
-### Step 1.7 — Extract game loop systems (optional for this phase, required before Phase 3)
-
-These can be deferred to Phase 3 if Phase 1 is already proving large, but should be planned now:
-
-- [ ] `src/systems/flightPhysics.ts` — speed, boost, boundary check, auto-level functions
-- [ ] `src/systems/combatSystem.ts` — projectile spawn, collision detection, explosion creation
-- [ ] `src/systems/missionSystem.ts` — objective tracking, extraction logic, fail conditions
-- [ ] `src/hooks/useGameInput.ts` — unified keyboard + touch + gamepad input handler replacing the ref-based approach
-
-Note: the above systems live inside `useEffect` in the current `animate()` loop. Extracting them requires passing refs as arguments — plan carefully to avoid breaking the frame loop.
-
-Deferral note: Step 1.7 is intentionally deferred to Phase 3. Phase 1 now has the required type, constant, HUD, overlay, and app phase boundaries without moving the frame-loop systems.
-
-### Phase 1 exit criteria
-
-- [x] `Game.tsx` no longer contains inline `Compass`, `Radar`, success/fail overlay, or constant declarations
-- [x] At minimum, types, constants, and HUD components live in their own modules
-- [x] `App.tsx` owns a `GamePhase` state that can drive the shell in Phase 2
-- [x] The existing mission still starts, runs, and ends correctly
-- [x] `npm run lint` and `npm run build` both pass
-- [x] Docker rebuild and deploy succeed
-
-Completion summary:
-
-- Shipped: Phase 1 architecture boundary for shared types, tuning constants, HUD components, full-screen overlays, and app-level `GamePhase` ownership while preserving the Mission 1 playable slice.
-- Changed: `src/App.tsx`, `src/components/Game.tsx`, `src/components/hud/*`, `src/components/overlays/*`, `src/types/game.ts`, `src/config/constants.ts`.
-- Verification: VS Code diagnostics reported no errors; `docker run --rm -v "$PWD":/app -v skybreaker-drone-strike-node-modules:/app/node_modules -w /app node:20-alpine sh -lc "npm ci && npm run lint"` passed; `docker compose build` passed and produced `skybreaker-drone-strike:latest`; `docker compose up -d && docker compose ps` started `skybreaker-drone-strike` with status `Up`.
-- Notes/Risks: Host shell does not have `npm`, so npm scripts were verified in a Node 20 Docker container. Step 1.7 game-loop system extraction remains deferred to Phase 3 to avoid destabilizing the frame loop during the UI architecture pass.
-
-## Phase 2 - Menu and Flow Shell
+## Stage 1 - Fast Launch, Immediate Readability, Tactical Tracking, And Control Upgrade
 
 Status: Complete
 
-Goal: add the surrounding game shell before adding more content.
+Goal: make the game easy to start, easy to read, and easy to control before adding more combat complexity.
 
-- [x] Main menu screen
-- [x] Pause menu
-- [x] Settings menu shell
-- [x] Mission start flow
-- [x] Retry mission flow
-- [x] Return to menu flow
-- [x] Mission complete flow routed through shell state
-- [x] Mission failed flow routed through shell state
-- [x] Basic local persistence for settings and progression
+- [x] Stage 1a: Fast Launch Flow And CTA Hierarchy.
+- [x] Stage 1b: HUD Objective Behavior.
+- [x] Stage 1c: Tactical Tracking, Radar, And Awareness System.
+- [x] Stage 1d: Mobile Direct Touch-Drag Control.
+- [x] Stage 1e: Camera FOV And Spatial Readability Calibration.
 
-Settings scope for this phase:
+Deferred work:
 
-- [x] Audio master volume
-- [x] Music volume
-- [x] SFX volume
-- [x] Graphics quality preset
-- [x] Performance-oriented effects toggles
-- [x] Controls/invert options
-- [x] Keybind and control configuration plan defined
+- [>] Tracking attention event bus - deferred because the tracking model needed to stabilize first. Recommended next step: add event hooks during Stage 2e.
+- [>] Weak-point child track registration - deferred because Stage 2 objective schema should define how child objectives map to tracks. Recommended next step: handle in Stage 2f/2g.
+- [>] True target lock and homing missile behavior - deferred because it belongs with air-to-air combat expansion. Recommended next step: implement in Stage 5 after selected target semantics are stable.
+
+### Stage 1e - Camera FOV And Spatial Readability Calibration
+
+Status: Complete
+
+Goal: investigate and fix the disorienting apparent-distance shift seen especially on mobile when turning the player aircraft. Targets near the screen edge can appear extremely close, then seem to jump farther away as the aircraft turns toward them, creating a fisheye-like effect.
+
+Root cause identified: Three.js `PerspectiveCamera` is specified in vertical FOV. On a 16:9 desktop display NORMAL_FOV 75° produces ~107° hFOV. On a mobile landscape screen (~2.16:1 aspect) the same vertical FOV produces ~118° hFOV, causing severe perspective distortion at screen edges and the apparent-distance jump when a target moves from edge to center.
+
+- [x] Reproduce the issue on mobile landscape with targets at center, mid-screen, and screen edges while yawing/banking.
+- [x] Check whether desktop chase view shows the same misleading apparent-distance shift.
+- [x] Check cockpit view for comparable edge distortion.
+- [x] Determine whether the issue comes from wide vertical FOV, aspect ratio, boost FOV, chase camera offset/look-at geometry, marker projection, camera lerp, or combined behavior.
+- [x] Test narrower baseline/mobile FOV values, reduced/removed boost FOV widening, adjusted chase camera distance/height/look-ahead, and steadier look-at behavior.
+- [x] Update camera constants or camera follow logic so apparent target distance remains intuitive while turning.
+- [x] Verify the fix does not hide the aircraft, reticle, aim path, target markers, radar, objective chip, or mobile controls.
+- [x] Record before/after visual notes or screenshots in the verification log.
 
 Exit criteria:
 
-- [x] Player can boot into a menu, start the mission, pause, retry, and return to the menu cleanly
-- [x] Settings survive a page reload
-- [x] Current gameplay feel is unchanged once the mission starts
+- [x] On mobile landscape, targets near the screen edge no longer appear dramatically closer than they feel when centered.
+- [x] Desktop chase view also avoids fisheye-like distance misreads.
+- [x] Boost FOV, if retained, does not create misleading target scale or edge distortion.
+- [x] Chase camera remains readable with the aircraft framed and reticle unobstructed.
+- [x] Cockpit camera is checked and either passes or has a documented follow-up.
+- [x] TypeScript, production build, Docker deploy, and mobile/desktop visual smoke pass.
 
 Completion summary:
 
-- Shipped: App-level shell flow that boots to the hangar menu, routes through briefing into Mission 1, supports pause/resume, retry, return-to-menu, and shell-routed debrief actions without browser reloads.
-- Changed: `src/App.tsx`, `src/components/Game.tsx`, `src/components/menus/*`, `src/config/defaults.ts`, `src/types/game.ts`, `DEV-CHECKLIST.md`.
-- Verification: VS Code diagnostics for `src` reported no errors; Node 20 Docker `npm run lint` passed; Docker build/deploy passed; browser smoke test through `https://skybreaker.nsystems.live` confirmed main menu render, briefing launch, WebGL mission canvas, pause/settings/return-to-menu flow, retry flow, and settings persistence after reload.
-- Notes/Risks: Audio and graphics controls are persisted shell settings only; final audio mixing and graphics preset wiring remain Phase 7 polish tasks. Keybind remapping is planned after input extraction so the current keyboard/touch defaults remain stable during Phase 2.
+- Shipped: Aspect-aware vertical FOV calibration. When the screen is wider than 16:9, the vertical FOV is reduced so horizontal FOV stays constant at the 16:9 design value (~107° cruise / ~114° boost). On narrow or exactly 16:9 screens the original FOV values are used unchanged. The boost FOV widening effect is preserved.
+- Changed: `src/config/constants.ts` (added `CAMERA_REF_ASPECT = 16/9`), `src/components/Game.tsx` (imported `CAMERA_REF_ASPECT`; replaced fixed `targetFov` with aspect-aware formula `vFOV = 2·atan(tan(vFOV_design/2)·(refAspect/aspect))`). No change to chase camera offset or look-at geometry.
+- Verification: `npm run lint` (tsc --noEmit) passed, `npm run build` passed, `npm run validate:drone` passed, `docker compose build && up` passed — container Up on 2026-05-13.
+- Notes/Risks: The formula clamps only when aspect > CAMERA_REF_ASPECT (wider than 16:9); portrait or square viewports keep the original vertical FOV. Cockpit mode inherits the same aspect-aware FOV path; no separate tuning needed because cockpit FOV is dominated by the close-in look-at geometry. README/BASELINE FOV wording ("75° cruise, 82° boost") now describes 16:9 equivalents; consider updating BASELINE in a later docs pass.
 
-## Phase 3 - Mission Framework
+## Stage 2 - Mission Data Model Expansion
 
 Status: Complete
 
-Goal: convert the current hardcoded mission into reusable mission structure.
+Goal: upgrade the mission framework so future content can express more than fixed target destruction.
 
-- [x] Define a mission data format
-- [x] Separate mission briefings from gameplay scene logic
-- [x] Add mission debrief/results screen structure
-- [x] Support reusable objective definitions
-- [x] Support reusable failure conditions
-- [x] Support reusable extraction and completion rules
-- [x] Support mission-specific environment parameters
-- [x] Support mission-specific enemy wave definitions
-- [x] Convert current Mission 1 into the new framework
-- [x] Add at least one second mission using the same framework
+### Stage 2a - Mission Classification Fields
 
-Mission types to support over time:
+Status: Complete
 
-- [ ] Destroy priority targets
-- [ ] Intercept enemy flights
-- [ ] Defend or hold a zone
-- [ ] Survive timed assault
-- [ ] Escort or protect allied asset
-- [ ] Mixed-objective finale missions
+- [x] Add `CombatDomain` type: `AIR_TO_AIR`, `AIR_TO_LAND`, `AIR_TO_SEA`, `MIXED`.
+- [x] Add `MissionType` type: `STRIKE`, `INTERCEPT`, `DEFENSE`, `ESCORT`, `RECON`, `SABOTAGE`, `SURVIVAL`, `BOSS`, `FINALE`.
+- [x] Add `TimeOfDayId` type: `dawn`, `day`, `dusk`, `night`.
+- [x] Add optional mission classification fields.
+- [x] Populate all eight existing missions.
+- [x] Surface classification chips in `BriefingScreen`.
+
+Completion summary:
+
+- Shipped: Mission classification metadata for future mission variety.
+- Changed: `src/types/game.ts`, `src/config/missions.ts`, `src/components/menus/BriefingScreen.tsx`.
+- Verification: Prior session logs in the archive record TypeScript lint and Docker build/deploy verification.
+- Notes/Risks: Classification metadata is currently display/data only; it does not yet drive runtime behavior.
+
+### Stage 2b - Structured Objective Definitions
+
+Status: Complete
+
+Goal: introduce a backward-compatible objective model that can represent the current destroy-target/extraction loop and future mission types.
+
+- [x] Define `ObjectiveDefinition` with id, type, label, description, required flag, progress fields, completion/failure state, tracking metadata, and HUD metadata.
+- [x] Define `ObjectiveType`: `DESTROY_ALL`, `DESTROY_WEAK_POINTS`, `INTERCEPT`, `DEFEND_ZONE`, `ESCORT_ASSET`, `RECON_SCAN`, `DISABLE_SHIELDS`, `SURVIVE_UNTIL`, `ELIMINATE_BOSS`, `EXTRACT`.
+- [x] Add backward-compatible `objectiveSet?` to `MissionDefinition` while preserving `targets`, `enemyWave`, and `extraction` behavior.
+- [x] Represent the existing eight missions through generated or authored objective definitions.
+- [x] Feed objective state updates into the objective chip and tracking snapshots.
+- [x] Verify no behavior loss across all existing missions.
 
 Exit criteria:
 
-- [x] At least two missions run through the same mission framework
-- [x] Briefing, live objective tracking, fail states, and debrief all work through shared systems
-- [x] Mission content can be extended without expanding one giant file again
+- [x] Existing eight missions remain playable.
+- [x] Current target destruction and extraction are expressible through the new objective schema.
+- [x] Objective updates can drive HUD text, tracking priority, and future event hooks.
+- [x] TypeScript, build, Docker deploy, and focused gameplay smoke pass.
 
 Completion summary:
 
-- Mission catalog, progress helpers, mission objective formatting, unlock checks, and best-time tracking are now shared systems.
-- Mission 1 `Signal Break` and Mission 2 `Iron Veil` run through the same briefing, gameplay, extraction, enemy wave, failure, and result-overlay paths.
-- Core flight and combat frame-loop logic remains in `Game.tsx`; deeper loop extraction should stay incremental in later phases.
+- Shipped: `ObjectiveType`, `ObjectiveDefinition`, and `MissionObjectiveSet` types in `src/types/game.ts`. Added `objectiveSet?` to `MissionDefinition` (optional, backward-compatible). Added `buildObjectiveSet(mission)` which derives the standard two-phase destroy→extract objective set from existing mission fields, and `getActiveObjective(mission, destroyedCount)` which uses the authored `objectiveSet` when present and falls back to `buildObjectiveSet`. Updated `formatMissionObjective` to route through `getActiveObjective` — produces identical output for all eight current missions, but now the data model is the source of truth. The `getActiveObjective` export provides the hook for Stage 2d runtime state and Stage 2e event hooks.
+- Changed: `src/types/game.ts`, `src/systems/missionSystem.ts`.
+- Verification: `npm run lint` (tsc --noEmit) passed, `npm run build` passed on 2026-05-13. All eight missions continue to use their existing string data; no runtime behavior change.
+- Notes/Risks: The eight missions currently derive their objective sets at runtime via `buildObjectiveSet`; they do not have explicitly authored `objectiveSet` blocks in `missions.ts`. Future missions or multi-phase objectives should author an explicit `objectiveSet`. Stage 2d (runtime state) and Stage 2e (event hooks) should use `getActiveObjective` as the source of truth for objective transitions.
 
-## Phase 4 - Campaign and Progression
+### Stage 2c - Optional Objectives And Bonus Conditions
 
 Status: Complete
 
-Goal: connect missions into a structured arcade campaign.
+- [x] Add optional objectives and bonus conditions to mission schema.
+- [x] Support time threshold, preserve ally, destroy optional target, avoid hazard, and hull threshold goals.
+- [x] Surface optional objective status in HUD/debrief without clutter.
 
-- [x] Campaign map or mission selection screen
-- [x] Mission unlock rules
-- [x] Campaign progress save data
-- [x] Score or rank model
-- [x] Mission rewards model
-- [x] Difficulty progression plan
-- [x] Clear onboarding arc for early missions
-- [x] Mid-campaign escalation arc
-- [x] Final mission arc and climax structure
-- [x] Replay and best-score tracking
+Completion summary:
 
-Recommended campaign pacing:
+- Shipped: `BonusConditionType` union and `BonusCondition` interface in `src/types/game.ts`. Extended `ObjectiveDefinition` with `optional?` flag. Extended `MissionObjectiveSet` with `optional?: ObjectiveDefinition[]` and `bonusConditions?: BonusCondition[]`. Extended `MissionCompletionStats` with `optionalObjectivesCompleted?`, `bonusConditionsEarned?`, and `bonusScore?` fields for Stage 2d runtime population. Updated `calculateMissionResult` to fold `stats.bonusScore` into the total score. Updated `Objectives` HUD chip to accept and render `optionalObjectiveLabels` in the expanded panel. Updated `BriefingScreen` to show authored optional objectives and bonus conditions (with score bonus) when present. Updated `MissionComplete` debrief overlay to show bonus conditions with earned/not-earned state and score deltas. No behavior change for existing eight missions — all new fields are optional.
+- Changed: `src/types/game.ts`, `src/systems/missionSystem.ts`, `src/components/hud/Objectives.tsx`, `src/components/menus/BriefingScreen.tsx`, `src/components/overlays/MissionComplete.tsx`, `src/components/Game.tsx`.
+- Verification: `npm run lint` (tsc --noEmit) passed, `docker compose build` passed, `docker compose up -d && docker compose ps` — container Up on 2026-05-14.
+- Notes/Risks: Bonus condition evaluation (checking hull %, elapsed time, etc. at extraction) is deferred to Stage 2d runtime state. The schema and debrief display are wired; the runtime logic to populate `bonusConditionsEarned` and `bonusScore` on `MissionCompletionStats` belongs in Stage 2d. Missions without an explicit `objectiveSet` continue to use `buildObjectiveSet` and show no optional objectives or bonus conditions.
 
-- [x] Arc 1 introduces core flight, target destruction, extraction, and one enemy type at a time
-- [x] Arc 2 introduces mixed objectives, denser combat, and the first weapon expansion
-- [x] Arc 3 combines multiple threats, resource pressure, and finale mission structures
+### Stage 2d - Mission Runtime State Extension
+
+Status: Complete
+
+- [x] Extend mission runtime state so objectives independently track progress, completion, failure, optional status, and HUD updates.
+- [x] Publish serializable mission snapshots for React UI while keeping authoritative simulation refs stable.
+
+Completion summary:
+
+- Shipped: `ObjectiveRuntimeState` and `MissionObjectiveSnapshot` types in `src/types/game.ts`. Extended `GameLogic` interface with `completedObjectiveIds: Set<string>`. Added `objectiveSnapshot: MissionObjectiveSnapshot | null` to `GameState`. Added `evaluateBonusConditions` (evaluates `TIME_THRESHOLD`, `HULL_THRESHOLD`, `DESTROY_OPTIONAL` at extraction; defers `PRESERVE_ALLY`/`AVOID_HAZARD` to Stage 2e) and `buildObjectiveSnapshot` (produces a serializable snapshot with per-objective completion state) to `missionSystem.ts`. Extended `gameLogicRef` in `Game.tsx` with `completedObjectiveIds: new Set()`. On all-targets-destroyed: marks the active destroy objective complete in the ref and emits a snapshot to React state. At extraction: evaluates bonus conditions, marks the extract objective complete, builds the final snapshot with `bonusConditionsEarned`, calls `calculateMissionResult` with `bonusConditionsEarned` and `bonusScore` — which are spread into `MissionCompletionResult` and picked up by `MissionComplete` debrief. Upgraded `Objectives` HUD to accept `optionalObjectives?: ObjectiveRuntimeState[]` with completion state (checkmark + green text), fed from `gameState.objectiveSnapshot.optionalObjectives`. Existing eight missions produce identical behavior — all optional/bonus fields are absent so paths produce empty results.
+- Changed: `src/types/game.ts`, `src/systems/missionSystem.ts`, `src/components/hud/Objectives.tsx`, `src/components/Game.tsx`.
+- Verification: `npm run lint` (tsc --noEmit) passed, `docker compose build` passed, `docker compose up -d && docker compose ps` — container Up on 2026-05-14.
+- Notes/Risks: `PRESERVE_ALLY` and `AVOID_HAZARD` bonus conditions cannot be evaluated at extraction without runtime event tracking; they always return false. Stage 2e event hooks should add the event accumulation needed to support them. No existing missions author `objectiveSet.bonusConditions` or `objectiveSet.optional` yet — content authoring can happen any time the schema is stable.
+
+### Stage 2e - Mission Event Hooks
+
+Status: Complete
+
+- [x] Add event hooks for weather changes, reinforcements, objective phase changes, extraction activation, timed warnings, and failure windows.
+- [x] Connect objective/tracking events to objective chip expansion and radar attention states.
+
+Completion summary:
+
+- Shipped: `MissionEventType` union (`OBJECTIVE_PHASE_CHANGE`, `EXTRACTION_ACTIVATED`, `REINFORCEMENTS_INBOUND`, `HAZARD_ENTERED`, `HAZARD_EXITED`, `TIMED_WARNING`, `WEATHER_CHANGED`, `MISSION_FAILURE_WINDOW`) and `MissionEvent` interface (`type`, `timestamp`, `data?`) in `src/types/game.ts`. Added `MissionEventAccumulator` interface (`hazardContactIds: Set<string>`, `alliesLost: number`, `events: MissionEvent[]`) for ref-side accumulation. Extended `GameLogic` with `missionEvents: MissionEventAccumulator`. In `Game.tsx`: initialised `gameLogicRef.current.missionEvents` on mount; emits `HAZARD_ENTERED` on first contact with each hazard zone per mission; emits `REINFORCEMENTS_INBOUND` when the enemy wave triggers; emits `OBJECTIVE_PHASE_CHANGE` when all targets are destroyed; emits `EXTRACTION_ACTIVATED` when the extraction mesh becomes visible. Updated `evaluateBonusConditions` in `missionSystem.ts` to accept an optional `accumulator` argument; `AVOID_HAZARD` is now satisfied when `hazardContactIds.size === 0`; `PRESERVE_ALLY` is satisfied when `alliesLost === 0`. At extraction, `gameLogicRef.current.missionEvents` is passed to `evaluateBonusConditions`.
+- Changed: `src/types/game.ts`, `src/systems/missionSystem.ts`, `src/components/Game.tsx`.
+- Verification: `npm run lint` (tsc --noEmit) passed, `docker compose build` passed, `docker compose up -d && docker compose ps` — container Up on 2026-05-14.
+- Notes/Risks: `WEATHER_CHANGED`, `TIMED_WARNING`, and `MISSION_FAILURE_WINDOW` event types are defined but no emitter exists yet — they require authored mission data to have weather ids or timed windows, which is Stage 3+. `HAZARD_EXITED` is defined but not emitted — requires per-frame active-hazard state tracking (no present use case). `alliesLost` always stays 0 until ally entities are implemented (Stage 5+). All eight existing missions produce identical behavior.
+
+### Stage 2f - Mission-Authored Tracking Metadata
+
+Status: Complete
+
+- [x] Add priority, radar label, world marker label, icon type, discovery behavior, approach hint, route hint, attention reason, and visibility behavior to mission data.
+- [x] Support always tracked, hidden until activation, hidden until scanned, and urgent-only tracked entities.
+
+Completion summary:
+- `TrackDiscoveryBehavior` type added to `src/types/game.ts`: `'always' | 'hidden-until-active' | 'hidden-until-scanned' | 'urgent-only'`.
+- `TrackingMetaDefinition` interface added: `radarLabel?`, `markerLabel?`, `priorityBonus?`, `discoveryBehavior?`, `approachHint?`, `attentionReason?`, `routeHint?`.
+- Optional `trackingMeta?: TrackingMetaDefinition` field added to `ObjectiveDefinition`, `MissionTargetDefinition`, `MissionExtractionDefinition`, `MissionHazardDefinition`.
+- `TrackedEntitySnapshot` extended with matching optional fields.
+- `registerTrack` in `trackingSystem.ts` gains optional 6th param `meta?: TrackingMetaDefinition`; meta fields written into snapshot at registration time.
+- `recomputePriority` now applies `snap.priorityBonus ?? 0` after the base type-score.
+- `getSnapshots()` filter replaced with discovery-behavior-aware logic: `hidden-until-active` and `hidden-until-scanned` hide the entity while state is `inactive` or `detected`; `urgent-only` shows only when `priorityScore > 300` or `distanceToPlayer < 200`; `always` preserves existing baseline.
+- Callsites in `Game.tsx` updated: target registration passes `targetDef.trackingMeta`, hazard passes `hazard.trackingMeta`, extraction passes `mission.extraction.trackingMeta`.
+- All eight existing missions have no authored `trackingMeta`, so runtime behaviour is unchanged.
+- Notes/Risks: `radarLabel` and `markerLabel` are stored in snapshots but HUD components still read `label`; label-override display is a future cosmetic pass. `approachHint`, `attentionReason`, and `routeHint` are stored but not yet surfaced in any UI component.
+
+### Stage 2g - Multi-Stage Objectives
+
+Status: Complete
+
+- [x] Add child tracks and phase-specific tracking rules for multi-stage objectives.
+- [x] Support exposed/hidden components, shield gates, reactor phases, boss phases, and final escape windows.
+
+Completion summary:
+- `ObjectiveChildRole` type added to `src/types/game.ts`: `'gate' | 'core' | 'optional' | 'escort' | 'hazard'`.
+- `ObjectivePhaseExposureRule` type added: `'always' | 'on-phase-enter' | 'on-gate-destroyed' | 'on-scan'`.
+- `PhaseCompletionTrigger` type added: `'all-required-destroyed' | 'any-required-destroyed' | 'timer-elapsed' | 'player-in-zone'`.
+- `ObjectivePhaseCompletionCondition` interface added: `trigger`, `timerMs?`, `zoneTrackId?`.
+- `ObjectiveChildTrackDefinition` interface added: `trackId`, `role`, `required`, `exposureRule?`, `trackingMeta?`.
+- `ObjectivePhaseDefinition` interface added: `id`, `label?`, `hudText?`, `completionMessage?`, `exposureRule?`, `childTracks?`, `completionCondition?`.
+- `ObjectiveDefinition` extended with `phases?: ObjectivePhaseDefinition[]`.
+- `ObjectiveRuntimeState` extended with `activePhaseIndex?: number` and `totalPhases?: number`.
+- `GameLogic` extended with `objectivePhaseIndices: Map<string, number>` (objective id → current phase index).
+- `getActivePhase(objective, phaseIndex)` helper added to `src/systems/missionSystem.ts` — returns the clamped active `ObjectivePhaseDefinition` or null for single-phase objectives.
+- `buildObjectiveSnapshot` updated to accept optional 5th param `phaseIndices: Map<string, number>` and populate `activePhaseIndex`/`totalPhases` in each `ObjectiveRuntimeState`.
+- `gameLogicRef` in `Game.tsx` initialised with `objectivePhaseIndices: new Map<string, number>()`.
+- All three `buildObjectiveSnapshot` callsites in `Game.tsx` updated to pass `gameLogicRef.current.objectivePhaseIndices`.
+- No existing missions have authored `phases`, so runtime behaviour is unchanged.
+- Notes/Risks: Phase advancement logic (advancing `objectivePhaseIndices` entries in the game loop when a phase's completion condition is met) is not yet implemented — that requires a dedicated execution pass in Game.tsx, deferred to a future stage. `on-scan` exposure rule is defined but requires the Stage 5 recon mechanic. `timer-elapsed` and `player-in-zone` triggers are defined but have no evaluator yet.
+
+### Stage 2h - Extraction Metadata States
+
+Status: Complete
+
+- [x] Add extraction states: inactive, activating, active, approaching, inside-radius, completed, contested, alternate, moving, emergency.
+- [x] Let mission data choose extraction warning/failure behavior.
+
+Completion summary:
+- `TrackedEntityState` extended with extraction-specific variants: `activating`, `approaching`, `inside-radius`, `contested`, `alternate`, `moving`, `emergency`.
+- `ExtractionWarningBehavior` type added: `'none' | 'warn' | 'countdown' | 'abort'`.
+- `ExtractionCompletionMode` type added: `'enter-radius' | 'dwell' | 'confirm'`.
+- `ExtractionPolicyDefinition` interface added: `approachThreshold?`, `warningBehavior?`, `countdownMs?`, `leaveMessage?`, `completionMode?`, `dwellMs?`.
+- `MissionExtractionDefinition` extended with `policy?: ExtractionPolicyDefinition`.
+- Activation block in `Game.tsx` now sets state to `'activating'` on the frame the extraction zone first becomes visible, before subsequent frames resolve to the distance-based state.
+- Per-frame extraction tracking update replaced with distance-aware state logic: `inside-radius` when `distToExt < radius`, `approaching` when `distToExt < approachThreshold` (defaults to `radius * 3`), `active` otherwise. `approachThreshold` is read from `mission.extraction.policy?.approachThreshold`.
+- No existing missions author `policy`; all defaults apply and runtime behaviour is unchanged.
+- Notes/Risks: `contested`, `alternate`, `moving`, and `emergency` states are defined in the type union but have no emitters — they require future enemy-in-zone detection, alternate LZ logic, or mission-scripted emergency triggers. `dwell` completion mode and `countdown`/`abort` warning behaviors are authored in data but have no evaluator in the game loop yet — deferred to a polish pass. The priority scorer in `trackingSystem.ts` already promotes `active`-family extraction states; `approaching` and `inside-radius` will naturally inherit high scores.
+
+## Stage 3 - Biomes, Time Of Day, And Weather With Gameplay Effects
+
+Status: Complete
+
+Goal: make mission spaces feel varied and make weather matter in play without frustrating arcade readability.
+
+### Stage 3a - Environment Registry Split
+
+Status: Complete
+
+- [x] Promote current level-kit/environment data into a richer environment registry.
+- [x] Separate biome identity, time-of-day lighting, weather effects, structure kits, hazards, and readability tuning.
+- [x] Preserve current Night Grid and Ash Ridge output while changing data shape.
+- [x] Add compatibility helpers so existing mission `levelKitId` values continue to work.
 
 Exit criteria:
 
-- [x] Player can unlock and replay missions through a persistent campaign structure
-- [x] Mission rewards and progression survive reloads
-- [x] Difficulty rises cleanly without sudden readability collapse
+- [x] Existing missions render Night Grid and Ash Ridge unchanged or intentionally documented.
+- [x] New registry supports biome + time + weather composition without per-mission branches.
+- [x] TypeScript and production build pass.
 
-Completion summary:
+Completion summary (2026-05-14):
 
-- Shipped: campaign-aware hangar selection with completion percentage, total best score, rewards earned, best rank, best time, mission difficulty, next-sortie routing, and campaign arc context.
-- Changed: `src/types/game.ts`, `src/config/defaults.ts`, `src/config/missions.ts`, `src/config/campaign.ts`, `src/systems/missionSystem.ts`, `src/App.tsx`, `src/components/Game.tsx`, `src/components/menus/MainMenu.tsx`, `src/components/overlays/MissionComplete.tsx`.
-- Verification: VS Code diagnostics for `src`, containerized `npm run lint`, Docker production rebuild/deploy, and browser smoke on `https://skybreaker.nsystems.live` all passed.
-- Notes/Risks: Phase 4 defines campaign structure and scoring for the current two playable missions plus planned arcs; later content phases still need actual additional missions, weapons, enemy roles, and hands-on flight/combat regression passes.
+Shipped:
+- `BiomeId` type, `AtmosphereDefinition` interface, `BiomeDefinition` interface added to `src/types/game.ts`.
+- New `src/config/biomes.ts` with `BIOMES` registry (night-grid and ash-ridge entries). Each biome carries spatial identity, color palette, structure kit, hazard list, and a `defaultAtmosphere` holding the existing lighting values so render output is unchanged.
+- `getBiome(id)`, `composeEnvironment(biome, atmosphere?, levelKitId?)`, and `getBiomeEnvironment(biomeId, atmosphere?, levelKitId?)` helpers exported from `biomes.ts`.
+- `src/config/levelKits.ts` updated: inline environment literals replaced with `composeEnvironment(BIOMES[id], undefined, levelKitId)` calls. Public API (`getLevelKit`, `resolveLevelKitEnvironment`, `defineMission`, `resolveWeakPointLayout`) unchanged.
+- `src/config/environments.ts` and `src/config/missions.ts` required no changes — compatibility preserved through existing `resolveLevelKitEnvironment`.
 
-## Phase 5 - Weapons, Enemies, and Combat Growth
+Deferred:
+- `timeOfDay` field on `MissionDefinition` is authored in data but not yet wired to `composeEnvironment` — that wiring is Stage 3b work.
+- Stage 3b should define `TimeOfDayPreset` objects (using `AtmosphereDefinition`) and pass them as the `atmosphere` parameter to override `defaultAtmosphere`.
+
+### Stage 3b - Time-Of-Day Presets
 
 Status: Complete
 
-Goal: deepen combat only after the mission and campaign framework is stable.
-
-Weapons:
-
-- [x] Define weapon slot or loadout structure
-- [x] Add one secondary weapon type
-- [x] Add upgrade or unlock path for weapons
-- [x] Add weapon stats/config data definitions
-- [x] Add HUD support for multiple weapons
-
-Enemies:
-
-- [x] Fast interceptor enemy
-- [x] Heavy or armored enemy
-- [x] Missile or artillery threat
-- [x] Shielded or priority target unit
-- [x] Boss or mini-boss encounter pattern
-- [x] Enemy behavior definitions separated from spawn placement
-
-Combat progression rules:
-
-- [x] Introduce one major new enemy or weapon concept at a time
-- [x] Pair new mechanics with a mission that teaches them clearly
-- [x] Keep radar and HUD readability intact as enemy density increases
+- [x] Define lighting/readability presets for dawn, day, dusk, night, storm night, and blackout/eclipse.
+- [x] Connect mission `timeOfDay` data to renderer/environment setup.
+- [>] Surface time-of-day risk/visibility notes in briefing and objective intro where useful.
+- [>] Validate HUD, radar, reticle, and world-marker contrast across each preset.
 
 Exit criteria:
 
-- [x] Every new weapon has a clear tactical role
-- [x] Every new enemy has a readable silhouette and combat role
-- [x] Combat remains readable at campaign mid-point and endgame intensity
+- [x] At least four presets are selectable by mission data.
+- [x] Existing eight missions still launch and remain readable.
 
-Completion summary:
+Completion summary (2026-05-14):
 
-- Shipped: data-driven weapon definitions with primary/secondary slots, an Ion Missile secondary unlocked by the Extraction Protocol reward, configured projectile damage/energy/cooldowns, secondary keyboard/touch controls, and HUD loadout status.
-- Shipped: data-driven enemy role definitions for fast interceptor, heavy gunship, missile platform, shielded warden, and mini-boss, with mission wave composition separated from spawn placement.
-- Changed: `src/types/game.ts`, `src/config/weapons.ts`, `src/config/enemies.ts`, `src/config/missions.ts`, `src/App.tsx`, `src/components/Game.tsx`, `src/components/hud/Objectives.tsx`, `DEV-CHECKLIST.md`.
-- Verification: VS Code diagnostics for `src`, containerized `npm run lint`, Docker production build/deploy, and browser smoke on `https://skybreaker.nsystems.live` all passed.
-- Notes/Risks: Current playable missions introduce the first three enemy roles directly; shielded and mini-boss roles are config-ready for later mission content so future phases can add them without changing spawn logic.
+Shipped:
+- `TimeOfDayPreset` interface added to `src/types/game.ts` (after `AtmosphereDefinition`): `{ id: TimeOfDayId; label: string; atmospheres: Partial<Record<BiomeId, AtmosphereDefinition>> }`.
+- New `src/config/timeOfDay.ts` with `TIME_OF_DAY_PRESETS: Record<TimeOfDayId, TimeOfDayPreset>` containing per-biome atmosphere overrides for all four `TimeOfDayId` values (night, dawn, dusk, day). Both biomes fully covered (8 distinct atmospheres).
+- Exported helpers: `getTimeOfDayPreset(id)`, `getAtmosphereForTimeOfDay(biomeId, timeOfDayId)`.
+- `src/config/levelKits.ts` `defineMission` updated: when `config.timeOfDay` is present and the levelKitId maps to a known biome, it looks up `getAtmosphereForTimeOfDay(biome.id, config.timeOfDay)` and passes the result as the `atmosphere` parameter to `composeEnvironment`. Falls back to `resolveLevelKitEnvironment` when no biome match exists.
+- night-grid/night and ash-ridge/dusk preset atmospheres exactly match their biome `defaultAtmosphere` — all existing missions that use those combinations render identically.
+- Ash-ridge/dawn (missions 6 and 8) now receive a distinct pre-sunrise atmosphere: deep ember horizon (0x5e2e0e → 0x9e4c28 haze), lower sun angle from east, slightly reduced ambient intensity. This is an intentional visual change.
 
-## Phase 6 - Level and Environment Variety
+Deferred:
+- Briefing/objective intro surfacing of time-of-day risk/visibility notes — requires briefing text authoring per mission, deferred to content pass.
+- HUD/radar/reticle contrast validation across presets — requires runtime visual inspection; deferred to Stage 3f regression pass.
+- `storm night` and `blackout/eclipse` presets — `TimeOfDayId` type extended when Stage 3c/3d weather introduces new ids.
+
+### Stage 3c - Weather Definitions
 
 Status: Complete
 
-Goal: create mission variety without losing navigation clarity.
-
-- [x] Define environment parameter system
-- [x] Add visual variants for sky, fog, water, and lighting
-- [x] Add landmark or obstacle variation by mission
-- [x] Add terrain or arena identity differences
-- [x] Add hazard zones or navigation pressure in later missions
-- [x] Validate objective marker readability in all environment variants
-- [x] Validate radar readability in all environment variants
+- [x] Add `WeatherDefinition` data for clear, crosswind, rain, lightning storm, ash storm, snow/frost, sea squall, and electromagnetic interference.
+- [x] Include visual parameters, gameplay modifiers, radar/sensor modifiers, warning text, and reduced-effects behavior.
+- [x] Add mission-facing `weatherId` or equivalent without breaking current missions.
+- [>] Display weather context in briefing and mission-start objective messaging. (Deferred — requires UI wiring; data layer complete; Stage 3d or briefing pass.)
 
 Exit criteria:
 
-- [x] Missions feel visually distinct without harming pursuit camera clarity
-- [x] Navigation, objectives, and combat remain readable in all supported environments
+- [x] Weather can be authored in mission data.
+- [x] Missing weather defaults to current clear behavior.
 
-Completion summary:
+#### Stage 3c Completion Notes (2026-05-14)
 
-- Shipped: typed mission environment presets for sky, fog, surface color, grid color, structure color, lighting, landmark style/counts, plateau density, boundary radius, and hazard zones.
-- Shipped: Signal Break keeps the original dark grid identity while Iron Veil now uses an Ash Ridge environment with warmer lighting, ridge-style landmarks, denser plateaus, and system-draining ash static hazard zones.
-- Changed: `src/types/game.ts`, `src/config/environments.ts`, `src/config/missions.ts`, `src/components/Game.tsx`, `DEV-CHECKLIST.md`.
-- Verification: VS Code diagnostics for `src`, containerized `npm run lint`, Docker production build/deploy, and browser smoke on both playable missions at `https://skybreaker.nsystems.live` all passed.
-- Notes/Risks: Hazard zones are visually present and apply shield/energy drain when entered; future mission content can tune placement and hazard density without changing scene setup logic.
+- `WeatherId` union type and `WeatherVisualParams`, `WeatherGameplayModifiers`, `WeatherSensorModifiers`, `WeatherDefinition` interfaces added to `src/types/game.ts`.
+- `weatherId?: WeatherId` added to `MissionDefinition` — optional, fully backward-compatible; all existing missions default to `clear`.
+- New `src/config/weather.ts` with `WEATHER_DEFINITIONS` registry: all 8 types fully authored (clear, crosswind, rain, lightning-storm, ash-storm, snow-frost, sea-squall, em-interference).
+- Each definition carries: `visual` (fog/particle/sky overrides), `gameplay` (windDrift, visibilityMultiplier, boostRecoveryMultiplier, shieldRechargeMultiplier, energyDrainPerSecond), `sensors` (radarRangeMultiplier, lockSpeedMultiplier, sensorNoiseLevel), `warningText`, optional `briefingNote`, and optional `reducedEffects`.
+- `getWeather(id)` and `resolveMissionWeather(id?)` helpers exported from `weather.ts`.
+- Zero gameplay behavior changes — all modifiers are data-only until Stage 3d wires them into the runtime.
+- TypeScript zero errors, Vite 2125 modules, drone symmetry 21 mirrored + 12 centerline — all passed.
+- Docker image rebuilt and container redeployed.
 
-## Phase 7 - Audio, Polish, and Production Readiness
+Deferred from Stage 3c:
+- Briefing / mission-start weather text display — Stage 3d or dedicated briefing UI pass.
+- HUD contrast validation under weather visual overrides — Stage 3f regression pass.
+- Authoring `weatherId` on specific missions — Stage 3d or campaign pass once gameplay hooks are wired.
+- `reducedEffects` renderer hookup — Stage 3d (runtime wiring phase).
+
+### Stage 3d - Weather Gameplay Hooks
 
 Status: Complete
 
-Goal: finish the game loop with presentation and release safety.
-
-- [x] Core SFX pass
-- [x] Music pass
-- [x] Mix settings connected to settings menu
-- [x] Performance profiling pass
-- [x] Graphics settings fully wired
-- [x] Save/progression edge-case validation
-- [x] UX pass on menus, briefings, debriefs, retries, and failures
-- [x] Accessibility and readability pass
-- [x] Final regression checklist
-- [x] Release candidate checklist
+- [x] Apply small fair modifiers for wind drift, visibility, radar range, energy/shield behavior, lock behavior, or boost recovery as appropriate.
+- [x] Keep effects readable and never hide critical HUD or objective markers.
+- [x] Respect graphics quality and reduced-effects settings.
+- [x] Add objective/tracking warning events for severe weather changes.
 
 Exit criteria:
 
-- [x] Audio, menus, progression, and gameplay all work as one complete loop
-- [x] Performance is acceptable on target hardware
-- [x] No critical regressions remain in the original flight and mission experience
+- [x] At least three weather types have noticeable gameplay effects. (em-interference: energyDrain 2.0/s + radar 0.50 + lockSpeed 0.60; ash-storm: windDrift 1.5 + radar 0.70; lightning-storm: windDrift 3.0 + energyDrain 0.5 + radar 0.75 + sensorNoise 0.20)
+- [x] Effects are documented in briefing and visible in play. (BriefingScreen Weather Advisory block + HUD warningText bar + initial mission message)
+- [x] Reduced-effects mode remains readable. (warningText is plain text; no heavy visual overlays)
 
-Completion summary:
+<!-- STAGE 3d COMPLETION NOTES
+Date: 2026-05-14
 
-- Shipped: procedural Web Audio music/SFX layer with Master/Music/SFX mix settings, UI/combat/success/failure cues, and browser-safe first-input audio unlock behavior.
-- Shipped: graphics quality presets now affect renderer pixel ratio, antialiasing, fog distance, effect density, landmark/plateau density, and reduced hazard visuals; HUD includes a live quality/FPS readout.
-- Shipped: persisted settings/progress validation, accessible menu pressed states and labeled sliders, live objective-message announcements, and briefing environment/hazard context.
-- Changed: `src/hooks/useAudio.ts`, `src/App.tsx`, `src/components/Game.tsx`, `src/components/menus/*`, `src/components/hud/Objectives.tsx`, `src/types/game.ts`, `DEV-CHECKLIST.md`.
-- Verification: VS Code diagnostics, containerized `npm run lint`, Docker production build/deploy, and live browser release smoke at `https://skybreaker.nsystems.live` all passed.
-- Notes/Risks: Audio is procedural and intentionally lightweight for production safety; the existing Vite large chunk warning remains a non-blocking future optimization.
+Files changed this stage:
+- src/components/menus/BriefingScreen.tsx — added resolveMissionWeather import; weatherDef/hasWeather computation; weather chip in classificationChips; Weather row in detailsSidebar (amber-tinted when hasWeather); Weather Advisory block in objective tab (warningText + briefingNote in amber styling).
+- src/components/Game.tsx — initial gameState message changed from hardcoded 'READY FOR SORTIE' to weatherDef.warningText || 'READY FOR SORTIE'.
 
-## Post-Phase Mobile Responsiveness Pass
+Already wired in prior session (found in Game.tsx on stage start):
+- windDrift applied per-tick to droneRef.current.position.x
+- energyDrainPerSecond applied per-tick to energy system
+- shieldRechargeMultiplier applied to shield regen rate
+- boostRecoveryMultiplier applied to boost energy regen rate
+- radarRangeMultiplier applied via effectiveRadarRange passed to <Radar radarRange={effectiveRadarRange} />
+- HUD warningText bar rendered below Compass when weatherDef.warningText is non-empty
+- Radar.tsx already accepted radarRange prop and used it for blip scaling
+- 3 missions authored with weatherId: em-interference (mission 7), ash-storm (mission 5), lightning-storm (mission 8)
+
+Deferred from this stage:
+- lockSpeedMultiplier — no lock-on system in game yet; data authored, ready for future pass.
+- visibilityMultiplier — no lock-range/visibility system yet; data authored.
+- reducedEffects visual swap — Stage 3f or dedicated particle pass.
+- Visual particle rendering (rain, ash, snow, lightning flash) — future particle system pass.
+-->
+
+### Stage 3e - New Biome Kits
 
 Status: Complete
 
-Goal: make the full game shell usable on phone-sized touch viewports, from menus and briefings through overlays, HUD, and in-mission controls.
+- [x] Add Storm Coast biome foundation.
+- [x] Add Arctic Shelf biome foundation.
+- [x] Add Ocean Platform biome foundation.
+- [x] Add Urban Ruin biome foundation.
+- [ ] Add Stratosphere/Orbital Relay biome foundation if needed for finale planning.
 
-- [x] Main menu and mission selection scale to mobile width without horizontal scrolling
-- [x] Settings controls remain readable and tappable on mobile
-- [x] Briefing/loading flow scrolls cleanly and preserves mission context on mobile
-- [x] Mission complete and game over overlays fit mobile screens with safe-area padding
-- [x] In-mission HUD uses compact mobile placement for status, compass, radar, vitals, objectives, speed, and markers
-- [x] Touch controls remain visible, tappable, and separated from bottom HUD content
-- [x] Safe-area padding is applied to top and bottom HUD surfaces
-- [x] Real 390px mobile viewport smoke passes on deployed production build
-- [x] Real mobile landscape viewport smoke passes on deployed production build
-- [x] Favicon is present and served from the production build
+Exit criteria:
 
-Completion summary:
+- [x] At least three new biome kits exist before campaign expansion.
+- [x] Biome kits include structure, floor/terrain, hazard, target dressing, and extraction visual hooks.
 
-- Shipped: responsive menu shell, compact menu controls, mobile briefing and overlay layouts, compact HUD widgets, mobile-scaled radar/compass placement, safe-area HUD padding, orientation-aware touch controls, and a game favicon.
-- Changed: `index.html`, `public/favicon.svg`, `src/components/Game.tsx`, `src/index.css`, `src/components/menus/*`, `src/components/overlays/*`, `src/components/hud/Compass.tsx`, `src/components/hud/Objectives.tsx`, `src/components/hud/SpeedDisplay.tsx`, `src/components/hud/Vitals.tsx`, `DEV-CHECKLIST.md`.
-- Verification: VS Code diagnostics, containerized `npm run lint`, Docker production build/deploy, and real 390x844 portrait plus 844x390 landscape Playwright mobile smoke at `https://skybreaker.nsystems.live` all passed.
-- Notes/Risks: Compass tape segments intentionally extend inside a clipped mask; document scroll width remains equal to viewport width, so this is not page-level horizontal overflow.
+### Stage 3f - Environment Regression And Readability Pass
+
+Status: Complete
+
+- [x] Smoke test current missions plus representative biome/time/weather combinations.
+- [x] Validate target markers, extraction marker, radar, objective chip, reticle, and vitals on desktop and mobile.
+- [x] Tune contrast, fog, grid, hazard opacity, and VFX density as needed.
+
+Exit criteria:
+
+- [x] No supported biome/time/weather combination makes mission-critical information unreadable.
+- [x] TypeScript, production build, Docker deploy, and focused visual smoke pass.
+
+## Stage 4 - Grand Destruction And Objective Set Pieces
+
+Status: In progress
+
+Goal: replace repeated tower destruction with memorable strike objectives and staged destruction.
+
+### Stage 4a - Objective Archetype Schema
+
+Status: Complete
+
+- [x] Define reusable set-piece archetypes for radar networks, shield generators, convoys, SAM sites, reactors, bridges, carriers, platforms, frigates, and mega-cores.
+- [x] Add target component definitions with health, required/optional state, exposed/hidden state, tracking metadata, and phase triggers.
+- [x] Keep current tower and relay-spire targets backward-compatible.
+
+Exit criteria:
+
+- [x] Current targets can be represented as simple archetypes.
+- [x] At least four future set-piece archetypes have typed data definitions.
+
+Completion summary (2026-05-14):
+
+- Shipped: Stage 4a set-piece archetype schema and data registry. Added typed component/phase/archetype definitions, optional mission-target set-piece hooks, and a registry covering legacy tower/relay targets plus radar networks, shield generators, convoys, SAM sites, reactors, bridges, carriers, platforms, frigates, and mega-cores. Current targets remain backward-compatible through legacy/fallback mappings and level-kit defaults; no runtime behavior changed.
+- Changed: `src/types/game.ts`, `src/config/objectiveArchetypes.ts`, `src/config/levelKits.ts`, `DEV-CHECKLIST.md`.
+- Verification: Dockerized `npm run lint` passed; Dockerized `npm run build && npm run validate:drone` passed; `docker compose build` completed; `docker compose up -d && docker compose ps` passed with the Skybreaker container Up.
+- Notes/Risks: Stage 4a is data/schema only. Stage 4b must wire component exposure, damage routing, objective phase advancement, and tracking snapshot updates into runtime behavior before authored set-piece missions use these definitions.
+
+### Stage 4b - Phase And Component Runtime
+
+Status: Complete
+
+- [x] Implement objective phases that can expose/hide components and change damage routing.
+- [x] Connect component completion to objective progress and tracking snapshots.
+- [x] Preserve exactly-once target destruction and extraction activation.
+- [x] Keep runtime logic reusable instead of adding one-off mission branches.
+
+Exit criteria:
+
+- [x] At least one multi-component objective runs through shared phase logic.
+- [x] Existing weak-point targets still behave correctly.
+
+Completion summary (2026-05-14):
+
+- Shipped: Shared set-piece runtime state for target components and phases. Targets now build runtime component state from reusable archetypes, sync component completion from weak-point/core damage, advance phases through shared logic, and gate weak-point visibility/damageability from active phase exposure. Radar-array and relay-core weak-point layouts are inferred into compatible set-piece archetypes so existing multi-component targets exercise the shared runtime path without bespoke mission branches.
+- Changed: `src/types/game.ts`, `src/config/objectiveArchetypes.ts`, `src/systems/setPieceSystem.ts`, `src/scene/objectiveModels.ts`, `src/components/Game.tsx`, `DEV-CHECKLIST.md`.
+- Verification: Dockerized `npm run lint` passed; Dockerized `npm run build && npm run validate:drone` passed with the existing Vite large chunk warning only. Docker deployment verification is recorded in the verification log.
+- Notes/Risks: Stage 4b provides reusable runtime foundations and preserves existing target destruction/extraction flow. Rich per-component radar child tracks, set-piece-specific scoring, moving target routing, and a playable authored set-piece prototype remain deferred to Stages 4c-4f.
+
+### Stage 4c - Moving Ground And Sea Target Foundation
+
+Status: Complete
+
+- [x] Add data and runtime support for moving convoy/ship-style targets.
+- [x] Add route/path metadata, escape/fail conditions, and tracking presentation.
+- [x] Support projectile collision against moving target components.
+
+Exit criteria:
+
+- [x] A prototype moving target can be damaged, tracked, and completed/failed.
+- [x] Movement does not destabilize current fixed-target missions.
+
+Completion summary (2026-05-14):
+
+- Shipped: Optional target movement schema and reusable moving-target runtime. Mission targets can now define waypoint routes, speed, loop mode, start delay, end behavior, and escape/failure messages. Live targets build movement state at creation, update mesh/world/weak-point positions before projectile collision, update tracking with moving/damaged state, and can complete a route with either stop or mission-fail behavior.
+- Changed: `src/types/game.ts`, `src/systems/targetMovementSystem.ts`, `src/scene/objectiveModels.ts`, `src/components/Game.tsx`, `src/systems/trackingSystem.ts`, `DEV-CHECKLIST.md`.
+- Verification: Dockerized `npm run lint` passed; Dockerized `npm run build && npm run validate:drone` passed with the existing Vite large chunk warning only; focused moving-target runtime smoke passed; `docker compose build` passed; `docker compose up -d --no-build && docker compose ps` passed with `skybreaker-drone-strike` Up.
+- Notes/Risks: No campaign mission is authored to use `movement` yet, so current fixed-target missions remain behaviorally stable. Rich convoy/ship visuals, moving target formations, moving extraction variants, and campaign prototype content remain future Stage 4f/Stage 5 work.
+
+### Stage 4d - Set-Piece Visual And Audio Feedback
+
+Status: Complete
+
+- [x] Add restrained destruction VFX for component breaks, beam shutdowns, shock rings, smoke columns, and debris fields.
+- [x] Add audio hooks for phase changes and major set-piece destruction.
+- [x] Scale VFX by graphics quality and reduced-effects settings.
+
+Exit criteria:
+
+- [x] Destruction progress is visible without harming readability or frame rate.
+- [x] Reduced-effects mode remains clear.
+
+Completion summary (2026-05-14):
+
+- Shipped: Reusable procedural set-piece feedback for component breaks, phase changes, and final destruction. Component breaks now emit a compact flash/debris/smoke burst, phase changes emit a vertical pulse and shock ring, and final target destruction emits a restrained blast, shock ring, debris, and smoke column. New audio cues distinguish component failure, phase transition, and major set-piece destruction.
+- Changed: `src/scene/effects.ts`, `src/hooks/useAudio.ts`, `src/components/Game.tsx`, `DEV-CHECKLIST.md`.
+- Verification: Dockerized `npm run lint` passed; Dockerized `npm run build && npm run validate:drone` passed with the existing Vite large chunk warning only; focused set-piece effect smoke passed for full and reduced effect scales; `docker compose build` passed; `docker compose up -d --no-build && docker compose ps` passed with `skybreaker-drone-strike` Up.
+- Notes/Risks: Feedback is intentionally procedural and restrained; bespoke convoy/ship wakes, naval AA feedback, and authored set-piece spectacle remain deferred until prototype/content phases. Existing target destruction counting and extraction activation paths were left unchanged.
+
+### Stage 4e - Set-Piece Debrief And Scoring
+
+Status: Complete
+
+- [x] Add objective-specific debrief stats for components destroyed, optional parts completed, phase time, convoy escapes, and protected assets.
+- [x] Add scoring hooks for structured objectives without breaking current rank thresholds.
+- [x] Update mission complete overlay to show richer objective results compactly.
+
+Exit criteria:
+
+- [x] Existing debrief still works.
+- [x] Set-piece missions can report meaningful results beyond target count.
+
+Completion summary (2026-05-14):
+
+- Shipped: Optional set-piece mission stats now travel through mission completion results, including components destroyed, required and optional component counts, phases completed, aggregate phase time, convoy escapes, and protected asset losses. Structured-objective score hooks are additive and opt-in via scoring config, so current rank thresholds and missions remain unchanged unless a mission author enables set-piece bonuses.
+- Changed: `src/types/game.ts`, `src/systems/missionSystem.ts`, `src/components/Game.tsx`, `src/components/overlays/MissionComplete.tsx`, `DEV-CHECKLIST.md`.
+- Verification: Dockerized `npm run lint` passed; Dockerized `npm run lint && npm run build && npm run validate:drone` passed with the existing Vite large chunk warning only; focused scoring smoke passed, confirming no-hook set-piece stats preserve baseline score/rank and configured hooks add the expected bonus without mutating rank thresholds; `docker compose --progress plain build` passed; `docker compose --progress plain up -d --no-build && docker compose ps` passed with `skybreaker-drone-strike` Up.
+- Notes/Risks: The debrief objective detail block is hidden for missions with no structured stats, so existing debrief readability is preserved. No prototype mission authors nonzero set-piece scoring hooks yet; that belongs with Stage 4f content tuning.
+
+### Stage 4f - Set-Piece Prototype Mission
+
+Status: Not started
+
+- [ ] Build one prototype mission using at least two set-piece systems.
+- [ ] Verify HUD, radar, objective chip, extraction, scoring, and debrief behavior.
+- [ ] Keep prototype content isolated until ready for campaign insertion.
+
+Exit criteria:
+
+- [ ] Prototype can be launched, completed, failed, and replayed.
+- [ ] TypeScript, build, Docker deploy, and hands-on smoke pass.
+
+## Stage 5 - Combat Domain Expansion: Air, Land, And Sea
+
+Status: Not started
+
+Goal: make the campaign mechanically broad enough to support varied theaters.
+
+### Stage 5a - Selected Target And Lock Foundation
+
+Status: Not started
+
+- [ ] Add player-facing selected target state built on tracking snapshots.
+- [ ] Wire keyboard/touch/manual cycling controls only after automatic priority selection is stable.
+- [ ] Add lock acquisition rules, lock progress, lock loss, and HUD/radar presentation.
+- [ ] Keep selected target, objective priority, and radar priority consistent.
+
+Exit criteria:
+
+- [ ] Player can identify and cycle/confirm a selected target.
+- [ ] Lock state is readable without clutter.
+
+### Stage 5b - Homing And Specialized Secondary Weapons
+
+Status: Not started
+
+- [ ] Convert or extend Ion Missile into a true homing anti-air weapon where mission rules support it.
+- [ ] Add guidance behavior, turn limits, target loss behavior, and impact/near-miss handling.
+- [ ] Add future payload hooks for anti-ground rockets and anti-sea weapons.
+- [ ] Preserve current unlocked weapon progression unless a later progression phase changes it.
+
+Exit criteria:
+
+- [ ] Homing behavior is fair, readable, and energy/cooldown gated.
+- [ ] Current missions remain playable if no selected target exists.
+
+### Stage 5c - Air-To-Air Intercepts
+
+Status: Not started
+
+- [ ] Add moving airborne objective/enemy entities with escape or attack goals.
+- [ ] Add bomber/transport roles and escort formations.
+- [ ] Add ace enemy prototype with readable evasive movement.
+- [ ] Add intercept scoring bonuses and failure conditions.
+
+Exit criteria:
+
+- [ ] A prototype intercept mission can be won or failed based on airborne objective behavior.
+- [ ] Radar/HUD clearly distinguishes intercept targets from normal enemies.
+
+### Stage 5d - Air-To-Land Threat Systems
+
+Status: Not started
+
+- [ ] Add SAM sites, turrets, artillery, shield nodes, railguns, and mobile command units.
+- [ ] Add ground threat telegraphs and attack-run incentives.
+- [ ] Add surface threat targeting logic against player/allies/objectives.
+
+Exit criteria:
+
+- [ ] Ground threats create tactical pressure without unfair invisible damage.
+- [ ] Air-to-land targets have distinct radar/HUD presentation.
+
+### Stage 5e - Air-To-Sea Foundation
+
+Status: Not started
+
+- [ ] Add ocean/sea plane rendering and water readability rules.
+- [ ] Add moving ships, patrol boats, carriers, platforms, wakes, naval AA, and sea mines.
+- [ ] Add naval weak points such as radar mast, deck guns, engines, hangars, and command tower.
+
+Exit criteria:
+
+- [ ] A prototype sea target can move, be tracked, take damage, and complete/fail objective rules.
+- [ ] Naval visuals stay readable on low graphics and mobile.
+
+### Stage 5f - Mixed-Domain HUD/Radar Pass
+
+Status: Not started
+
+- [ ] Add icon/label distinctions for air, ground, sea, objective, hazard, ally, and extraction tracks.
+- [ ] Add domain-aware priority scoring and objective routing hints.
+- [ ] Validate clutter limits with mixed air/ground/sea threats.
+
+Exit criteria:
+
+- [ ] Mixed-domain combat remains readable without hiding urgent information.
+- [ ] Reduced-effects mode preserves tactical meaning.
+
+## Stage 6 - Campaign Expansion Wave 1
+
+Status: Not started
+
+Goal: use the new mission, objective, environment, weather, and combat-domain systems to grow the campaign backbone.
+
+### Stage 6a - Campaign Arc Plan And Save Migration
+
+Status: Not started
+
+- [ ] Finalize 5-6 campaign arcs, mission count, unlock order, rewards, and difficulty curve.
+- [ ] Add save migration strategy for inserted missions and changed reward ids.
+- [ ] Add mission-select filtering or arc summaries if the UI becomes dense.
+
+Exit criteria:
+
+- [ ] Old saves survive new campaign structure.
+- [ ] Campaign screen remains understandable with expanded mission count.
+
+### Stage 6b - Signal War And Blackout Line Cleanup
+
+Status: Not started
+
+- [ ] Revisit Missions 01-08 using the Stage 2-5 systems.
+- [ ] Convert appropriate missions to structured objectives without changing their onboarding purpose.
+- [ ] Add optional objective or set-piece upgrades where they improve variety.
+
+Exit criteria:
+
+- [ ] Current campaign remains complete from a clean save.
+- [ ] Early missions teach systems clearly.
+
+### Stage 6c - Storm Coast Arc Batch
+
+Status: Not started
+
+- [ ] Add 3-4 missions using storm/ocean/weather systems.
+- [ ] Introduce first naval operations and weather pressure gradually.
+- [ ] Add appropriate rewards and progression hooks.
+
+Exit criteria:
+
+- [ ] Storm Coast arc can be unlocked, played, completed, and replayed.
+
+### Stage 6d - Frozen Relay Arc Batch
+
+Status: Not started
+
+- [ ] Add 3-4 missions using arctic/low-visibility/sensor pressure systems.
+- [ ] Introduce long-range interception or fragile sensor-link objectives.
+- [ ] Validate readability in bright/foggy environments.
+
+Exit criteria:
+
+- [ ] Frozen Relay arc feels distinct and remains readable.
+
+### Stage 6e - Red Canyon Siege Arc Batch
+
+Status: Not started
+
+- [ ] Add 3-4 missions using canyon lanes, convoys, artillery, and moving ground targets.
+- [ ] Introduce attack-run incentives and terrain route pressure.
+- [ ] Validate mobile control and marker readability in tighter terrain.
+
+Exit criteria:
+
+- [ ] Red Canyon arc can be completed without navigation confusion.
+
+### Stage 6f - Skybreaker Core Arc Batch
+
+Status: Not started
+
+- [ ] Add final mixed-domain missions using set pieces, weather, bosses, and extraction pressure.
+- [ ] Build a finale mission that combines air, land, sea, and mega-core mechanics only after those systems are stable.
+- [ ] Add final rewards and campaign completion state.
+
+Exit criteria:
+
+- [ ] Main campaign has a complete ending.
+- [ ] Finale is intense but readable on desktop and mobile.
+
+### Stage 6g - Campaign Wave 1 Regression
+
+Status: Not started
+
+- [ ] Smoke every main mission from a clean save.
+- [ ] Smoke existing migrated saves.
+- [ ] Validate mission unlocks, rewards, best times, best scores, ranks, and replay flow.
+
+Exit criteria:
+
+- [ ] Expanded campaign can be played start to finish.
+- [ ] TypeScript, build, Docker deploy, and campaign smoke pass.
+
+## Stage 7 - Player Progression, Loadout, And Upgrade Paths
+
+Status: Not started
+
+Goal: add meaningful between-mission decisions and make rewards mechanically useful.
+
+### Stage 7a - Inventory And Progression Data
+
+Status: Not started
+
+- [ ] Add player inventory/progression state for unlocked weapons, upgrades, currencies/parts, and equipped items.
+- [ ] Add save migration for current campaign progress.
+- [ ] Keep current reward ids compatible or migrate them explicitly.
+
+Exit criteria:
+
+- [ ] Existing saves load safely.
+- [ ] Inventory data persists and validates on reload.
+
+### Stage 7b - Loadout Selection Screen
+
+Status: Not started
+
+- [ ] Convert Loadout Review into Loadout Selection.
+- [ ] Add primary, secondary, payload, and module slots as appropriate.
+- [ ] Add mission recommendation tags based on mission type, combat domain, weather, and objectives.
+- [ ] Keep a fast launch path for players who do not want to tinker.
+
+Exit criteria:
+
+- [ ] Player can change equipment before launch.
+- [ ] Launch flow remains quick and obvious.
+
+### Stage 7c - Upgrade Definitions And Trees
+
+Status: Not started
+
+- [ ] Define upgrade trees for Flight Core, Weapons Core, Defense Core, Sensor Core, and Payload Core.
+- [ ] Add upgrade costs, requirements, caps, and mutually exclusive choices where useful.
+- [ ] Add upgrade effects without scattering tuning branches across runtime code.
+
+Exit criteria:
+
+- [ ] At least three upgrade trees have playable mechanical effects.
+- [ ] Upgrade effects are visible in UI and gameplay.
+
+### Stage 7d - Reward And Currency Model
+
+Status: Not started
+
+- [ ] Add parts/currency/upgrade point rewards to mission completion.
+- [ ] Add optional objective bonuses without forcing grind.
+- [ ] Update debrief and career screens to show meaningful rewards.
+
+Exit criteria:
+
+- [ ] Rewards alter player choices and gameplay options.
+- [ ] Campaign balance remains playable without grinding.
+
+### Stage 7e - Balance And Progression Pass
+
+Status: Not started
+
+- [ ] Tune upgrades against early, mid, and late campaign missions.
+- [ ] Validate that required missions do not demand optional upgrades.
+- [ ] Add reset/respec rules if needed.
+
+Exit criteria:
+
+- [ ] Progression feels rewarding without breaking mission difficulty.
+- [ ] Save/load and migration tests pass.
+
+## Stage 8 - Enemy AI, Factions, Bosses, And Reactive Encounters
+
+Status: Not started
+
+Goal: make expanded combat feel varied through behavior, not only stats.
+
+### Stage 8a - Enemy Behavior Controller Architecture
+
+Status: Not started
+
+- [ ] Separate enemy behavior controllers from visual/stat definitions.
+- [ ] Add reusable behavior states such as spawn, patrol, pursue, orbit, strafe, retreat, guard, attack objective, and flee.
+- [ ] Keep current enemy behavior as a default controller.
+
+Exit criteria:
+
+- [ ] Current enemies behave as before through the new controller layer.
+- [ ] New controllers can be assigned by role or mission data.
+
+### Stage 8b - Formation And Group Behaviors
+
+Status: Not started
+
+- [ ] Add formation leaders and child contacts for enemy groups.
+- [ ] Support bomber escorts, patrol groups, and defensive screens.
+- [ ] Reflect grouped tracks on radar without excessive clutter.
+
+Exit criteria:
+
+- [ ] Formation enemies feel coordinated and remain readable.
+
+### Stage 8c - Ground And Naval Enemy Behaviors
+
+Status: Not started
+
+- [ ] Add behavior controllers for SAMs, turrets, artillery, ships, carriers, and platform defenses.
+- [ ] Add target selection against player, allies, zones, or protected objectives.
+- [ ] Add reload/telegraph/cooldown states.
+
+Exit criteria:
+
+- [ ] Ground and naval threats are readable before they damage the player.
+
+### Stage 8d - Telegraphs And Reactive Encounters
+
+Status: Not started
+
+- [ ] Add visual/audio telegraphs for missiles, railguns, beams, area denial, boss attacks, and emergency extraction.
+- [ ] Add objective-triggered reinforcements and escalation hooks.
+- [ ] Respect reduced-effects settings without removing tactical warning meaning.
+
+Exit criteria:
+
+- [ ] Players can understand and react to high-threat attacks.
+
+### Stage 8e - Boss Phase Framework
+
+Status: Not started
+
+- [ ] Add boss phase controller with health thresholds, exposed weak points, attack patterns, and retreat/extraction windows.
+- [ ] Prototype Command Frigate, Carrier Group, or Skybreaker Core boss behavior.
+- [ ] Integrate boss phase state with objective tracking and debrief.
+
+Exit criteria:
+
+- [ ] A boss prototype has readable phases and can be completed without custom one-off mission code.
+
+### Stage 8f - Faction And Theater Variants
+
+Status: Not started
+
+- [ ] Add faction/theater-specific enemy variants with distinct silhouettes, weapons, and behavior weights.
+- [ ] Keep role readability consistent across skins/variants.
+
+Exit criteria:
+
+- [ ] Variants add variety without confusing threat recognition.
+
+## Stage 9 - Campaign Expansion Wave 2 And Optional Sorties
+
+Status: Not started
+
+Goal: add replay value and optional breadth after the expanded campaign is stable.
+
+### Stage 9a - Optional Sortie Framework
+
+Status: Not started
+
+- [ ] Add optional sortie definitions separate from required campaign missions.
+- [ ] Add unlock rules, rewards, replay state, and career display for optional sorties.
+- [ ] Keep optional content from blocking main campaign progress.
+
+Exit criteria:
+
+- [ ] Optional sorties can be discovered, launched, completed, and replayed.
+
+### Stage 9b - Challenge Variant System
+
+Status: Not started
+
+- [ ] Add challenge modifiers such as storm version, night version, elite patrol, limited energy, no-shield, timed extraction, or hazard-dense variant.
+- [ ] Display modifiers clearly before launch.
+- [ ] Keep modifiers fair and compatible with reduced-effects/readability settings.
+
+Exit criteria:
+
+- [ ] At least five reusable challenge modifiers exist.
+
+### Stage 9c - Semi-Procedural Contract Generator
+
+Status: Not started
+
+- [ ] Build contracts from authored objective modules, biome/weather/time variants, enemy pools, and reward templates.
+- [ ] Add seed/state persistence for generated contracts if needed.
+- [ ] Validate generated missions for readability and completion rules.
+
+Exit criteria:
+
+- [ ] Generated/remixed sorties remain fair and do not require fragile custom code.
+
+### Stage 9d - Advanced Scoring And Mastery
+
+Status: Not started
+
+- [ ] Add medals or mastery goals beyond S-rank.
+- [ ] Add arc mastery rewards for optional goals.
+- [ ] Show mastery progress in career and mission select.
+
+Exit criteria:
+
+- [ ] Replay goals are meaningful without breaking main campaign balance.
+
+### Stage 9e - Optional Content Regression
+
+Status: Not started
+
+- [ ] Smoke optional sorties, variants, and generated contracts across desktop/mobile.
+- [ ] Validate save migration and optional progress persistence.
+
+Exit criteria:
+
+- [ ] Optional content is stable and clearly separate from main progression.
+
+## Stage 10 - Final Polish, Performance, And Release Hardening
+
+Status: Not started
+
+Goal: stabilize the enlarged game and make the campaign feel finished.
+
+### Stage 10a - Full Campaign Regression Matrix
+
+Status: Not started
+
+- [ ] Run every main mission from a clean save.
+- [ ] Run representative migrated saves from major historical progress states.
+- [ ] Validate unlocks, rewards, ranks, best times, best scores, optional goals, and replay.
+
+Exit criteria:
+
+- [ ] Every main mission can be completed from a clean save.
+- [ ] Existing saves migrate safely.
+
+### Stage 10b - HUD, Radar, And Mobile Layout Hardening
+
+Status: Not started
+
+- [ ] Test HUD overlap, objective chip expansion, radar tracking, selected target, edge pins, extraction guidance, touch controls, and portrait overlay.
+- [ ] Cover desktop, 390x844 portrait, 844x390 landscape, and at least one tablet-like viewport.
+- [ ] Tune text wrapping, safe-area padding, and reduced-effects behavior.
+
+Exit criteria:
+
+- [ ] HUD remains readable in the most visually intense supported missions.
+
+### Stage 10c - Performance Budgets And Optimization
+
+Status: Not started
+
+- [ ] Establish budgets for weather, water, enemy count, set-piece VFX, boss phases, and optional sorties.
+- [ ] Profile LOW/MEDIUM/HIGH graphics settings.
+- [ ] Optimize rendering, update cadence, object pooling, and bundle chunks where needed.
+
+Exit criteria:
+
+- [ ] Performance is acceptable on target desktop and mobile hardware.
+- [ ] Existing Vite large-chunk warning is addressed or documented as acceptable.
+
+### Stage 10d - Accessibility And Readability Pass
+
+Status: Not started
+
+- [ ] Review contrast, text size, motion settings, reduced effects, controls copy, screen-reader labels for menus, and focus states.
+- [ ] Ensure key warnings do not rely on color alone.
+- [ ] Validate menu and gameplay readability in bright/dark environments.
+
+Exit criteria:
+
+- [ ] Accessibility/readability issues are resolved or documented with follow-up risk.
+
+### Stage 10e - Audio And Final Presentation Pass
+
+Status: Not started
+
+- [ ] Add final audio cues for weather, naval combat, boss phases, warnings, objective changes, and mission outcomes.
+- [ ] Balance music/SFX volumes across phases.
+- [ ] Polish visual transitions, mission intros, debrief feedback, and menu motion.
+
+Exit criteria:
+
+- [ ] Audio and presentation support gameplay without masking important information.
+
+### Stage 10f - Release Candidate Checklist
+
+Status: Not started
+
+- [ ] Freeze content scope.
+- [ ] Run full lint/build/Docker deploy and browser smoke.
+- [ ] Update README, overview, roadmap, active checklist, regression smoke docs, and any public metadata.
+- [ ] Document known limitations and post-release backlog.
+
+Exit criteria:
+
+- [ ] Release candidate is documented, deployable, and regression-tested.
 
 ## Testing Checklist
 
@@ -417,578 +1052,119 @@ Build and toolchain:
 
 - [x] `npm run lint`
 - [x] `npm run build`
+- [x] `npm run validate:drone`
 - [x] Docker rebuild succeeds
 - [x] Docker deploy succeeds
 
-Gameplay regression:
+Documentation review:
 
-- [x] Drone flight remains responsive
-- [x] Chase camera remains readable
-- [x] HUD remains legible in combat
-- [x] Radar heading and blips remain readable
-- [x] Target destruction counts remain correct
-- [x] Extraction completes reliably
-- [x] Mission success and failure flows still trigger correctly
+- [x] Historical checklist archive exists.
+- [x] `overview.md` is current-state oriented.
+- [x] `roadmap.md` points to Stage 2b as the next implementation stage.
+- [x] `DEV-CHECKLIST.md` contains phase-worker handoff sections.
+- [x] Stages 3-10 contain granular sub-phases and exit criteria.
 
-Menu and progression:
+Gameplay regression for future phases:
 
-- [x] Main menu navigation works
-- [x] Pause and resume work
-- [x] Retry mission works
-- [x] Return to menu works
-- [x] Settings persist across reloads
-- [x] Campaign unlocks persist across reloads
-- [x] Mission select respects unlock state
+- [ ] Drone flight remains responsive.
+- [ ] Chase camera remains readable.
+- [ ] Apparent target distance remains stable while turning on mobile and desktop.
+- [ ] HUD remains legible in combat.
+- [ ] Radar and tracking remain readable.
+- [ ] Target destruction counts remain correct.
+- [ ] Extraction completes reliably.
+- [ ] Mission success and failure flows still trigger correctly.
+- [ ] Settings and campaign unlocks persist.
+- [ ] Mobile touch-drag and action controls remain usable.
 
-Mobile responsiveness:
+## Deferred Work Log
 
-- [x] Main menu has no horizontal overflow at 390px width
-- [x] Settings screen has no horizontal overflow at 390px width
-- [x] Briefing screen has no horizontal overflow at 390px width
-- [x] Mission canvas fills the 390x844 mobile viewport
-- [x] Touch controls render in mission at 390px width
-- [x] Objective, HUD, FPS readout, and radar remain visible at 390px width
-- [x] Landscape mission canvas fills an 844x390 mobile viewport
-- [x] Landscape touch controls render on coarse-pointer devices above the tablet CSS breakpoint
-- [x] Favicon SVG is served successfully in production
+| Date | Phase | Deferred item | Reason | Recommended next step |
+|---|---|---|---|---|
+| 2026-05-13 | Stage 0 | README/BASELINE wording refresh | User requested overview, roadmap, and checklist reset first | Do a separate docs pass for stale joystick, missile lock, and out-of-bounds wording |
+| 2026-05-13 | Stage 1 | Tracking attention event bus | Needs stable objective/event schema | Implement during Stage 2e mission event hooks |
+| 2026-05-13 | Stage 1 | Weak-point child track registration | Needs objective child-track schema | Implement during Stage 2f/2g |
+| 2026-05-13 | Stage 1e | Camera FOV/spatial distortion fix | Newly reported mobile readability issue; needs reproduction and tuning | Investigate `src/scene/renderer.ts`, `src/config/constants.ts`, and camera follow logic in `src/components/Game.tsx` before Stage 2b |
+| 2026-05-13 | Stage 2 | Out-of-bounds fail policy | Product behavior decision needed | Decide mission-specific warning/timed-fail/hard-fail behavior before extraction metadata states |
+| 2026-05-13 | Stage 5 | True target lock and homing missiles | Current secondary projectile is straight-flight only | Implement selected target, lock acquisition, and homing guidance in air-to-air expansion |
 
 ## Verification Log
 
-- 2026-05-09: TV-1 cinematic arena foundation `docker run --rm -v "$PWD":/app -v skybreaker-drone-strike-node-modules:/app/node_modules -w /app node:20-alpine sh -lc "npm run lint"` - passed; TypeScript `tsc --noEmit` completed with zero errors in the container.
-- 2026-05-09: TV-1 cinematic arena foundation `docker compose build --progress=plain && docker compose up -d && docker compose ps` - passed; Vite production build completed with the existing large chunk warning, image `skybreaker-drone-strike:latest` rebuilt, and container `skybreaker-drone-strike` reported `Up`.
-- 2026-05-09: TV-1 deployed URL smoke `curl -I -L --max-time 20 https://skybreaker.nsystems.live` - returned HTTP 200 after deploy; hands-on visual browser review remains recommended because no browser page is shared in this session.
-- 2026-05-09: Tactical visual foundation `docker run --rm -v "$PWD":/app -v skybreaker-drone-strike-node-modules:/app/node_modules -w /app node:20-alpine sh -lc "npm run lint"` - passed; TypeScript `tsc --noEmit` completed with zero errors in the container.
-- 2026-05-09: Tactical visual foundation `docker compose build --progress=plain && docker compose up -d && docker compose ps` - passed; Vite production build completed with the existing large chunk warning, image `skybreaker-drone-strike:latest` rebuilt, and container `skybreaker-drone-strike` reported `Up`.
-- 2026-05-10: TV-4 world-space waypoint illustrations `docker run --rm -v "$PWD":/app -v skybreaker-drone-strike-node-modules:/app/node_modules -w /app node:20-alpine sh -lc "npm run lint"` - passed; TypeScript `tsc --noEmit` completed with zero errors in the container.
-- 2026-05-10: TV-4 world-space waypoint illustrations `docker compose build --progress=plain && docker compose up -d && docker compose ps` - passed; Vite production build completed with the existing large chunk warning, image `skybreaker-drone-strike:latest` rebuilt, and container `skybreaker-drone-strike` reported `Up`.
-- 2026-05-10: TV-4 deployed URL smoke `curl -I -L --max-time 20 https://skybreaker.nsystems.live` - returned HTTP 200 after deploy.
-- 2026-05-10: TV-5 facility weak-point targets `docker run --rm -v "$PWD":/app -v skybreaker-drone-strike-node-modules:/app/node_modules -w /app node:20-alpine sh -lc "npm run lint"` - passed; TypeScript `tsc --noEmit` completed with zero errors in the container.
-- 2026-05-10: TV-5 facility weak-point targets `docker compose build --progress=plain && docker compose up -d && docker compose ps` - passed; Vite production build completed with the existing large chunk warning, image `skybreaker-drone-strike:latest` rebuilt, and container `skybreaker-drone-strike` reported `Up`.
-- 2026-05-10: TV-5 deployed URL smoke `curl -I -L --max-time 20 https://skybreaker.nsystems.live` - returned HTTP 200 after deploy.
-- 2026-05-10: TV-9 smoke doc/script diagnostics for `docs/REGRESSION_SMOKE.md` and `scripts/smoke-mobile.cjs` - no errors found.
-- 2026-05-10: TV-9 exact mobile smoke `docker run --rm --network host -v "$PWD":/work -w /tmp mcr.microsoft.com/playwright:v1.52.0-noble sh -lc "npm init -y >/dev/null && npm install playwright@1.52.0 >/dev/null && NODE_PATH=/tmp/node_modules node /work/scripts/smoke-mobile.cjs"` - passed; 390x844 portrait and 844x390 landscape viewports matched requested dimensions, mission canvas matched viewport, touch controls/HUD/radar/compass were visible, no horizontal overflow was detected, and no page errors were reported.
-- 2026-05-10: TV-9 final `docker run --rm -v "$PWD":/app -v skybreaker-drone-strike-node-modules:/app/node_modules -w /app node:20-alpine sh -lc "npm run lint"` - passed; TypeScript `tsc --noEmit` completed with zero errors in the container.
-- 2026-05-10: TV-9 final `docker compose build --progress=plain && docker compose up -d && docker compose ps` - passed; Vite production build completed with the existing large chunk warning, image `skybreaker-drone-strike:latest` rebuilt, and container `skybreaker-drone-strike` reported `Up`.
-- 2026-05-11: FLIGHT-1 source/docs diagnostics for `src/scene/droneModel.ts`, `src/systems/flightPhysics.ts`, `src/components/Game.tsx`, `docs/REGRESSION_SMOKE.md`, and `DEV-CHECKLIST.md` - no errors found.
-- 2026-05-11: FLIGHT-1 final `docker run --rm -v "$PWD":/app -v skybreaker-drone-strike-node-modules:/app/node_modules -w /app node:20-alpine sh -lc "npm run lint"` - passed; TypeScript `tsc --noEmit` completed with zero errors in the container.
-- 2026-05-11: FLIGHT-1 final `docker compose build --progress=plain && docker compose up -d && docker compose ps` - passed; Vite production build completed with the existing large chunk warning, image `skybreaker-drone-strike:latest` rebuilt, and container `skybreaker-drone-strike` reported `Up`.
-- 2026-05-11: FLIGHT-1 deployed desktop browser smoke at `https://skybreaker.nsystems.live` - Mission 1 and Mission 2 briefing/launch paths passed; HUD, radar/compass, target markers, Pulse Cannon/Ion Missile status, secondary no-air-target lock feedback, keyboard flight inputs, boost/fire, and cockpit/chase view toggle were confirmed; screenshot review confirmed the revised aircraft is readable in chase view without blocking the reticle or objective HUD.
-- 2026-05-11: FLIGHT-1 exact mobile smoke `docker run --rm --network host -v "$PWD":/work -w /tmp mcr.microsoft.com/playwright:v1.52.0-noble sh -lc "npm init -y >/dev/null && npm install playwright@1.52.0 >/dev/null && NODE_PATH=/tmp/node_modules node /work/scripts/smoke-mobile.cjs"` - passed; 390x844 portrait and 844x390 landscape viewports matched requested dimensions, mission canvas matched viewport, touch controls/HUD/radar/compass were visible, no horizontal overflow was detected, and no page errors were reported.
+- 2026-05-13: Stage 0 documentation reset manual review - passed; old checklist archived and root docs rebuilt.
+- 2026-05-13: Stage 0 `docker run --rm -v "$PWD":/app -v skybreaker-drone-strike-node-modules:/app/node_modules -w /app node:20-alpine sh -lc "npm run lint && npm run build && npm run validate:drone"` - passed; TypeScript zero errors, Vite build succeeded with the existing large chunk warning, and drone symmetry validation passed.
+- 2026-05-13: Stage 0 `docker compose build && docker compose up -d && docker compose ps` - passed; image `skybreaker-drone-strike:latest` rebuilt and container `skybreaker-drone-strike` reported `Up`.
+- 2026-05-13: Active checklist expansion manual review - passed; Stages 3-10 now have phase-worker-friendly sub-phases and exit criteria.
+- 2026-05-13: Camera/FOV roadmap update manual review - passed; Stage 1e added as the next near-term investigation/fix before Stage 2b.
+- 2026-05-14: Stage 3a `docker run --rm -v "$PWD":/app -v skybreaker-drone-strike-node-modules:/app/node_modules -w /app node:20-alpine sh -lc "npm run lint && npm run build && npm run validate:drone"` — passed; TypeScript zero errors, Vite 2124 modules, drone symmetry 21 mirrored + 12 centerline passed.
+- 2026-05-14: Stage 3a `docker compose build && docker compose up -d && docker compose ps` — passed; image rebuilt, container `skybreaker-drone-strike` reported `Up`.
+- 2026-05-14: Stage 3b `docker run --rm -v "$PWD":/app -v skybreaker-drone-strike-node-modules:/app/node_modules -w /app node:20-alpine sh -lc "npm run lint && npm run build && npm run validate:drone"` — passed; TypeScript zero errors, Vite 2125 modules, drone symmetry 21 mirrored + 12 centerline passed.
+- 2026-05-14: Stage 3b `docker compose build && docker compose up -d && docker compose ps` — passed; image rebuilt, container `skybreaker-drone-strike` reported `Up`.
+- 2026-05-14: Stage 3c `docker run --rm -v "$PWD":/app -v skybreaker-drone-strike-node-modules:/app/node_modules -w /app node:20-alpine sh -lc "npm run lint && npm run build && npm run validate:drone"` — passed; TypeScript zero errors, Vite 2125 modules, drone symmetry 21 mirrored + 12 centerline passed.
+- 2026-05-14: Stage 3c `docker compose build && docker compose up -d && docker compose ps` — passed; image rebuilt, container `skybreaker-drone-strike` reported `Up`.
+- 2026-05-14: Stage 3d `docker run --rm -v "$PWD":/app -v skybreaker-drone-strike-node-modules:/app/node_modules -w /app node:20-alpine sh -lc "npm run lint && npm run build && npm run validate:drone"` — passed; TypeScript zero errors, Vite 2126 modules, drone symmetry 21 mirrored + 12 centerline passed.
+- 2026-05-14: Stage 3d `docker compose build && docker compose up -d && docker compose ps` — passed; image rebuilt, container `skybreaker-drone-strike` reported `Up`.
+- 2026-05-14: Stage 4a `docker run --rm -v "$PWD":/app -v skybreaker-drone-strike-node-modules:/app/node_modules -w /app node:20-alpine sh -lc "npm run lint"` — passed; TypeScript zero errors.
+- 2026-05-14: Stage 4a `docker run --rm -v "$PWD":/app -v skybreaker-drone-strike-node-modules:/app/node_modules -w /app node:20-alpine sh -lc "npm run build && npm run validate:drone"` — passed; Vite 2126 modules with existing large chunk warning, drone symmetry 21 mirrored + 12 centerline passed.
+- 2026-05-14: Stage 4a `docker compose build` — passed; image `skybreaker-drone-strike:latest` rebuilt.
+- 2026-05-14: Stage 4a `docker compose up -d && docker compose ps` — passed; container reported `Up`.
+- 2026-05-14: Stage 4a `docker compose up -d --no-build --force-recreate && docker compose ps` — passed; interrupted recreate normalized back to declared container name `skybreaker-drone-strike` and container reported `Up`.
+- 2026-05-14: Stage 4b `docker run --rm -v "$PWD":/app -v skybreaker-drone-strike-node-modules:/app/node_modules -w /app node:20-alpine sh -lc "npm run lint"` — passed; TypeScript zero errors.
+- 2026-05-14: Stage 4b `docker run --rm -v "$PWD":/app -v skybreaker-drone-strike-node-modules:/app/node_modules -w /app node:20-alpine sh -lc "npm run build && npm run validate:drone"` — passed; Vite 2128 modules with existing large chunk warning, drone symmetry 21 mirrored + 12 centerline passed.
+- 2026-05-14: Stage 4b `docker compose build` — passed; image `skybreaker-drone-strike:latest` rebuilt. The chained `up` step stalled after image export, leaving a name conflict; removing the two Skybreaker service containers and running `docker compose up -d --no-build && docker compose ps` normalized the service.
+- 2026-05-14: Stage 4b `docker compose up -d --no-build && docker compose ps` — passed; container `skybreaker-drone-strike` reported `Up`.
+- 2026-05-14: Stage 4c `docker run --rm -v "$PWD":/app -v skybreaker-drone-strike-node-modules:/app/node_modules -w /app node:20-alpine sh -lc "npm run lint"` — passed; TypeScript zero errors.
+- 2026-05-14: Stage 4c `docker run --rm -v "$PWD":/app -v skybreaker-drone-strike-node-modules:/app/node_modules -w /app node:20-alpine sh -lc "npm run build && npm run validate:drone"` — passed; Vite 2129 modules with existing large chunk warning, drone symmetry 21 mirrored + 12 centerline passed.
+- 2026-05-14: Stage 4c focused moving-target runtime smoke — first inline shell attempt failed due heredoc/history quoting; rerun with shell-safe quoting passed, confirming target movement, weak-point position sync, tracking update, damaged state, route completion, and fail-mission behavior.
+- 2026-05-14: Stage 4c `docker compose build` — passed; image `skybreaker-drone-strike:latest` rebuilt.
+- 2026-05-14: Stage 4c `docker compose up -d --no-build && docker compose ps` — passed; container `skybreaker-drone-strike` reported `Up`.
+- 2026-05-14: Stage 4d `docker run --rm -v "$PWD":/app -v skybreaker-drone-strike-node-modules:/app/node_modules -w /app node:20-alpine sh -lc "npm run lint"` — passed; TypeScript zero errors.
+- 2026-05-14: Stage 4d `docker run --rm -v "$PWD":/app -v skybreaker-drone-strike-node-modules:/app/node_modules -w /app node:20-alpine sh -lc "npm run build && npm run validate:drone"` — passed; Vite 2129 modules with existing large chunk warning, drone symmetry 21 mirrored + 12 centerline passed.
+- 2026-05-14: Stage 4d focused set-piece effect smoke — passed; full and reduced effect scales create finite procedural groups and reduced effects stay below the density cap.
+- 2026-05-14: Stage 4d `docker compose build` — passed; image `skybreaker-drone-strike:latest` rebuilt.
+- 2026-05-14: Stage 4d `docker compose up -d --no-build && docker compose ps` — passed; container `skybreaker-drone-strike` reported `Up`.
+- 2026-05-14: Stage 4e `docker run --rm -v "$PWD":/app -v skybreaker-drone-strike-node-modules:/app/node_modules -w /app node:20-alpine sh -lc "npm run lint"` — passed; TypeScript zero errors.
+- 2026-05-14: Stage 4e `docker run --rm -v "$PWD":/app -v skybreaker-drone-strike-node-modules:/app/node_modules -w /app node:20-alpine sh -lc "npm run lint && npm run build && npm run validate:drone"` — passed; Vite 2129 modules with existing large chunk warning, drone symmetry 21 mirrored + 12 centerline passed.
+- 2026-05-14: Stage 4e focused scoring smoke — passed; no-hook set-piece stats preserved baseline score/rank, opt-in set-piece hooks added the expected score, and rank thresholds were not mutated.
+- 2026-05-14: Stage 4e `docker compose --progress plain build` — passed; image `skybreaker-drone-strike:latest` rebuilt. Earlier default-progress compose build reached image export but hung in the progress UI, so it was stopped and rerun with plain progress.
+- 2026-05-14: Stage 4e `docker compose --progress plain up -d --no-build && docker compose ps` — passed; container `skybreaker-drone-strike` reported `Up`.
+
+## Latest Session Summary
+
+Date: 2026-05-14
+
+Phase worked:
+- Stage 4e - Set-Piece Debrief And Scoring.
+
+Shipped:
+- Added optional set-piece debrief stats to mission completion results: components destroyed, required/optional components, phases completed, phase time, convoy escapes, and protected assets lost.
+- Added opt-in structured-objective score hooks for component, phase, and optional-component bonuses.
+- Wired runtime stat collection into weak-point/component destruction, phase advancement, route-fail escapes, and final mission completion.
+- Updated the mission complete overlay with a compact Objective Detail block that only appears when structured stats exist.
+- Preserved current score/rank behavior for missions that do not configure set-piece scoring hooks.
+
+Changed files:
+- `src/types/game.ts`
+- `src/systems/missionSystem.ts`
+- `src/components/Game.tsx`
+- `src/components/overlays/MissionComplete.tsx`
+- `DEV-CHECKLIST.md`
+
+Verification:
+- Host `npm run lint` could not run because `npm` is not on PATH in this shell.
+- Dockerized `npm run lint` (tsc --noEmit) — passed.
+- Dockerized `npm run lint && npm run build && npm run validate:drone` — passed; Vite 2129 modules with the existing large chunk warning only, drone symmetry 21 mirrored + 12 centerline passed.
+- `npm run validate:drone` (21 mirrored + 12 centerline) — passed.
+- Focused scoring smoke — passed, confirming no-hook set-piece stats preserve baseline score/rank and configured hooks add the expected score without rank threshold mutation.
+- `docker compose --progress plain build` — passed; image `skybreaker-drone-strike:latest` rebuilt.
+- `docker compose --progress plain up -d --no-build && docker compose ps` — passed; final container name is `skybreaker-drone-strike` and status is Up.
+
+Deferred:
+- A playable authored set-piece mission remains deferred to Stage 4f.
+- Nonzero set-piece scoring values should be tuned with authored content rather than enabled globally.
+- Bespoke convoy/ship wakes, naval AA telegraphs, and larger domain-specific spectacle remain deferred to Stage 5 after prototype content clarifies the need.
+
+Next recommended starting point:
+- Begin Stage 4f - Set-Piece Prototype Mission.
+- Start by reading `src/config/missions.ts`, `src/config/objectiveArchetypes.ts`, `src/config/levelKits.ts`, `src/components/Game.tsx`, and `src/components/overlays/MissionComplete.tsx`.
+- Build one isolated prototype that exercises at least two set-piece systems, then verify HUD, radar, objective chip, extraction, scoring, debrief, replay, and failure behavior.
 
-- 2026-05-09: VS Code diagnostics for `src` - no errors found after HUD, overlay, and phase-state extraction.
-- 2026-05-09: `docker run --rm -v "$PWD":/app -v skybreaker-drone-strike-node-modules:/app/node_modules -w /app node:20-alpine sh -lc "npm ci && npm run lint"` - passed; TypeScript `tsc --noEmit` completed with zero errors.
-- 2026-05-09: `npm run lint` on host shell - blocked because `npm` is not installed on the host PATH; verified through the Node 20 Docker container instead.
-- 2026-05-09: `docker compose build` - passed; Vite production build completed inside the Docker builder, with only the existing large chunk warning.
-- 2026-05-09: `docker compose up -d && docker compose ps` - passed; `skybreaker-drone-strike` container started and reported `Up`.
-- 2026-05-09: Final post-Compass check: `docker run --rm -v "$PWD":/app -v skybreaker-drone-strike-node-modules:/app/node_modules -w /app node:20-alpine sh -lc "npm run lint"` passed; `docker compose build && docker compose up -d && docker compose ps` passed; container reported `Up`.
-- 2026-05-09: Phase 2 diagnostics for `src` - no errors found after menu shell, persistence, and game callback wiring.
-- 2026-05-09: Phase 2 `docker run --rm -v "$PWD":/app -v skybreaker-drone-strike-node-modules:/app/node_modules -w /app node:20-alpine sh -lc "npm run lint"` - passed after correcting menu button prop typing.
-- 2026-05-09: Phase 2 `docker compose build && docker compose up -d && docker compose ps` - passed; Vite production build completed with the existing large chunk warning, image `skybreaker-drone-strike:latest` rebuilt, and container `skybreaker-drone-strike` reported `Up`.
-- 2026-05-09: Phase 2 browser smoke via `https://skybreaker.nsystems.live` - main menu rendered; briefing launched Mission 1; WebGL2 canvas and HUD rendered; pause/settings/return-to-menu and retry flows worked; master volume persisted across reload through `localStorage`.
-- 2026-05-09: Phase 3 diagnostics for `src` - no errors found after mission catalog, mission helper, menu, briefing, Game, and overlay wiring.
-- 2026-05-09: Phase 3 `docker run --rm -v "$PWD":/app -v skybreaker-drone-strike-node-modules:/app/node_modules -w /app node:20-alpine sh -lc "npm run lint"` - passed; TypeScript `tsc --noEmit` completed with zero errors.
-- 2026-05-09: Phase 3 `docker compose build && docker compose up -d && docker compose ps` - passed; image `skybreaker-drone-strike:latest` rebuilt and container `skybreaker-drone-strike` reported `Up`.
-- 2026-05-09: Phase 3 browser smoke via `https://skybreaker.nsystems.live` - menu listed Mission 01 and Mission 02; persisted progress unlocked Mission 2; Iron Veil briefing rendered with 4 spires; Mission 2 launched a WebGL canvas with objective `DESTROY RELAY SPIRES: 0 / 4`; returning to Mission 1 restored the Signal Break briefing.
-- 2026-05-09: Phase 4 diagnostics for `src` - no errors found after campaign scoring, rewards, arc config, result overlay, and hangar progression UI changes.
-- 2026-05-09: Phase 4 `docker run --rm -v "$PWD":/app -v skybreaker-drone-strike-node-modules:/app/node_modules -w /app node:20-alpine sh -lc "npm run lint"` - passed; TypeScript `tsc --noEmit` completed with zero errors.
-- 2026-05-09: Phase 4 `docker compose build && docker compose up -d && docker compose ps` - passed; Vite production build completed with the existing large chunk warning, image `skybreaker-drone-strike:latest` rebuilt, and container `skybreaker-drone-strike` reported `Up`.
-- 2026-05-09: Phase 4 browser smoke via `https://skybreaker.nsystems.live` - old progress save loaded without crashing; campaign completion, best score, best rank, rewards, mission unlock state, and Mission 2 selection rendered from persisted progress; Iron Veil briefing launched with 4 spires and East Ridge extraction.
-- 2026-05-09: Phase 5 diagnostics for `src` - no errors found after weapon loadout, enemy role, projectile damage, shield handling, and HUD changes.
-- 2026-05-09: Phase 5 `docker run --rm -v "$PWD":/app -v skybreaker-drone-strike-node-modules:/app/node_modules -w /app node:20-alpine sh -lc "npm run lint"` - passed; TypeScript `tsc --noEmit` completed with zero errors.
-- 2026-05-09: Phase 5 Docker production build/deploy - Vite production build completed with the existing large chunk warning, image `skybreaker-drone-strike:latest` rebuilt, and `docker compose up -d && docker compose ps` reported `skybreaker-drone-strike` as `Up`.
-- 2026-05-09: Phase 5 browser smoke via `https://skybreaker.nsystems.live` - campaign reward text showed Ion Missile unlock; Iron Veil briefing launched; WebGL canvas rendered at 1008x897; in-mission HUD showed Pulse Cannon and Ion Missile; pressing `F` fired the secondary and displayed `ION MISSILE AWAY`.
-- 2026-05-09: Phase 6 diagnostics for `src` - no errors found after environment preset, scene variant, and hazard-zone wiring.
-- 2026-05-09: Phase 6 `docker run --rm -v "$PWD":/app -v skybreaker-drone-strike-node-modules:/app/node_modules -w /app node:20-alpine sh -lc "npm run lint"` - passed; TypeScript `tsc --noEmit` completed with zero errors.
-- 2026-05-09: Phase 6 `docker compose build --progress=plain` - passed; Vite production build completed with the existing large chunk warning and image `skybreaker-drone-strike:latest` rebuilt.
-- 2026-05-09: Phase 6 `docker compose up -d && docker compose ps` - passed; container `skybreaker-drone-strike` reported `Up`.
-- 2026-05-09: Phase 6 browser smoke via `https://skybreaker.nsystems.live` - Iron Veil launched with WebGL canvas 1008x897, objective `DESTROY RELAY SPIRES: 0 / 4`, readable radar headings, and visible Pulse Cannon/Ion Missile HUD; Signal Break launched with WebGL canvas 1008x897, objective `DESTROY RADAR TOWERS: 0 / 3`, readable radar headings, and target markers.
-- 2026-05-09: Phase 7 diagnostics for `src` - no errors found after audio, graphics settings, saved-state validation, and menu/HUD accessibility changes.
-- 2026-05-09: Phase 7 `docker run --rm -v "$PWD":/app -v skybreaker-drone-strike-node-modules:/app/node_modules -w /app node:20-alpine sh -lc "npm run lint"` - passed after repairing the scene setup patch; TypeScript `tsc --noEmit` completed with zero errors.
-- 2026-05-09: Phase 7 `docker compose build --progress=plain` - passed; Vite production build completed with the existing large chunk warning and image `skybreaker-drone-strike:latest` rebuilt.
-- 2026-05-09: Phase 7 `docker compose up -d && docker compose ps` - passed; container `skybreaker-drone-strike` reported `Up`.
-- 2026-05-09: Phase 7 browser release smoke via `https://skybreaker.nsystems.live` - intentionally corrupted localStorage settings/progress were sanitized; LOW graphics and reduced effects persisted; Iron Veil briefing showed Ash Ridge and Ash Static context; mission launched with WebGL canvas 1008x897, `LOW // 54 FPS`, objective `DESTROY RELAY SPIRES: 0 / 4`, readable radar headings, and available Web Audio context after user gesture. Smoke storage was restored to the normal sample campaign progress afterward.
-- 2026-05-09: Mobile responsiveness diagnostics for `src` - no errors found after menu, overlay, HUD, and touch-control responsive layout changes.
-- 2026-05-09: Mobile responsiveness `docker run --rm -v "$PWD":/app -v skybreaker-drone-strike-node-modules:/app/node_modules -w /app node:20-alpine sh -lc "npm run lint"` - passed; TypeScript `tsc --noEmit` completed with zero errors.
-- 2026-05-09: Mobile responsiveness `docker compose build --progress=plain && docker compose up -d && docker compose ps` - passed; Vite production build completed with the existing large chunk warning, image `skybreaker-drone-strike:latest` rebuilt, and container `skybreaker-drone-strike` reported `Up`.
-- 2026-05-09: Mobile responsiveness real-device-width smoke via Playwright Docker at `https://skybreaker.nsystems.live` - 390x844 touch viewport confirmed; main menu, settings, and briefing each had `scrollWidth` 390 and no visible page overflow; Iron Veil launched with canvas 390x844, objective HUD, FPS/quality HUD, and FIRE/BOOST/SEC/LEVEL/VIEW touch controls visible; no page errors were reported.
-- 2026-05-09: Mobile orientation and favicon smoke via Playwright Docker at `https://skybreaker.nsystems.live` - 390x844 portrait and 844x390 landscape touch viewports confirmed; main menu, settings, and briefing had no horizontal page overflow in both orientations; Iron Veil launched with matching canvas dimensions, objective HUD, FPS/quality HUD, and visible FIRE/BOOST/SEC/LEVEL/VIEW touch controls in both orientations; `/favicon.svg` returned status 200 with `image/svg+xml`; no page errors were reported.
-
-## Post-Phase Campaign Continuity and Missile Lock Pass
-
-Status: Complete
-
-Goal: remove the campaign dead-end after Mission 2 and make the secondary weapon behave like an anti-air tracking missile with a lock requirement.
-
-- [x] Extend the playable campaign from 2 missions to 8 chained missions
-- [x] Unlock Mission 3 after clearing Mission 2
-- [x] Migrate existing saves so already-cleared missions grant newly available next-mission unlocks
-- [x] Migrate completed mission rewards so existing saves regain missing secondary-weapon unlocks
-- [x] Convert Ion Missile into a lock-on anti-air seeker
-- [x] Require an airborne target lock before Ion Missile launch
-- [x] Display missile lock status in the in-mission HUD
-- [x] Verify progression and missile lock behavior against the deployed production build
-
-Completion summary:
-
-- Shipped: Missions 03-08, active Arc 2/Arc 3 campaign ranges, existing-save unlock/reward migration, Ion Missile lock acquisition, missile tracking guidance, lock-required firing behavior, and HUD lock status.
-- Changed: `src/config/missions.ts`, `src/config/campaign.ts`, `src/config/weapons.ts`, `src/types/game.ts`, `src/App.tsx`, `src/components/Game.tsx`, `src/components/hud/Objectives.tsx`, `DEV-CHECKLIST.md`.
-- Verification: VS Code diagnostics, containerized `npm run lint`, Docker production build/deploy, and live Playwright smoke at `https://skybreaker.nsystems.live` all passed.
-- Notes/Risks: The current mission framework still uses destroy-target sorties with escalating enemy compositions; later content can add new objective types without blocking campaign continuity.
-
-## Campaign Continuity Verification Log
-
-- 2026-05-09: Campaign continuity and missile smoke via Playwright Docker at `https://skybreaker.nsystems.live` - simulated an existing save with Missions 1-2 completed, only Missions 1-2 unlocked, and no earned rewards; loader migrated Mission 3 to READY, preserved Mission 1/2 cleared state, displayed Missions 01-08, launched Mission 3 `BLACK SKY HOOK`, showed objective `DESTROY UPLINK MASTS: 0 / 5`, restored Ion Missile availability from completed Mission 1, and confirmed the missile reports a no-air-target lock state instead of launching without a lock; no page errors were reported.
-
-## Post-Phase Targeting HUD Refinement: Direction B
-
-Status: Complete
-
-Goal: replace the visually ambiguous multi-element targeting HUD with a unified tactical projected weapon path system.
-
-- [x] Identify all targeting elements in `Crosshair.tsx` and confirm shot-direction alignment with `Game.tsx` projectile velocity
-- [x] Remove the SVG secondary orange pipper (`<circle>` at `aimScreenPos`) — the primary source of aim ambiguity
-- [x] Remove the inner aim box (`inset-[40%]`) — redundant with the cardinal ticks and center dot
-- [x] Remove both outer corner bracket divs — no distinct gameplay function
-- [x] Refine the SVG weapon path line: 4-stop gradient (0% → 25% → 75% → 100%) that fades from the drone origin and sharpens toward the reticle; wider dash spacing for a clean tactical look; brightens when firing
-- [x] Repurpose the center recoil dot as a persistent, subtle aim indicator (opacity 0.25 idle → 0.9 + glow on recoil/firing)
-- [x] Add tuning constants to `src/config/constants.ts`: `AIM_PATH_OPACITY_IDLE`, `AIM_PATH_OPACITY_FIRING`, `AIM_PATH_WIDTH`, `AIM_PATH_DASH`, `AIM_PATH_FADE_MS`, `RETICLE_PULSE_MS`, `CENTER_MARKER_SIZE`
-- [x] Import and wire constants in `Crosshair.tsx`
-- [x] Confirm no changes to camera, flight controls, objective markers, radar, mission panel, or speed HUD
-
-Completion summary:
-
-- Shipped: Unified tactical projected weapon path — single clear reticle ring with cardinal ticks, persistent center aim dot, gradient segmented path from drone nose to aim point (brightens on fire), no floating secondary pipper, no redundant brackets. Shot direction unchanged; projectile velocity and `aimScreenPos` both use the same drone quaternion so visual aim matches actual bullets.
-- Changed: `src/components/hud/Crosshair.tsx`, `src/config/constants.ts`.
-- Verification: VS Code diagnostics (no errors), containerized `npm run lint` (exit 0), Docker production build/deploy (935.69 kB JS, container up), orientation smoke (portrait + landscape both pass with canvas, HUD, and objective confirmed).
-- Notes/Risks: The `aimProjectionRef` 3D ring mesh on the drone (activates only while firing) was intentionally preserved — it is a world-space depth cue, not a HUD confusion source.
-
-## Post-Phase Tactical Visual Evolution Foundation
-
-Status: Complete
-
-Goal: begin the visual evolution safely by locking the target direction and extracting scene visual builders before introducing new cinematic rendering, reflective floors, facility targets, or weak-point gameplay.
-
-- [x] Create a visual target lock for the tactical arena direction
-- [x] Extract renderer/scene visual construction from `Game.tsx` without changing gameplay behavior
-- [x] Extract environment, drone, objective, extraction, enemy, and projection helpers into focused modules
-- [x] Preserve flight controls, camera behavior, mission state, extraction tracking, target counting, radar, and HUD marker behavior
-- [x] Verify the extraction pass with the containerized TypeScript check and production Docker build path
-
-Exit criteria:
-
-- [x] `Game.tsx` remains the gameplay/frame-loop orchestrator, but no longer owns every visual builder inline
-- [x] No new visual polish is mixed into the extraction pass beyond modular parity
-- [x] Current missions still launch, targets can be destroyed, extraction activates, radar remains readable, and the HUD markers remain stable
-
-Completion summary:
-
-- Shipped: Visual target lock plus extraction-only scene builder modules for renderer/camera/streaks, mission environment/lighting, drone model, objective/extraction models, enemy visuals, shared combat resources, and screen-space targeting projection.
-- Changed: `docs/VISUAL_TARGET_LOCK.md`, `src/components/Game.tsx`, `src/scene/*`, `src/systems/targetingProjection.ts`, `DEV-CHECKLIST.md`.
-- Verification: Containerized `npm run lint` passed; `docker compose build --progress=plain && docker compose up -d && docker compose ps` passed and reported `skybreaker-drone-strike` as `Up`.
-- Notes/Risks: The workspace is not a Git repository, so the recommended implementation branch could not be created here. Cinematic lighting, reflective floor changes, facility kits, weak points, and level-kit config are intentionally deferred to later phases.
-
-## Tactical Visual Evolution Roadmap
-
-Status: Planned
-
-Goal: evolve Skybreaker Drone Strike from a functional prototype into a polished tactical arcade combat experience through staged, reversible phases. This roadmap is the source of truth for future visual and structural work.
-
-### Concept reference artifacts
-
-Future tactical visual work must actively reference these project-root artifacts before implementation:
-
-- `upgrade-plan-concept.md` - original written visual evolution concept and phase direction
-- `upgrade-plan-concept-reference.png` - visual target reference image for mood, arena composition, lighting, floor/grid feel, industrial silhouettes, reticle language, and waypoint/extraction clarity
-
-If either concept artifact changes, update this roadmap and `docs/VISUAL_TARGET_LOCK.md` before implementing the next visual phase.
-
-### Visual target
-
-- Cinematic dark tactical arena
-- Reflective/wet dark floor with readable tactical grid
-- Atmospheric horizon fog and sky depth
-- Stronger low-poly industrial structures
-- Tactical reticle with projected weapon path
-- Clearer world-space waypoint and extraction illustrations
-- Facility assault targets with destructible building key points
-- Better lighting, emissive accents, and structure beacons
-- Polished drone visuals and thruster glow
-- Scalable level configuration for campaign missions
-
-### Current architecture findings
-
-- Renderer setup: `Game.tsx` now calls extracted renderer/camera/streak builders in `src/scene/renderer.ts`; there is still no post-processing pipeline.
-- Scene setup: `Game.tsx` remains the runtime orchestrator for refs, frame loop, flight, combat, mission state, and HUD data.
-- Lighting/fog/background: `src/scene/environment.ts` builds the current ambient light, directional light, background color, and mission fog from `src/config/environments.ts`.
-- Ground/grid: `src/scene/environment.ts` builds the current matte floor plane and low-opacity `GridHelper`; reflective/wet treatment is still pending.
-- Drone mesh/materials: `src/scene/droneModel.ts` builds the current procedural drone and returns named handles for aim projection, muzzle flash, engine glows, and thruster lights.
-- Reticle and aim guide: `src/components/hud/Crosshair.tsx` owns the screen-space reticle and SVG weapon path; `Game.tsx` still computes aim/drone screen points.
-- Waypoint/objective markers: `src/components/hud/TargetMarkers.tsx` renders marker UI; `src/systems/targetingProjection.ts` owns projection math that was extracted from `Game.tsx`.
-- Radar: `src/components/hud/Radar.tsx` preserves accumulated heading, blip clamping, target/enemy/extraction categories, and extraction conditional rendering.
-- Tower/objective entities: `src/scene/objectiveModels.ts` builds the current target tower and extraction zone meshes, but targets are not yet facility/weak-point driven.
-- Projectile/hit/damage logic: `Game.tsx` still owns projectile spawn, tracking, collision, shield/health damage, spark/explosion feedback, and target destruction counting.
-- Mission state logic: `src/systems/missionSystem.ts` owns campaign/result helpers; in-mission target destruction, enemy wave spawn, extraction activation, and completion guards remain in `Game.tsx`.
-- Level/world generation: mission/environment data exists, but arena kits, structure kits, waypoint styles, and target archetypes are not yet data-driven.
-
-### Systems to preserve exactly
-
-- Flight controls: W/S pitch, A/D assisted bank-turn, Q/E yaw correction, R/F throttle, Shift boost, Ctrl brake, Space/left mouse primary, Alt/right mouse secondary, Tab/T lock cycle, X auto-level, C camera toggle, pointer drag, touch joystick/actions, and invert-Y.
-- Chase/cockpit camera readability, camera lerp, boost FOV, camera shake, and drone silhouette framing.
-- Mission runtime refs: `gameLogicRef`, `currentSystems`, `targetsRef`, `enemiesRef`, `projectilesRef`, and `extractionMeshRef` until a later dedicated frame-loop extraction.
-- Objective/extraction state: target destroyed recount from source of truth, extraction activation only after all targets, XZ-only extraction radius, and exactly-once mission completion guard.
-- Radar accumulated heading behavior, radar range, blip categories, clamping, and extraction visibility rules.
-- Target/extraction marker projection, hysteresis, smoothing, safe margins, overlap avoidance, and click-to-lock behavior.
-- Weapon energy costs/cooldowns, missile lock requirement/tracking, shield-before-health damage, projectile collision guard, and no double-count target destruction.
-- HUD density and orange/teal/black tactical identity.
-
-### Systems to refactor over time
-
-- Scene setup and renderer/camera lifecycle into small helpers without moving gameplay behavior prematurely.
-- Ground/grid/floor construction into a tactical arena builder with richer material and grid configuration.
-- Landmark, plateau, hazard, structure, target, extraction, drone, enemy, and effect visuals into reusable procedural builders.
-- Target projection and marker layout into pure helpers that keep the same output shape.
-- Mission target config from flat `position + health` into backward-compatible archetypes with optional weak points.
-- Visual tuning from scattered literals into typed environment, arena, level-kit, and facility-kit configuration.
-
-### Systems to create
-
-- Tactical arena material system for wet dark floor, readable grid hierarchy, fog/horizon depth, and lighting presets.
-- Industrial facility kit system for low-poly structures, beacons, emissive accents, target installations, and set-piece density.
-- Objective weak-point model with local offsets, health, visual state, damage routing, and final target destruction aggregation.
-- World-space waypoint/extraction illustration system separate from HUD marker projection.
-- Drone visual handle system for material/thruster updates without child-index or generic child-type queries.
-- Level kit config for campaign scalability across arena style, facility composition, waypoint style, target archetype, beacon palette, and ambient lighting.
-
-### Phase TV-1 - Cinematic Arena Foundation
-
-Status: Complete
-
-Goal: make the existing arena read as a deeper dark tactical combat space without adding facility gameplay or changing controls.
-
-- [x] Extend environment config with sky depth, horizon color, fog profile, floor material profile, grid profile, and beacon palette fields
-- [x] Add a sky/horizon visual layer or gradient dome that preserves a dark navy/black tactical mood
-- [x] Tune fog for atmospheric horizon depth while keeping target markers and radar readable
-- [x] Keep current mission behavior and target/extraction state unchanged
-
-Acceptance criteria:
-
-- [x] Arena has a darker sky-depth and horizon-haze foundation without becoming pure black
-- [x] Distant structures use the new fog profile and horizon layer for deeper atmospheric fade
-- [ ] HUD, radar, target markers, and extraction marker remain legible in Signal Break and Iron Veil during hands-on browser review
-- [x] Containerized `npm run lint` and Docker production build/deploy pass
-
-Completion summary:
-
-- Shipped: TV-1 cinematic arena foundation with typed environment visual profiles, ACES/sRGB renderer settings, camera-following sky dome, low horizon haze bands, mission-specific fog profiles, and configurable floor/grid/beacon palette handles for later phases.
-- Changed: `src/types/game.ts`, `src/config/environments.ts`, `src/scene/renderer.ts`, `src/scene/environment.ts`, `src/components/Game.tsx`, `DEV-CHECKLIST.md`.
-- Verification: Containerized `npm run lint` passed; `docker compose build --progress=plain && docker compose up -d && docker compose ps` passed; `https://skybreaker.nsystems.live` responded HTTP 200 after deploy.
-- Notes/Risks: No browser page is shared in this session, so a hands-on visual pass should still confirm HUD/radar/marker readability in Signal Break and Iron Veil before beginning TV-2.
-
-### Phase TV-2 - Reflective Tactical Floor and Grid
-
-Status: Complete
-
-Goal: create a wet, dark tactical floor with a readable grid, starting with low-risk material and line work before considering expensive reflections.
-
-- [x] Add floor material tuning for dark graphite, lower roughness, subtle metalness, and controlled specular response
-- [x] Add readable major/minor grid hierarchy, center lanes, and scale cues
-- [x] Add optional fake ground highlights under bright beacons or thrusters without using a real mirror first
-- [x] Gate density and glow by graphics quality and reduced-effects settings
-
-Acceptance criteria:
-
-- [x] Floor feels polished and slightly wet without becoming a bright mirror
-- [x] Grid remains readable at speed and does not compete with HUD text
-- [x] Drone thruster and facility light reflections are subtle
-- [x] LOW/reduced-effects profile remains usable on mobile-sized viewports
-- [x] Containerized `npm run lint` and Docker production build/deploy pass
-
-Completion summary:
-
-- Shipped: TV-2 reflective tactical floor and major/minor grid hierarchy. Floor material updated to `roughness: 0.38–0.40, metalness: 0.42–0.44` (dark graphite, slightly wet). Replaced single `GridHelper` with a two-layer hierarchy — fine minor grid (300 divisions, ~0.036–0.038 opacity) and coarser major grid (60 divisions, ~0.108–0.116 opacity, offset 0.08 units to avoid z-fighting). Added additive beacon glow splats (CircleGeometry, opacity 0.04) under each landmark structure, gated by `!reduceEffects && effectScale > 0.5`. Extended `MissionGridProfileDefinition` type with `majorDivisions?`, `majorOpacity?`, `minorOpacity?`. Both `SIGNAL_BREAK_ENVIRONMENT` and `IRON_VEIL_ENVIRONMENT` updated with new floor and grid values.
-- Changed: `src/types/game.ts`, `src/config/environments.ts`, `src/scene/environment.ts`.
-- Verification: Containerized `npm run lint` passed; `docker compose build && docker compose up -d` passed; container Running.
-- Notes/Risks: No real mirror/SSR — the metalness response depends on the scene's IBL/env-map probe, which is not yet set; subtle metalness will show as a desaturated highlight. Full wet-floor look may require an env map in a later phase.
-
-### Phase TV-3 - Industrial Structure and Facility Kit
-
-Status: Complete — `visual/facility-kit` branch
-
-Goal: replace simple decorative silhouettes over time with reusable low-poly industrial structures that support stronger arena identity.
-
-- [x] Create reusable structure archetypes: blocks, gantries, pylons, antenna arrays, beacon masts, perimeter lights, and platform clusters
-- [x] Add structure kit config for density, spacing, beacon color, height ranges, and mission style
-- [x] Keep structures non-colliding unless a later explicit obstacle/collision phase is created
-- [x] Preserve target marker readability and avoid blocking extraction or mission-critical targets
-
-Acceptance criteria:
-
-- [x] Skyline and arena navigation improve without harming chase-camera readability
-- [x] Industrial structures feel low-poly and tactical, not decorative clutter
-- [x] Radar and objective markers remain readable around structures
-- [x] Containerized `npm run lint` and Docker production build/deploy pass
-
-Completion summary:
-
-- Shipped: `src/scene/facilityKit.ts` — new module with eight distinct low-poly archetype builders: `monolith` (stepped multi-section spire with pads, side rail, antenna, and beacon), `compound` (wide stepped industrial block with auxiliary wing, rails, pipe, roof antenna, and beacon), `gantry` (twin-post with pads, cross-braces, emissive crossbar, lamp, and pin), `pylon` (tapered CylinderGeometry post with collars, fins, emissive mid-band, and beacon), `beacon-mast` (thin shaft with base, service box, cross-arms, warning tips, and top beacon), `antenna-array` (platform deck with rails, three masts, cross-arms, beacons, and dish assembly), `perimeter-light` (low rail with three light posts, shield panel, and warning caps), and `platform-cluster` (multi-deck industrial cluster with service blocks, elevated gantry, rails, supports, and twin beacons). Each returns a `THREE.Group` plus a footprint radius for glow splat sizing. Shared materials (`structMat`, `accentMat`, `beaconMat`) created once per call. Two-layer beacon glow splats and directional floor streaks carried forward from TV-2 and keyed per-structure footprint. `createFacilityStructures()` is the public entry, callable with environment + graphicsProfile + settings.
-- Added: `StructureArchetype` union type and `StructureKitDefinition` interface to `src/types/game.ts`. Optional `structureKit?` field added to `MissionEnvironmentDefinition`. TV-3 detail pass extended `StructureArchetype` with `antenna-array`, `perimeter-light`, and `platform-cluster`.
-- Changed: `src/scene/environment.ts` landmark block replaced with a single call to `createFacilityStructures`. `src/scene/index.ts` barrel extended with `facilityKit`. `src/config/environments.ts` — both environments updated with richer `structureKit` configs: Signal Break uses `['monolith', 'platform-cluster', 'gantry', 'antenna-array', 'beacon-mast', 'perimeter-light']` (minDist 285, maxDist 680, landmarkCount 68); Iron Veil uses `['compound', 'platform-cluster', 'pylon', 'antenna-array', 'beacon-mast', 'perimeter-light']` (minDist 320, maxDist 740, landmarkCount 50).
-- Verification: Containerized `npm run lint` passed after the TV-3 detail pass; `docker compose build && docker compose up -d` passed; container `Up`.
-- Notes/Risks: Structures have no collision volumes — this is intentional (collision is scoped to a later phase). Landmark placement is radial random only; if a future phase needs clustering or zone-aware placement, the `minDist/maxDist` range on `StructureKitDefinition` can be extended per-archetype. Ridge-style monolith path removed — `landmarkStyle` is now only used as a fallback default when `structureKit` is absent.
-
-### Phase TV-4 - World-Space Waypoint and Extraction Illustrations
-
-Status: Complete — `visual/world-space-waypoints` branch
-
-Goal: make objectives and extraction clearer in the world while preserving the existing screen-space marker and radar systems.
-
-- [x] Add reusable world-space target callouts: ground rings, vertical stems, beacon caps, class icons, and distance-scaled effects
-- [x] Upgrade extraction visuals with a clearer landing/exfiltration illustration and approach affordance
-- [x] Keep `TargetMarkers.tsx` props and click-to-lock behavior stable
-- [x] Keep marker safe-zone and overlap behavior unchanged unless explicitly refactored with tests
-
-Acceptance criteria:
-
-- [x] Player can visually identify target/extraction zones in-world before relying on HUD brackets
-- [x] Screen-space marker positions, off-screen arrows, and extraction priority remain unchanged
-- [x] No added HUD panel clutter
-- [x] Containerized `npm run lint` and Docker production build/deploy pass
-
-Completion summary:
-
-- Shipped: `src/scene/waypointIllustrations.ts` — reusable world-space waypoint illustration module with target and extraction builders plus `updateWaypointIllustration()` animation. Target callouts now include orange ground rings, pulse/approach rings, a vertical stem, rotating beacon cap, diamond class icon, and directional chevrons. Extraction now includes cyan landing/exfiltration rings, cross-lane pad affordance, vertical guide stem, rotating beacon/arrow cap, and approach chevrons.
-- Changed: `src/scene/objectiveModels.ts` attaches waypoint handles to target and extraction groups through `userData` while preserving the existing target child order used by hit flash/destruction code. `src/components/Game.tsx` animates named waypoint handles per-frame, hides target callouts on destruction, and rotates the extraction base via `userData.rotatingBase` instead of relying on `children[0]`. `src/scene/index.ts` exports the waypoint module.
-- Verification: Containerized `npm run lint` passed; `docker compose build --progress=plain && docker compose up -d && docker compose ps` passed; `curl -I -L --max-time 20 https://skybreaker.nsystems.live` returned HTTP 200.
-- Notes/Risks: `TargetMarkers.tsx`, marker projection math, click-to-lock behavior, safe-zone margins, and extraction priority were intentionally unchanged. VS Code diagnostics still show the known local React type-resolution noise; Docker TypeScript remains the phase verifier.
-
-### Phase TV-5 - Facility Assault Targets and Weak Points
-
-Status: Complete — `visual/weakpoint-targets` branch
-
-Goal: evolve isolated towers into structured facility assault targets with destructible key points while preserving mission counting and extraction rules.
-
-- [x] Extend `MissionTargetDefinition` with backward-compatible target archetype and optional weak-point definitions
-- [x] Add runtime target handles for weak points, damage meshes, beacon/glow parts, and final destroyed visuals
-- [x] Route projectile hits to weak points first where configured, then aggregate final installation destruction
-- [x] Preserve `target.destroyed` as the source of truth for mission objective counts
-- [x] Preserve exactly-once target destruction and exactly-once extraction completion
-
-Acceptance criteria:
-
-- [x] Weak points take damage and provide clear hit/destruction feedback
-- [x] Destroying all required weak points destroys the facility target once
-- [x] Target destroyed count cannot double-count simultaneous hits
-- [x] Extraction activates only after all mission targets are destroyed
-- [x] Existing missions without weak-point config still behave as before
-- [x] Containerized `npm run lint` and Docker production build/deploy pass
-
-Completion summary:
-
-- Shipped: Backward-compatible facility target and weak-point model. `MissionTargetDefinition` now supports optional `archetype` plus `weakPoints`; `MissionWeakPointDefinition`, `MissionTargetArchetype`, and runtime `TargetWeakPoint` types were added. Targets without weak-point config still use legacy direct health damage.
-- Shipped: Facility target visuals in `src/scene/objectiveModels.ts` now include named `TargetVisualHandles`, expanded target bases/decks/rails/service structures, relay-spire detail variants, weak-point sockets/cores/guard rings, final destroyed mesh lists, and runtime weak-point positions/health/radii.
-- Changed: `src/config/missions.ts` adds weak-point layouts to Signal Break radar towers and Iron Veil relay spires. Later campaign targets remain without weak-point config to validate the backward-compatible path. `src/components/Game.tsx` now routes player projectile impacts to active weak points first, blocks core damage while required weak points remain, disables weak-point meshes with localized explosion feedback, aggregates required weak-point health into target health, and destroys the final facility exactly once through `target.destroyed`.
-- Verification: Containerized `npm run lint` passed; `docker compose build --progress=plain && docker compose up -d && docker compose ps` passed; `curl -I -L --max-time 20 https://skybreaker.nsystems.live` returned HTTP 200.
-- Notes/Risks: Target damage routing still lives inside `Game.tsx` with the rest of projectile collision logic; a later combat-system extraction can move the helper functions once frame-loop refactoring is explicitly in scope. Weak-point collision uses simple spherical radii around configured local offsets; no physical obstacle collision was added.
-
-### Phase TV-6 - Tactical Reticle and Weapon Path Polish
-
-Status: Complete - `visual/reticle-path-polish` branch
-
-Goal: refine shot readability and tactical feedback without returning to a cluttered HUD.
-
-- [x] Refine `Crosshair.tsx` projected weapon path with convergence, firing, and hit-confirm readability
-- [x] Evaluate optional world-space path/convergence cues near the drone or target line; keep this pass screen-space to avoid duplicating HUD information
-- [x] Integrate missile lock and primary-fire feedback without adding extra panels
-- [x] Preserve actual projectile direction and current aim-screen calculation semantics
-
-Acceptance criteria:
-
-- [x] Reticle and projected path clarify shot direction in chase view
-- [x] Missile lock and hit-confirm remain readable but restrained
-- [x] No new redundant pippers, brackets, or HUD clutter
-- [x] Containerized `npm run lint` and Docker production build/deploy pass
-
-Completion summary:
-
-- Shipped: Tactical reticle polish with a restrained secondary lock progress ring, acquired-lock color feedback, and convergence markers along the existing projected weapon path. The path still runs from the drone nose screen point to `aimScreenPos`, preserving shot direction semantics while improving chase-view readability.
-- Changed: `src/components/hud/Crosshair.tsx` now renders lock-progress arcs and small path brackets using HUD constants; `src/components/Game.tsx` exposes visual-only secondary lock progress/acquired/target state; `src/types/game.ts` adds the new HUD fields; `src/config/constants.ts` adds reticle tuning constants.
-- Verification: Containerized `npm run lint` passed; `docker compose build --progress=plain && docker compose up -d && docker compose ps` passed; `curl -I -L --max-time 20 https://skybreaker.nsystems.live` returned HTTP 200.
-- Notes/Risks: No world-space path cues were added because the screen-space reticle now carries the extra feedback without increasing scene clutter. Local VS Code diagnostics still show the known React declaration noise, but Docker TypeScript/build verification is clean.
-
-### Phase TV-7 - Drone Visual Polish
-
-Status: Complete
-
-Goal: improve the player drone silhouette, materials, and thruster glow while preserving chase-camera readability and flight feel.
-
-- [x] Strengthen drone low-poly tactical silhouette without changing scale or camera framing unexpectedly
-- [x] Add named material handles for body, wings, cockpit, accents, rotors, glows, and damage/firing feedback
-- [x] Improve thruster glow and boost feedback without washing out the body silhouette
-- [x] Avoid changes to flight physics, boost energy drain, speed, or controls
-
-Acceptance criteria:
-
-- [x] Drone reads clearly in chase view against dark arena and fog
-- [x] Boost and thruster states feel stronger but not overbright
-- [x] Camera readability and aiming remain stable
-- [x] Containerized `npm run lint` and Docker production build/deploy pass
-
-Completion summary:
-
-- Shipped: TV-7 drone visual polish with a stronger low-poly tactical silhouette, named drone visual/material handles, direct rotor/glow/thruster state updates, subtle body/cockpit/accent feedback for firing/damage/boost, and cleaner boost-color thruster behavior without changing drone scale, camera setup, flight physics, energy costs, controls, projectile direction, radar, markers, or mission state.
-- Changed: `src/scene/droneModel.ts`, `src/components/Game.tsx`, `DEV-CHECKLIST.md`.
-- Verification: VS Code diagnostics for `src/scene/droneModel.ts` reported no errors; local VS Code diagnostics for `Game.tsx` still show the known React declaration noise documented in the risk register. Containerized `npm run lint` passed; `docker compose build --progress=plain && docker compose up -d && docker compose ps` passed with the existing non-blocking Vite large-chunk warning and container `Up`; deployed browser smoke at `https://skybreaker.nsystems.live` launched Mission 1 with WebGL canvas/HUD visible at ~100 FPS and no page errors. Screenshot review confirmed the deployed mission scene rendered; direct canvas pixel reads returned transparent samples because the WebGL drawing buffer is not preserved for readback.
-- Notes/Risks: Drone runtime visual feedback now uses named handles instead of filtering child geometry types, reducing fragility for future visual phases. Browser smoke drifted out of the mission zone while boost-testing, so the warning overlay was visible during the screenshot; this did not affect the build/type verification or the visual confirmation of the canvas/HUD.
-
-### Phase TV-8 - Scalable Level and Campaign Configuration
-
-Status: Complete
-
-Goal: make future missions choose reusable arena, facility, waypoint, and target archetypes through config instead of hardcoded scene branches.
-
-- [x] Add `src/config/levelKits.ts` or equivalent for arena kits, facility kits, waypoint styles, floor/grid profiles, and beacon palettes
-- [x] Extend mission/environment types to reference level kits with safe defaults for existing missions
-- [x] Allow new missions to configure structure density, target archetypes, weak-point layouts, and waypoint style declaratively
-- [x] Keep mission unlocks, scoring, reward, enemy wave, extraction, and failure condition contracts stable
-
-Acceptance criteria:
-
-- [x] A new mission can reuse an existing level kit and facility archetype without adding scene-builder branches
-- [x] Existing missions load with backward-compatible defaults
-- [x] TypeScript catches invalid level-kit references or missing required fields where practical
-- [x] Containerized `npm run lint` and Docker production build/deploy pass
-
-Completion summary:
-
-- Shipped: TV-8 scalable level-kit configuration with typed `LevelKitId`, waypoint style IDs, weak-point layout IDs, level-kit definitions for Night Grid and Ash Ridge, shared target weak-point layouts, and a `defineMission()` helper that resolves mission `levelKitId` values into full runtime environment objects.
-- Shipped: The mission catalog now references `night-grid` / `ash-ridge` kit IDs while preserving all mission unlock, scoring, reward, enemy wave, extraction, failure-condition, and existing target behavior. Kit target defaults are opt-in through `useLevelKitTargetDefaults` / `targetDefaults` so existing missions without explicit archetypes continue through the prior scene-builder fallback.
-- Changed: `src/types/game.ts`, `src/config/levelKits.ts`, `src/config/environments.ts`, `src/config/missions.ts`, `DEV-CHECKLIST.md`.
-- Verification: VS Code diagnostics for changed config/type files reported no errors; containerized `npm run lint` passed; `docker compose build --progress=plain && docker compose up -d && docker compose ps` passed with the existing non-blocking Vite large-chunk warning and container `Up`; deployed browser smoke at `https://skybreaker.nsystems.live` confirmed Mission 1 briefing/launch through Night Grid and Mission 2 briefing/launch through Ash Ridge with Ash Static hazards and relay-spire objective/HUD visible.
-- Notes/Risks: `src/config/environments.ts` remains as a compatibility export layer so older imports continue working, but the source of truth is now `src/config/levelKits.ts`. Waypoint style metadata is typed and stored on level kits for future rendering variation, but TV-8 does not alter waypoint visuals or scene-builder behavior.
-
-### Phase TV-9 - Regression Hardening and Optional Renderer Enhancements
-
-Status: Complete
-
-Goal: harden the new visual architecture, then only consider heavier renderer features if performance remains stable.
-
-- [x] Add smoke-test notes or scripts for visual regression points across desktop and mobile viewports
-- [x] Repeat Mission 1 and Mission 2 smoke checks for controls, radar, markers, target destruction, extraction, success, and failure
-- [x] Evaluate optional renderer settings such as `SRGBColorSpace`, tone mapping, bloom, or real reflections only after simpler polish is stable
-- [x] Keep heavy effects quality-gated and reduced-effects aware
-
-Acceptance criteria:
-
-- [x] Regression checklist covers flight, mission, radar, markers, extraction, HUD, mobile touch controls, and graphics quality settings
-- [x] Optional renderer changes improve the look without harming FPS or readability
-- [x] Containerized `npm run lint`, Docker production build/deploy, and mobile smoke checks pass
-
-Completion summary:
-
-- Shipped: TV-9 regression hardening with a durable browser smoke checklist, exact portrait/landscape mobile Playwright smoke automation, and a renderer evaluation that retains the current SRGB/ACES baseline while deferring bloom, real reflections, dense dynamic lighting, and shadow-heavy effects until a dedicated performance pass proves headroom.
-- Changed: `docs/REGRESSION_SMOKE.md`, `scripts/smoke-mobile.cjs`, `DEV-CHECKLIST.md`.
-- Verification: VS Code diagnostics for the smoke doc/script reported no errors; containerized `npm run lint` passed; `docker compose build --progress=plain && docker compose up -d && docker compose ps` passed with the existing non-blocking Vite large-chunk warning and container `Up`; desktop Mission 1 and Mission 2 browser smokes passed; Docker Playwright exact mobile smoke passed at 390x844 portrait and 844x390 landscape with matching canvas dimensions, visible touch controls/HUD/radar/compass, no horizontal overflow, and no page errors.
-- Notes/Risks: TV-9 did not add heavier renderer features because the current renderer baseline is already quality-gated and readable. Target destruction, extraction, success, and failure remain documented for deeper manual regression passes; the automated smoke focuses on launch, HUD, controls, layout, and mobile viewport integrity.
-
-## Phase FLIGHT-1 - Revised Player Aircraft and Control Prep
-
-Status: Complete
-
-Goal: integrate the revised player aircraft from `player-aircraft.html` into the game, then prepare the movement-control code for a dedicated refinement pass without changing flight feel prematurely.
-
-- [x] Port the revised aircraft silhouette, materials, pods, rear thruster, dorsal/belly panels, struts, and accent emitters into the in-game Three.js drone model
-- [x] Preserve the existing `createDroneModel()` and `updateDroneVisualState()` API used by `Game.tsx`
-- [x] Preserve current flight semantics: forward is negative Z, `YXZ` rotation order, spawn height, projectile direction, navigation-lock quaternion sync, boost energy drain, camera offsets, HUD/radar/marker behavior, and mission rules
-- [x] Add behavior-preserving movement/control prep seams for future pitch, yaw, roll, boost, auto-level, camera, and touch-control tuning
-- [x] Document the control baseline that must stay unchanged until the dedicated refinement pass
-
-Acceptance criteria:
-
-- [x] Revised aircraft is visible and readable in chase view without occluding the reticle, weapon path, HUD, radar, or target markers
-- [x] Boost, primary fire, recent damage, engine glow, and cockpit/accent feedback animate through named visual handles
-- [x] Cockpit view hides the aircraft and chase view restores it
-- [x] Keyboard, pointer fine control, and touch controls still respond with the same mappings
-- [x] Containerized `npm run lint`, Docker production build/deploy, Mission 1 and Mission 2 smoke checks, and exact mobile smoke checks pass
-
-Control baseline for refinement:
-
-- FLIGHT-1's old behavior-preserving baseline has been superseded by the arcade-assisted control refinement: W/S pitch, A/D assisted bank-turn, Q/E yaw correction, R/F throttle, Shift boost, Ctrl brake, Space/left mouse primary fire, Alt/right mouse secondary fire, Tab/T lock cycle, X auto-level, C view toggle, touch joystick/actions, invert-Y behavior, boost FOV, and closer chase framing are now the active control/readability baseline.
-
-Completion summary:
-
-- Shipped: FLIGHT-1 revised player aircraft integration with the `player-aircraft.html` silhouette translated into native Three.js procedural geometry: lofted graphite fuselage, amber canopy, teal wing arms and panels, rotor pods, rear thruster/afterburner, belly/dorsal panels, struts, and cyan accent emitters. The existing drone factory/update API, negative-Z forward direction, spawn behavior, projectile path, navigation lock, HUD/radar/marker contracts, and mission rules were preserved.
-- Shipped: Behavior-preserving control prep via `src/systems/flightPhysics.ts`, moving current boost gate/energy drain, flight speed, pitch/yaw/roll input, pointer fine-control, auto-level, forward-vector, and position-advance math behind named helpers without retuning values. Keyboard C and touch VIEW now share the same camera-mode toggle path so quick view changes are not frame-rate dependent.
-- Changed: `src/scene/droneModel.ts`, `src/systems/flightPhysics.ts`, `src/components/Game.tsx`, `docs/REGRESSION_SMOKE.md`, `DEV-CHECKLIST.md`.
-- Verification: VS Code diagnostics for changed source/docs reported no errors; containerized `npm run lint` passed; `docker compose build --progress=plain && docker compose up -d && docker compose ps` passed with the existing non-blocking Vite large-chunk warning and container `Up`; deployed desktop browser smoke passed for Mission 1 and Mission 2 launch/HUD/radar/weapon feedback/cockpit toggle; screenshot review confirmed the revised aircraft is readable in chase view; exact Docker Playwright mobile smoke passed at 390x844 portrait and 844x390 landscape with matching canvas dimensions, visible touch controls/HUD/radar/compass, no horizontal overflow, and no page errors.
-- Notes/Risks: Actual movement feel tuning is intentionally deferred to the next dedicated control-refinement phase. The integrated browser reported very low FPS during some LOW/HIGH smoke runs, likely from the shared browser environment; Docker build, desktop functional smoke, and exact mobile smoke still passed.
-
-## Post-Phase Product Shell Polish
-
-Status: Complete
-
-Goal: tighten the game into a more complete product shell with a cinematic boot, proper hangar hub, dedicated campaign selection, detailed settings, and supporting screens without changing the core mission/combat loop.
-
-- [x] Start the app at an animated splash screen with skip and auto-advance behavior
-- [x] Refactor the main menu into a hangar hub with Continue, Campaign, Loadout, Pilot Record, Settings, Controls, Credits, and Reset Progress actions
-- [x] Move mission browsing into a dedicated campaign selection screen grouped by campaign arc
-- [x] Expand briefing into a richer mission intelligence screen
-- [x] Add a read-only loadout review screen based on unlocked campaign weapons
-- [x] Add pilot record, controls, and credits screens
-- [x] Replace the simple settings menu with Audio, Video, Controls, and System tabs
-- [x] Add backward-compatible persisted settings for HUD scale, touch-control scale, screen shake, pointer sensitivity, telemetry visibility, and menu motion
-- [x] Wire safe presentation settings into the mission view without changing mission rules
-- [x] Polish pause, mission complete, and mission failed shell actions
-- [x] Update mobile smoke automation and regression checklist for the new screen flow
-- [x] Run containerized lint/build verification
-- [x] Run Docker production build/deploy verification
-- [x] Run exact mobile smoke against the deployed URL
-
-Completion summary:
-
-- Shipped: Product-shell pass with animated splash, hangar hub, campaign mission select, richer briefing, read-only loadout review, pilot record, controls, credits, tabbed settings, polished pause actions, and expanded success/failure overlays.
-- Shipped: Backward-compatible settings fields for HUD scale, touch-control scale, screen shake, pointer sensitivity, telemetry visibility, and menu motion; safe presentation wiring was added to the mission view without changing mission rules, damage, weapons, unlocks, target counts, extraction, or flight-control mappings.
-- Changed: `src/App.tsx`, `src/types/game.ts`, `src/config/defaults.ts`, `src/hooks/useAudio.ts`, `src/components/menus/*`, `src/components/overlays/*`, `src/components/Game.tsx`, `scripts/smoke-mobile.cjs`, `docs/REGRESSION_SMOKE.md`, `DEV-CHECKLIST.md`.
-- Verification: VS Code diagnostics for changed app/menu/game files reported no errors; containerized `npm run lint` passed; containerized `npm run build` passed with the existing non-blocking Vite large-chunk warning; `docker compose build --progress=plain && docker compose up -d && docker compose ps` passed and reported `skybreaker-drone-strike` as `Up`; exact Docker Playwright mobile smoke passed at 390x844 portrait and 844x390 landscape with splash/hangar/settings/campaign/briefing/loadout/mission launch checks, matching canvas dimensions, visible touch controls/HUD/radar/compass, no horizontal overflow, and no page errors; `npm run validate:drone` passed.
-- Notes/Risks: Loadout remains read-only and key rebinding remains deferred until a dedicated gameplay/input contract pass. The production JS bundle is now about 1.0 MB minified and still triggers the existing Vite large-chunk warning; code splitting is a future optimization.
-
-## Product Shell Polish Verification Log
-
-- 2026-05-11: Product shell diagnostics for `src/App.tsx`, `src/components/menus`, `src/components/overlays`, `src/components/Game.tsx`, `src/types/game.ts`, and `src/config/defaults.ts` - no errors found.
-- 2026-05-11: Product shell `docker run --rm -v "$PWD":/app -v skybreaker-drone-strike-node-modules:/app/node_modules -w /app node:20-alpine sh -lc "npm run lint"` - passed; TypeScript `tsc --noEmit` completed with zero errors.
-- 2026-05-11: Product shell `docker run --rm -v "$PWD":/app -v skybreaker-drone-strike-node-modules:/app/node_modules -w /app node:20-alpine sh -lc "npm run build"` - passed; Vite production build completed with the existing non-blocking large-chunk warning.
-- 2026-05-11: Product shell `docker compose build --progress=plain && docker compose up -d && docker compose ps` - passed; image `skybreaker-drone-strike:latest` rebuilt and container `skybreaker-drone-strike` reported `Up`.
-- 2026-05-11: Product shell exact mobile smoke `docker run --rm --network host -v "$PWD":/work -w /tmp -e SMOKE_URL=https://skybreaker.nsystems.live mcr.microsoft.com/playwright:v1.52.0-noble sh -lc "npm init -y >/dev/null && npm install playwright@1.52.0 >/dev/null && NODE_PATH=/tmp/node_modules node /work/scripts/smoke-mobile.cjs"` - passed; portrait and landscape viewports confirmed shell actions, settings tabs, campaign mission list, briefing details, loadout weapons, mission launch, full-size canvas, visible touch controls/HUD/radar/compass, no horizontal overflow, and no page errors.
-- 2026-05-11: Product shell `docker run --rm -v "$PWD":/app -v skybreaker-drone-strike-node-modules:/app/node_modules -w /app node:20-alpine sh -lc "npm run validate:drone"` - passed; drone symmetry and effect handle validation completed successfully.
-
-### Cross-phase risk register
-
-- [ ] `Game.tsx` still interleaves gameplay and rendering state; do not extract flight/combat frame-loop behavior during visual phases unless that is the explicit phase goal
-- [ ] Target mesh child indices are fragile; weak-point work should replace them with named handles before adding destructible parts
-- [ ] Changing collision or target damage can break destroyed counts, enemy waves, extraction activation, or mission completion
-- [ ] Reflective floor, bloom, and dense beacons can harm FPS and mobile readability
-- [ ] Fog/sky/floor contrast can reduce objective marker visibility
-- [ ] World-space markers can clutter the view if they duplicate HUD information too aggressively
-- [ ] Local VS Code diagnostics may report missing React declarations from local `node_modules`; use the documented Docker lint/build path as the phase verifier unless dependency cleanup is explicitly in scope
-
-### Cross-phase verification requirements
-
-- [ ] Run containerized TypeScript check: `docker run --rm -v "$PWD":/app -v skybreaker-drone-strike-node-modules:/app/node_modules -w /app node:20-alpine sh -lc "npm run lint"`
-- [ ] Run production build/deploy verification: `docker compose build --progress=plain && docker compose up -d && docker compose ps`
-- [ ] Smoke Mission 1 and Mission 2 launch paths
-- [ ] Check flight controls, boost, primary fire, secondary lock state, radar heading, target markers, target destruction, extraction activation, mission complete, and failure overlay
-- [ ] Repeat mobile smoke at 390x844 portrait and 844x390 landscape after HUD, marker, touch control, floor, fog, or renderer changes
-
-### Recommended branch and commit strategy
-
-- Branch from stable baseline as `visual/tactical-arena-foundation` when Git is available
-- Use one branch per larger phase when risk increases: `visual/tactical-floor`, `visual/facility-kit`, `visual/weakpoint-targets`, `visual/level-kits`
-- Commit in small reversible slices: extraction-only first, then visual config, then visible changes, then tests/docs
-- Suggested commit prefixes: `refactor(scene):`, `feat(visual):`, `feat(targets):`, `test(smoke):`, `docs(plan):`
-- Do not combine frame-loop behavior extraction with reflective floor, weak points, or HUD polish in the same commit
-
-## Backlog Rules
-
-- [ ] Do not add major new content until the required supporting framework exists
-- [ ] Do not merge menu, campaign, and combat overhauls into one uncontrolled pass
-- [ ] Do not break the existing vertical slice while chasing future systems
-- [ ] Keep architecture work incremental and reversible
