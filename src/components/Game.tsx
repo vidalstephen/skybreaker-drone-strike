@@ -10,7 +10,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { Compass, Crosshair, Objectives, Radar, SpeedDisplay, Vitals } from './hud';
+import { Compass, Crosshair, Objectives, Radar, SpeedDisplay, TargetLock, Vitals } from './hud';
 import { GameOver, MissionComplete, OutOfBoundsWarning } from './overlays';
 
 // --- Phase 1: types and constants live in dedicated modules ---
@@ -21,6 +21,10 @@ import {
   NORMAL_FOV,
   CAMERA_REF_ASPECT,
   HIT_FLASH_EMISSIVE,
+  LOCK_RANGE,
+  LOCK_CONE_DOT,
+  LOCK_ACQUIRE_RATE,
+  LOCK_DRAIN_RATE,
 } from '../config/constants';
 import { expandEnemyWave } from '../config/enemies';
 import { DEFAULT_PRIMARY_WEAPON, getUnlockedWeapons } from '../config/weapons';
@@ -58,6 +62,7 @@ import {
   consumeBoostEnergy,
   getBoostState,
   getFlightSpeed,
+  getForwardVector,
   isBrakeActive,
   shouldAutoLevel,
   updateThrottle,
@@ -66,7 +71,7 @@ import {
 import { calculateMissionResult, buildObjectiveSnapshot, evaluateBonusConditions, formatMissionObjective, getActiveObjective } from '../systems/missionSystem';
 import { advanceTargetSetPiecePhase, applyTargetSetPieceVisibility, isTargetComponentDamageable, syncTargetSetPieceRuntime } from '../systems/setPieceSystem';
 import { updateTargetMovement } from '../systems/targetMovementSystem';
-import { GamePhase, TrackedEntityType, type AppSettings, type CampaignProgress, type MissionCompletionResult, type MissionDefinition, type Target, type TargetWeakPoint, type Enemy, type Projectile, type Explosion, type GameState, type WeaponDefinition, type MissionEvent, type ObjectiveRuntimeState, type SetPieceMissionStats, type TargetComponentRuntimeState, type TrackedEntityState } from '../types/game';
+import { GamePhase, TrackedEntityType, type AppSettings, type CampaignProgress, type MissionCompletionResult, type MissionDefinition, type Target, type TargetWeakPoint, type Enemy, type Projectile, type Explosion, type GameState, type WeaponDefinition, type MissionEvent, type ObjectiveRuntimeState, type SetPieceMissionStats, type TargetComponentRuntimeState, type TrackedEntityState, type TargetLockSnapshot } from '../types/game';
 import { createTrackingSystem } from '../systems/trackingSystem';
 import { RADAR_RANGE } from '../config/constants';
 import { resolveMissionWeather } from '../config/weather';
@@ -260,6 +265,7 @@ export default function Game({
       invertY: settings.invertY,
     },
     objectiveSnapshot: buildObjectiveSnapshot(mission, 0, new Set()),
+    targetLock: null,
   });
 
   // --- Input & Simulation Refs ---
@@ -282,6 +288,9 @@ export default function Game({
     destroyedComponentKeys: new Set<string>(),
     completedPhaseKeys: new Set<string>(),
     phaseStartedAtMs: new Map<string, number>(),
+    // Stage 5a: target lock state
+    lockProgress:  0,
+    lockTargetId:  null as string | null,
   });
 
   const recordSetPieceComponentDestroyed = (target: Target, component?: TargetComponentRuntimeState): void => {
@@ -459,6 +468,14 @@ export default function Game({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.code === 'KeyC' && !e.repeat && phaseRef.current === GamePhase.IN_MISSION && !gameLogicRef.current.missionComplete && !gameLogicRef.current.gameOver) {
         toggleCameraMode();
+      }
+      // Tab key — cycle manual target selection
+      if (e.code === 'Tab' && !e.repeat && phaseRef.current === GamePhase.IN_MISSION && !gameLogicRef.current.missionComplete && !gameLogicRef.current.gameOver) {
+        e.preventDefault();
+        tracksRef.current.cycleManualTarget();
+        // Reset lock progress when the player manually changes targets
+        gameLogicRef.current.lockProgress = 0;
+        gameLogicRef.current.lockTargetId = null;
       }
       keysRef.current[e.code] = true;
     };
@@ -1404,6 +1421,59 @@ export default function Game({
           }
           tracksRef.current.recomputePriority();
 
+          // ---- Stage 5a: lock progress computation ----------------------
+          let targetLockSnapshot: TargetLockSnapshot | null = null;
+          const selectedSnap = tracksRef.current.getSelectedTrack();
+          const lockableTypes = [TrackedEntityType.OBJECTIVE, TrackedEntityType.WEAK_POINT, TrackedEntityType.ENEMY];
+          if (
+            selectedSnap &&
+            lockableTypes.includes(selectedSnap.type) &&
+            selectedSnap.state !== 'destroyed' &&
+            selectedSnap.state !== 'completed'
+          ) {
+            const isNewTarget = gameLogicRef.current.lockTargetId !== selectedSnap.id;
+            if (isNewTarget) {
+              // Selection changed — reset lock progress without triggering extra drain
+              gameLogicRef.current.lockProgress = 0;
+              gameLogicRef.current.lockTargetId = selectedSnap.id;
+            }
+            // Check if target is within lock range and inside the forward cone
+            const targetPos  = new THREE.Vector3(selectedSnap.worldX, selectedSnap.worldY, selectedSnap.worldZ);
+            const toTarget   = targetPos.clone().sub(dronePos).normalize();
+            const forward    = getForwardVector(droneRef.current!.quaternion);
+            const dotProduct = forward.dot(toTarget);
+            const inCone     = dotProduct >= LOCK_CONE_DOT && selectedSnap.distanceToPlayer <= LOCK_RANGE;
+
+            if (inCone) {
+              gameLogicRef.current.lockProgress = Math.min(1, gameLogicRef.current.lockProgress + LOCK_ACQUIRE_RATE * delta);
+            } else {
+              gameLogicRef.current.lockProgress = Math.max(0, gameLogicRef.current.lockProgress - LOCK_DRAIN_RATE * delta);
+            }
+
+            const lockProgress = gameLogicRef.current.lockProgress;
+            const lockState = lockProgress >= 1 ? 'locked' : lockProgress > 0 ? 'acquiring' : 'none';
+            targetLockSnapshot = {
+              id:          selectedSnap.id,
+              label:       selectedSnap.radarLabel ?? selectedSnap.label,
+              type:        selectedSnap.type,
+              distance:    Math.round(selectedSnap.distanceToPlayer),
+              health:      selectedSnap.health,
+              maxHealth:   selectedSnap.maxHealth,
+              lockState,
+              lockProgress,
+              isManual:    tracksRef.current.isManualTargeting(),
+            };
+          } else {
+            // No lockable target selected — drain any residual progress
+            if (gameLogicRef.current.lockProgress > 0) {
+              gameLogicRef.current.lockProgress = Math.max(0, gameLogicRef.current.lockProgress - LOCK_DRAIN_RATE * delta);
+            }
+            if (gameLogicRef.current.lockProgress === 0) {
+              gameLogicRef.current.lockTargetId = null;
+            }
+          }
+          // ---- end lock computation -------------------------------------
+
           setGameState(prev => ({
             ...prev,
             speed: Math.round(currentSpeed * 960),
@@ -1423,7 +1493,8 @@ export default function Game({
             secondaryReady,
             message: activeHazard ? activeHazard.message : prev.message,
             aimScreenPos: { x: aimScreenX, y: aimScreenY },
-            droneScreenPos: { x: droneScreenX, y: droneScreenY }
+            droneScreenPos: { x: droneScreenX, y: droneScreenY },
+            targetLock: targetLockSnapshot,
           }));
         }
       }
@@ -1538,6 +1609,9 @@ export default function Game({
             <div className="flex items-end justify-between gap-2 md:flex-col md:items-start md:gap-6" data-hud-region="bottom-left">
               <SpeedDisplay speed={gameState.speed} boosting={gameState.boosting} />
               <Vitals shields={currentSystems.current.shields} energy={currentSystems.current.energy} boostEnergy={currentSystems.current.boostEnergy} health={currentSystems.current.health} />
+              {gameState.targetLock && (
+                <TargetLock lock={gameState.targetLock} reduceEffects={settings.reduceEffects} />
+              )}
             </div>
 
             <div className="pointer-events-auto" data-hud-region="bottom-right">
@@ -1608,6 +1682,17 @@ export default function Game({
               onTouchEnd={() => touchActions.current.level = false}
             >
               LEVEL
+            </button>
+            {/* Stage 5a: cycle target button */}
+            <button
+              className="touch-action-small w-11 h-11 rounded-full border border-orange-400/30 bg-orange-500/10 active:bg-orange-500 text-orange-400 active:text-black flex items-center justify-center font-bold tracking-widest text-[7px] transition-colors sm:w-12 sm:h-12 sm:text-[8px]"
+              onTouchEnd={() => {
+                tracksRef.current.cycleManualTarget();
+                gameLogicRef.current.lockProgress = 0;
+                gameLogicRef.current.lockTargetId = null;
+              }}
+            >
+              LOCK
             </button>
             <button 
               className="touch-action-small w-11 h-11 rounded-full border border-white/10 bg-white/5 active:bg-white text-white active:text-black flex items-center justify-center font-bold tracking-widest text-[7px] transition-colors sm:w-12 sm:h-12 sm:text-[8px]"

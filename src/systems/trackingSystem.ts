@@ -35,6 +35,9 @@ export interface TrackUpdate {
 export function createTrackingSystem() {
   const registry = new Map<string, TrackedEntitySnapshot>();
 
+  // Stage 5a: manual target selection — null means auto-priority drives selection
+  let manualTargetId: string | null = null;
+
   // ---- mutation helpers --------------------------------------------------
 
   function registerTrack(
@@ -93,6 +96,47 @@ export function createTrackingSystem() {
 
   function reset(): void {
     registry.clear();
+    manualTargetId = null;
+  }
+
+  // ---- Stage 5a: manual target cycling ----------------------------------
+
+  /** Manually pin the selected target to a specific track id. Pass null to revert to auto-priority. */
+  function setManualTarget(id: string | null): void {
+    manualTargetId = id;
+  }
+
+  /**
+   * Cycle the manual selection to the next viable combat target.
+   * Cycles through OBJECTIVE, WEAK_POINT, and ENEMY tracks sorted by priority.
+   * Clears manual mode if no viable targets remain.
+   */
+  function cycleManualTarget(): void {
+    const viable = [...registry.values()]
+      .filter(s =>
+        s.priorityScore > 0 &&
+        s.state !== 'destroyed' &&
+        s.state !== 'completed' &&
+        s.state !== 'inactive' &&
+        (s.type === TrackedEntityType.OBJECTIVE ||
+         s.type === TrackedEntityType.WEAK_POINT ||
+         s.type === TrackedEntityType.ENEMY)
+      )
+      .sort((a, b) => b.priorityScore - a.priorityScore);
+
+    if (viable.length === 0) {
+      manualTargetId = null;
+      return;
+    }
+
+    const currentIndex = viable.findIndex(s => s.id === manualTargetId);
+    const nextIndex    = (currentIndex + 1) % viable.length;
+    manualTargetId     = viable[nextIndex].id;
+  }
+
+  /** Returns whether the current selection is a player-initiated manual cycle. */
+  function isManualTargeting(): boolean {
+    return manualTargetId !== null;
   }
 
   // ---- priority scoring --------------------------------------------------
@@ -150,7 +194,21 @@ export function createTrackingSystem() {
     });
 
     registry.forEach(snap => {
-      snap.isSelected = snap.id === selectedId && maxScore > 0;
+      // Honor manual selection over auto-priority, but clear it if the target is gone.
+      if (manualTargetId !== null) {
+        const manualSnap = registry.get(manualTargetId);
+        const manualGone =
+          !manualSnap ||
+          manualSnap.state === 'destroyed' ||
+          manualSnap.state === 'completed' ||
+          manualSnap.state === 'inactive' ||
+          manualSnap.priorityScore <= 0;
+        if (manualGone) manualTargetId = null;
+      }
+
+      snap.isSelected = manualTargetId !== null
+        ? snap.id === manualTargetId
+        : snap.id === selectedId && maxScore > 0;
     });
   }
 
@@ -182,7 +240,12 @@ export function createTrackingSystem() {
 
   // ---- public interface --------------------------------------------------
 
-  return { registerTrack, updateTrack, markDestroyed, recomputePriority, getSnapshots, getSelectedTrack, reset };
+  return {
+    registerTrack, updateTrack, markDestroyed,
+    recomputePriority, getSnapshots, getSelectedTrack,
+    setManualTarget, cycleManualTarget, isManualTargeting,
+    reset,
+  };
 }
 
 export type TrackingSystem = ReturnType<typeof createTrackingSystem>;

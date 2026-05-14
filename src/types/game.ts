@@ -1070,6 +1070,38 @@ export type TrackedEntityState =
   /** Emergency extraction with modified policy. Future use. */
   | 'emergency';
 
+// ---------------------------------------------------------------------------
+// Stage 5a: Target lock types
+// ---------------------------------------------------------------------------
+
+/** Phase of lock-on acquisition for the currently selected target. */
+export type TargetLockState = 'none' | 'acquiring' | 'locked';
+
+/**
+ * Serializable lock state for the currently selected target.
+ * Passed to HUD components via GameState. Null when no target is selected.
+ */
+export interface TargetLockSnapshot {
+  /** Track id of the locked/acquiring target. */
+  id: string;
+  /** Display label. */
+  label: string;
+  /** Entity type — drives icon and color. */
+  type: TrackedEntityType;
+  /** Current distance from player to target in world units. */
+  distance: number;
+  /** Current health fraction (0–maxHealth). Absent for entities without health. */
+  health?: number;
+  /** Max health. */
+  maxHealth?: number;
+  /** Current lock phase. */
+  lockState: TargetLockState;
+  /** Lock progress 0–1. Drives the lock ring arc on the HUD. */
+  lockProgress: number;
+  /** True when the player manually cycled to this target rather than auto-priority. */
+  isManual: boolean;
+}
+
 /** Serializable snapshot passed to HUD components — updated each frame tick */
 export interface TrackedEntitySnapshot {
   id:               string;
@@ -1127,6 +1159,11 @@ export interface GameLogic {
   destroyedComponentKeys: Set<string>;
   completedPhaseKeys: Set<string>;
   phaseStartedAtMs: Map<string, number>;
+  // Stage 5a: target lock
+  /** Lock progress 0–1 for the currently selected target. Reset when selection changes. */
+  lockProgress: number;
+  /** Track id of the last entity for which lock progress was accumulating. */
+  lockTargetId: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -1165,4 +1202,6 @@ export interface GameState {
   };
   /** Serializable snapshot of mission objective state. Null until first game tick. */
   objectiveSnapshot: MissionObjectiveSnapshot | null;
+  /** Serializable target lock state for the HUD lock indicator. Null when no target is selected. */
+  targetLock: TargetLockSnapshot | null;
 }

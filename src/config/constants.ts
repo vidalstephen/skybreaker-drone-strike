@@ -51,3 +51,9 @@ export const AIM_PATH_FADE_MS         = 150;  // ms for path to return to idle a
 export const RETICLE_PULSE_MS         = 200;  // ms for reticle pulse on fire
 export const CENTER_MARKER_SIZE       = 8;    // reference size for center aim dot (px)
 export const AIM_CONVERGENCE_MARKERS  = 3;    // small path brackets near reticle
+
+// --- Target lock ---
+export const LOCK_RANGE        = 500;  // world units — max range to acquire lock on a target
+export const LOCK_CONE_DOT     = 0.5;  // min dot product of forward → target direction (~60° half-angle cone)
+export const LOCK_ACQUIRE_RATE = 0.65; // lock progress gained per second when eligible (~1.5 s to full lock)
+export const LOCK_DRAIN_RATE   = 1.5;  // lock progress drained per second when not eligible

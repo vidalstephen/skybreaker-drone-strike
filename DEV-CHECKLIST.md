@@ -451,7 +451,7 @@ Exit criteria:
 
 ## Stage 4 - Grand Destruction And Objective Set Pieces
 
-Status: In progress
+Status: Complete
 
 Goal: replace repeated tower destruction with memorable strike objectives and staged destruction.
 
@@ -578,23 +578,23 @@ Completion summary (2026-05-14):
 
 ## Stage 5 - Combat Domain Expansion: Air, Land, And Sea
 
-Status: Not started
+Status: In progress
 
 Goal: make the campaign mechanically broad enough to support varied theaters.
 
 ### Stage 5a - Selected Target And Lock Foundation
 
-Status: Not started
+Status: Complete
 
-- [ ] Add player-facing selected target state built on tracking snapshots.
-- [ ] Wire keyboard/touch/manual cycling controls only after automatic priority selection is stable.
-- [ ] Add lock acquisition rules, lock progress, lock loss, and HUD/radar presentation.
-- [ ] Keep selected target, objective priority, and radar priority consistent.
+- [x] Add player-facing selected target state built on tracking snapshots.
+- [x] Wire keyboard/touch/manual cycling controls only after automatic priority selection is stable.
+- [x] Add lock acquisition rules, lock progress, lock loss, and HUD/radar presentation.
+- [x] Keep selected target, objective priority, and radar priority consistent.
 
 Exit criteria:
 
-- [ ] Player can identify and cycle/confirm a selected target.
-- [ ] Lock state is readable without clutter.
+- [x] Player can identify and cycle/confirm a selected target.
+- [x] Lock state is readable without clutter.
 
 ### Stage 5b - Homing And Specialized Secondary Weapons
 
@@ -1178,4 +1178,37 @@ Next recommended starting point:
 - Begin Stage 5a - Selected Target And Lock Foundation.
 - Start by reading `src/components/Game.tsx`, `src/systems/trackingSystem.ts`, `src/components/hud/Radar.tsx`, `src/components/hud/Crosshair.tsx`, and `src/config/weapons.ts`.
 - Add selected-target state and cycling/confirmation on top of tracking snapshots before implementing lock acquisition or homing behavior.
+
+---
+
+## Stage 5a Completion Summary
+
+**Completed:** Stage 5a - Selected Target And Lock Foundation
+
+**Summary:**
+Implemented end-to-end selected target and lock acquisition system. The player now has a clearly identifiable selected target (auto-priority from tracking system), can manually cycle it with Tab (keyboard) or LOCK (touch), and sees a real-time lock ring HUD widget showing acquisition progress, lock state, entity type badge, distance, and health bar.
+
+**Changed files:**
+- `src/config/constants.ts` — Added `LOCK_RANGE`, `LOCK_CONE_DOT`, `LOCK_ACQUIRE_RATE`, `LOCK_DRAIN_RATE`
+- `src/types/game.ts` — Added `TargetLockState`, `TargetLockSnapshot`, extended `GameLogic` with `lockProgress`/`lockTargetId`, extended `GameState` with `targetLock`
+- `src/systems/trackingSystem.ts` — Added `manualTargetId`, `setManualTarget()`, `cycleManualTarget()`, `isManualTargeting()`; `recomputePriority()` now honors manual override and validates manual target viability; `reset()` clears manual state
+- `src/components/hud/TargetLock.tsx` — New HUD component: SVG lock ring with arc progress, 4 cardinal ticks, locked pulse animation, entity type badge, distance, health bar, MAN/ACQ/LOCK indicators
+- `src/components/hud/index.ts` — Exported `TargetLock`
+- `src/components/Game.tsx` — Imports, `gameLogicRef` init, `GameState` init, Tab key handler, per-frame lock computation block, `setGameState` with `targetLock`, `<TargetLock>` render in bottom-left HUD, LOCK touch button in action row
+- `src/config/buildMeta.ts` — PHASE_TAG → `'Phase 5a'`
+
+**Verification:**
+- Dockerized `npm run lint` — passed (0 errors)
+- Dockerized `npm run build && npm run validate:drone && npm run validate:prototype` — passed; Vite 2131 modules, drone symmetry 21 mirrored + 12 centerline, prototype validator passed
+- `docker compose --progress plain build` — passed; image `skybreaker-drone-strike:latest` rebuilt
+- `docker compose --progress plain up -d --no-build && docker compose ps` — passed; container status Up
+
+**Deferred:**
+- Homing missile guidance using the selected target lock is Stage 5b work.
+- Lock breaking / countermeasure events remain a Stage 5b or 5c concern.
+
+**Next recommended starting point:**
+- Begin Stage 5b - Homing And Specialized Secondary Weapons.
+- Start by reading `src/config/weapons.ts`, `src/systems/projectileSystem.ts` (if it exists), and `Game.tsx` projectile fire logic.
+- Convert the Ion Missile secondary into a true homing weapon that uses the Stage 5a lock state when a target is locked.
 

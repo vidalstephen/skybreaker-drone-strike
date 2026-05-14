@@ -3,4 +3,5 @@ export { Crosshair } from './Crosshair';
 export { Objectives } from './Objectives';
 export { Radar } from './Radar';
 export { SpeedDisplay } from './SpeedDisplay';
+export { TargetLock } from './TargetLock';
 export { Vitals } from './Vitals';
