@@ -134,3 +134,7 @@ docs/
 | `npm run build` | Production build to `dist/` |
 | `npm run lint` | TypeScript type-check (`tsc --noEmit`) |
 | `npm run validate:drone` | Assert bilateral symmetry of all drone components |
+| `npm run validate:storm` | Validate Storm Coast campaign mission data and unlock chain |
+| `npm run validate:frozen` | Validate Frozen Relay campaign mission data and unlock chain |
+| `npm run validate:canyon` | Validate Red Canyon campaign mission data and unlock chain |
+| `npm run validate:core` | Validate Skybreaker Core finale mission data and unlock chain |

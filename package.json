@@ -14,7 +14,12 @@
     "validate:intercept": "tsx scripts/validate-intercept-prototype.ts",
     "validate:ground": "tsx scripts/validate-ground-prototype.ts",
     "validate:sea": "tsx scripts/validate-sea-prototype.ts",
-    "validate:hud": "tsx scripts/validate-hud-domains.ts"
+    "validate:storm": "tsx scripts/validate-storm-coast.ts",
+    "validate:frozen": "tsx scripts/validate-frozen-relay.ts",
+    "validate:canyon": "tsx scripts/validate-red-canyon.ts",
+    "validate:core": "tsx scripts/validate-skybreaker-core.ts",
+    "validate:hud": "tsx scripts/validate-hud-domains.ts",
+    "validate:campaign": "tsx scripts/validate-campaign-wave1.ts"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",

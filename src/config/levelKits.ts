@@ -45,6 +45,38 @@ export const LEVEL_KITS: Record<LevelKitId, LevelKitDefinition> = {
     defaultTarget: { archetype: 'relay-spire', setPieceArchetypeId: 'shield-generator', weakPointLayoutId: 'relay-core' },
     environment: composeEnvironment(BIOMES['ash-ridge'], undefined, 'ash-ridge'),
   },
+  'storm-coast': {
+    id: 'storm-coast',
+    label: 'Storm Coast',
+    arenaKit: 'cinematic-ocean-grid',
+    waypointStyle: 'ocean-buoys',
+    defaultTarget: { archetype: 'patrol-craft', weakPointLayoutId: 'patrol-craft-vitals' },
+    environment: composeEnvironment(BIOMES['storm-coast'], undefined, 'storm-coast'),
+  },
+  'arctic-shelf': {
+    id: 'arctic-shelf',
+    label: 'Arctic Shelf',
+    arenaKit: 'cinematic-arctic-grid',
+    waypointStyle: 'signal-array',
+    defaultTarget: { archetype: 'relay-spire', setPieceArchetypeId: 'shield-generator', weakPointLayoutId: 'relay-core' },
+    environment: composeEnvironment(BIOMES['arctic-shelf'], undefined, 'arctic-shelf'),
+  },
+  'red-canyon': {
+    id: 'red-canyon',
+    label: 'Red Canyon',
+    arenaKit: 'cinematic-canyon-grid',
+    waypointStyle: 'ash-relay',
+    defaultTarget: { archetype: 'facility-node' },
+    environment: composeEnvironment(BIOMES['urban-ruin'], undefined, 'red-canyon'),
+  },
+  'skybreaker-core': {
+    id: 'skybreaker-core',
+    label: 'Skybreaker Core',
+    arenaKit: 'cinematic-core-grid',
+    waypointStyle: 'signal-array',
+    defaultTarget: { archetype: 'relay-spire', setPieceArchetypeId: 'reactor', weakPointLayoutId: 'relay-core' },
+    environment: composeEnvironment(BIOMES['night-grid'], undefined, 'skybreaker-core'),
+  },
   // Stage 5e: ocean platform kit — sea-surface arena for naval combat
   'ocean-platform': {
     id: 'ocean-platform',

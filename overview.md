@@ -1,12 +1,12 @@
 # Skybreaker Drone Strike - Current Game Overview
 
-Current-state snapshot date: 2026-05-13.
+Current-state snapshot date: 2026-05-15.
 
 This document describes the implemented game as it exists now. It is the current-state source of truth for planning. Future goals belong in `roadmap.md`; completed historical work lives in `docs/DEV-CHECKLIST.v1-phases-0-to-stage2a.archive.md`; regression expectations live in `BASELINE.md`.
 
 ## Current State Summary
 
-Skybreaker Drone Strike is a browser-based 3D arcade drone combat game built with React, TypeScript, Vite, Tailwind CSS, Motion, and Three.js. The current playable game is a compact eight-mission tactical arcade campaign plus one isolated post-campaign set-piece proving-ground sortie, not a single-mission prototype and not a simulation-grade flight/combat sim.
+Skybreaker Drone Strike is a browser-based 3D arcade drone combat game built with React, TypeScript, Vite, Tailwind CSS, Motion, and Three.js. The current playable game is a twenty-four-mission tactical arcade campaign plus isolated post-campaign prototype-range sorties, not a single-mission prototype and not a simulation-grade flight/combat sim.
 
 The core loop is:
 
@@ -21,7 +21,7 @@ The core loop is:
 Implemented pillars:
 
 - Full app shell with splash, hangar, mission select, briefing, optional loadout review, career, settings, controls, credits, pause, mission complete, and game over screens.
-- Eight chained mission definitions grouped across campaign arcs.
+- Twenty-four chained mission definitions grouped across campaign arcs, plus isolated prototype-range sorties.
 - Arcade flight with chase/cockpit camera modes, boost, brake, throttle, auto-level, pointer fine control, and direct touch-drag mobile steering.
 - Primary Pulse Cannon and unlockable Ion Missile secondary projectile.
 - Procedural player drone, enemy meshes, facility targets, weak-point target layouts, extraction zones, arena structures, effects, and Web Audio cues.
@@ -53,7 +53,7 @@ The live Three.js runtime is owned by `src/components/Game.tsx`. It orchestrates
 
 Config modules:
 
-- `src/config/missions.ts` defines the eight authored missions.
+- `src/config/missions.ts` defines the authored campaign and prototype missions.
 - `src/config/campaign.ts` defines campaign arc metadata.
 - `src/config/levelKits.ts` defines reusable level kits and weak-point layouts.
 - `src/config/weapons.ts` defines weapon stats and unlock requirements.
@@ -82,23 +82,42 @@ Scene construction:
 
 ## Campaign And Missions
 
-The current campaign contains eight authored missions. A separate prototype range sortie exists after the campaign for set-piece validation and tuning:
+The current campaign contains twenty-four authored missions. Prototype range sorties exist after the campaign for set-piece, intercept, ground-defense, and sea-warfare validation and tuning:
 
 | Order | Mission | Current domain/type/time data |
 |---|---|---|
 | 01 | Signal Break | `AIR_TO_LAND`, `STRIKE`, `night` |
 | 02 | Iron Veil | `AIR_TO_LAND`, `STRIKE`, `dusk` |
 | 03 | Black Sky Hook | `AIR_TO_LAND`, `STRIKE`, `night` |
-| 04 | Deep Veil | `AIR_TO_LAND`, `STRIKE`, `dusk` |
+| 04 | Blackout Line | `AIR_TO_LAND`, `STRIKE`, `dusk` |
 | 05 | Warden Break | `AIR_TO_LAND`, `STRIKE`, `dusk` |
 | 06 | Ember Crown | `MIXED`, `STRIKE`, `dawn` |
 | 07 | Skybreaker Gate | `MIXED`, `BOSS`, `night` |
 | 08 | Final Dawn | `MIXED`, `FINALE`, `dawn` |
+| 09 | Coastal Knife | `AIR_TO_SEA`, `STRIKE`, `day`, `rain` |
+| 10 | Squall Hook | `AIR_TO_SEA`, `STRIKE`, `dusk`, `sea-squall` |
+| 11 | Tidebreaker Array | `MIXED`, `SABOTAGE`, `dawn`, `crosswind` |
+| 12 | Tempest Spear | `MIXED`, `BOSS`, `night`, `lightning-storm` |
+| 13 | Frost Needle | `AIR_TO_LAND`, `STRIKE`, `day`, `snow-frost` |
+| 14 | Whiteout Run | `AIR_TO_AIR`, `INTERCEPT`, `dusk`, `snow-frost` |
+| 15 | Ghost Link | `MIXED`, `SABOTAGE`, `night`, `em-interference` |
+| 16 | Zero Sun Crown | `MIXED`, `BOSS`, `dawn`, `snow-frost` |
+| 17 | Canyon Vanguard | `AIR_TO_LAND`, `STRIKE`, `day`, `crosswind` |
+| 18 | Railfire Pass | `AIR_TO_LAND`, `SABOTAGE`, `dusk`, `ash-storm` |
+| 19 | Scarlet Siege | `MIXED`, `SABOTAGE`, `night`, `em-interference` |
+| 20 | Bastion Fall | `MIXED`, `BOSS`, `dawn`, `ash-storm` |
+| 21 | Core Needle | `MIXED`, `SABOTAGE`, `night`, `em-interference` |
+| 22 | Carrier Eclipse | `MIXED`, `BOSS`, `dusk`, `lightning-storm` |
+| 23 | Skybreaker Heart | `MIXED`, `BOSS`, `night`, `em-interference` |
+| 24 | Last Light | `MIXED`, `FINALE`, `dawn`, `lightning-storm` |
 | 90 | Set-Piece Proving Ground | `MIXED`, `SABOTAGE`, `dawn`, prototype range |
+| 91 | Raven Break | `AIR_TO_AIR`, `INTERCEPT`, `dusk`, prototype range |
+| 92 | Iron Perimeter | `AIR_TO_LAND`, `STRIKE`, `day`, prototype range |
+| 93 | Sea Wolf | `AIR_TO_SEA`, `STRIKE`, `night`, prototype range |
 
 The missions are data-defined and hand-authored. They use target arrays, extraction definitions, enemy wave definitions, failure condition labels, scoring definitions, reward definitions, unlock gates, campaign arc metadata, and Stage 2a classification fields.
 
-Current runtime mission behavior is still centered on required target destruction followed by extraction. The Stage 2a classification fields are present for future systems, but combat domain, mission type, and time of day do not yet drive specialized runtime mechanics.
+Current runtime mission behavior is still centered on required target destruction followed by extraction. Authored objective sets, bonus conditions, moving targets, weak points, weather modifiers, and combat-domain metadata now add mission variety while preserving the core completion loop.
 
 ## Mission Loop
 

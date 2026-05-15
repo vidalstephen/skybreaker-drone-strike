@@ -60,4 +60,37 @@ export const CAMPAIGN_ARCS: CampaignArcDefinition[] = [
     escalation: 'Single looping patrol craft with air CAP; validates AIR_TO_SEA domain and patrol-craft archetype.',
     status: 'PLANNED',
   },
+  // Stage 6a: expanded campaign arcs — missions authored in Stage 6c-6f
+  {
+    id: 'storm-coast',
+    label: 'Arc 4 // Storm Coast',
+    missionRange: 'Missions 09-12',
+    focus: 'Introduce naval operations, storm weather pressure, and sea-to-air engagement variety.',
+    escalation: 'Missions escalate from coastal patrol interdiction through naval strike with full-weather modifiers and moving targets.',
+    status: 'ACTIVE',
+  },
+  {
+    id: 'frozen-relay',
+    label: 'Arc 5 // Frozen Relay',
+    missionRange: 'Missions 13-16',
+    focus: 'Arctic low-visibility operations, sensor pressure, and long-range interception objectives.',
+    escalation: 'Snow/frost weather degrades radar and locks; fragile sensor-link objectives force precision play under reduced information.',
+    status: 'ACTIVE',
+  },
+  {
+    id: 'red-canyon-siege',
+    label: 'Arc 6 // Red Canyon Siege',
+    missionRange: 'Missions 17-20',
+    focus: 'Canyon-lane combat, moving convoys, artillery emplacements, and terrain-route pressure.',
+    escalation: 'Attack-run scoring incentives reward precision low passes; terrain funnels engagements and tests mobile marker readability.',
+    status: 'ACTIVE',
+  },
+  {
+    id: 'skybreaker-core',
+    label: 'Arc 7 // Skybreaker Core',
+    missionRange: 'Missions 21-24',
+    focus: 'Final mixed-domain climax missions combining air, land, sea, set pieces, weather, and bosses.',
+    escalation: 'Builds to a finale mission that requires mastery of all combat domains; campaign completion state and final rewards.',
+    status: 'ACTIVE',
+  },
 ];

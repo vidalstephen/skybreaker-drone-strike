@@ -39,7 +39,7 @@ export function CareerScreen({ missions, progress, onBack }: CareerScreenProps) 
     >
       <div className="grid gap-5 max-w-3xl">
         <section className="grid gap-3 sm:grid-cols-3">
-          {CAMPAIGN_ARCS.map(arc => (
+          {CAMPAIGN_ARCS.filter(arc => missions.some(mission => mission.campaignArc === arc.label)).map(arc => (
             <div key={arc.id} className="border border-white/10 bg-black/35 p-4 font-mono uppercase tracking-[0.13em]">
               <div className="text-[10px] text-orange-400">{arc.missionRange}</div>
               <div className="mt-2 text-sm text-white">{arc.label}</div>

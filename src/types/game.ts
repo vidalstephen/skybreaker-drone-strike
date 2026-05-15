@@ -37,6 +37,8 @@ export interface AppSettings {
 }
 
 export interface CampaignProgress {
+  /** Schema version used for forward-compatible save migration. Absent in pre-6a saves; treated as version 0. */
+  saveVersion?: number;
   unlockedMissionIds: string[];
   completedMissionIds: string[];
   bestMissionTimes: Record<string, number>;
@@ -156,7 +158,7 @@ export interface MissionBriefingItem {
   value: string;
 }
 
-export type LevelKitId = 'night-grid' | 'ash-ridge' | 'ocean-platform';
+export type LevelKitId = 'night-grid' | 'ash-ridge' | 'storm-coast' | 'arctic-shelf' | 'red-canyon' | 'skybreaker-core' | 'ocean-platform';
 export type BiomeId =
   | 'night-grid'
   | 'ash-ridge'

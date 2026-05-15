@@ -25,7 +25,7 @@ import {
 } from './config/defaults';
 import { DEFAULT_MISSION_ID, getMissionById, MISSIONS } from './config/missions';
 import { useAudio } from './hooks/useAudio';
-import { completeMission, isMissionUnlocked } from './systems/missionSystem';
+import { completeMission, isMissionUnlocked, normalizeCampaignProgress } from './systems/missionSystem';
 import { GamePhase, type AppSettings, type CampaignProgress, type MissionCompletionResult } from './types/game';
 
 function loadStoredJson(key: string): unknown {
@@ -68,47 +68,9 @@ function loadStoredSettings() {
   } satisfies AppSettings;
 }
 
-function stringArray(value: unknown) {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
-}
-
 function loadStoredProgress() {
   const stored = loadStoredJson(PROGRESS_STORAGE_KEY) as Partial<CampaignProgress> | null;
-  const missionIds = new Set(MISSIONS.map(mission => mission.id));
-  const validRanks = new Set(['S', 'A', 'B', 'C']);
-  const completedMissionIds = Array.from(new Set(stringArray(stored?.completedMissionIds).filter(id => missionIds.has(id))));
-  const completedMissionIdSet = new Set(completedMissionIds);
-  const unlockedFromCompleted = MISSIONS
-    .filter(mission => mission.unlockAfterMissionId && completedMissionIdSet.has(mission.unlockAfterMissionId))
-    .map(mission => mission.id);
-  const unlockedMissionIds = Array.from(new Set([
-    ...DEFAULT_CAMPAIGN_PROGRESS.unlockedMissionIds,
-    ...stringArray(stored?.unlockedMissionIds).filter(id => missionIds.has(id)),
-    ...completedMissionIds,
-    ...unlockedFromCompleted,
-  ]));
-
-  const bestMissionTimes = Object.fromEntries(
-    Object.entries(stored?.bestMissionTimes ?? {}).filter(([id, value]) => missionIds.has(id) && typeof value === 'number' && Number.isFinite(value) && value > 0)
-  );
-  const bestMissionScores = Object.fromEntries(
-    Object.entries(stored?.bestMissionScores ?? {}).filter(([id, value]) => missionIds.has(id) && typeof value === 'number' && Number.isFinite(value) && value >= 0)
-  );
-  const bestMissionRanks = Object.fromEntries(
-    Object.entries(stored?.bestMissionRanks ?? {}).filter(([id, value]) => missionIds.has(id) && typeof value === 'string' && validRanks.has(value))
-  ) as CampaignProgress['bestMissionRanks'];
-
-  return {
-    unlockedMissionIds,
-    completedMissionIds,
-    bestMissionTimes,
-    bestMissionScores,
-    bestMissionRanks,
-    earnedRewardIds: Array.from(new Set([
-      ...stringArray(stored?.earnedRewardIds),
-      ...MISSIONS.filter(mission => completedMissionIdSet.has(mission.id)).map(mission => mission.reward.id),
-    ])),
-  } satisfies CampaignProgress;
+  return normalizeCampaignProgress(stored, MISSIONS);
 }
 
 export default function App() {

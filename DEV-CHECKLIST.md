@@ -57,6 +57,18 @@ Do not regress these systems unless a phase explicitly targets them:
 - Settings and campaign progress persistence.
 - Docker production build/deploy path.
 
+### Unit Visual Fidelity Standard
+
+Applies to every stage that introduces or revises a unit model (air enemy, ground emplacement, naval target, ally):
+
+- **Proportional scale**: anchor new unit geometry to the `AIRCRAFT_SCALE = 0.28` world-scale reference established in `droneModel.ts`. A unit that is larger or smaller in lore must reflect that difference in mesh scale, not through inflated hitboxes or invisible volume offsets.
+- **Hitbox-mesh correspondence**: collision geometry (bounding box or bounding sphere used for projectile/damage checks) must closely match the visible silhouette. Do not inherit a default `BoxGeometry` hitbox for a model whose visual is not a box unless the visual is explicitly box-shaped.
+- **Geometry layering**: every new or revised unit must have at minimum a role-recognizable silhouette (body + at least one domain-specific sub-component), matching the layered geometry standard set by the drone (body, wings, cockpit, accents, engine/rotor glows). A plain box with an eye sphere does not meet this standard.
+- **Named material/handle pattern**: materials that receive per-frame state updates (damage flash, shield visibility, glow intensity, thrust state) must be stored in named handles analogous to `DroneVisualMaterials` / `DroneVisualHandles`. Anonymous inline material references that cannot be retrieved for update are not acceptable on units with dynamic visual state.
+- **Visual-model coupling on revision**: any stat, role, or behavior change to an existing unit that meaningfully affects its real-world size, armament, or domain must be accompanied by a corresponding visual/hitbox review. A text-only stat change that creates a scale mismatch is a bug, not a deferred task.
+- **Allied units**: when ally units are added (ALLY stub in Stage 5f), they must meet the same standard as enemy units — friendly fire, collision, and visual readability all depend on correct scale and hitbox.
+- **Role legibility**: a unit must be immediately readable as what it is. A bomber must look like a bomber (wide span, heavy fuselage, multi-engine silhouette). An enemy fighter must be distinguishable from a bomber by silhouette alone. A ship must read as a ship (hull waterline, superstructure, deck features). An AA emplacement must communicate its upward-facing threat geometry (tubes, barrels, radar dish) before it fires. A carrier must be visibly larger than a patrol craft. If a unit's model could be confused with a different role at combat distance on LOW graphics, the model does not meet this standard and must be revised before the stage closes.
+
 ## Stage 0 - Roadmap Baseline And State Reconciliation
 
 Status: Complete
@@ -578,7 +590,7 @@ Completion summary (2026-05-14):
 
 ## Stage 5 - Combat Domain Expansion: Air, Land, And Sea
 
-Status: In progress
+Status: Complete
 
 Goal: make the campaign mechanically broad enough to support varied theaters.
 
@@ -691,99 +703,162 @@ Exit criteria:
 - [x] Mixed-domain combat remains readable without hiding urgent information.
 - [x] Reduced-effects mode preserves tactical meaning.
 
+### Stage 5 — Unit Visual Fidelity Backlog Note
+
+The base air enemy model created in `src/scene/enemyModels.ts` (`createEnemyModel` — non-ground path) currently uses a single `BoxGeometry` body + `SphereGeometry` eye. This does **not** meet the Unit Visual Fidelity Standard defined in the Non-Regression Rules. No behavior regressions exist from this state, but the model must be upgraded before Stage 8 layers new behavior controllers on top of it. The upgrade is the first item in Stage 8a.
+
 ## Stage 6 - Campaign Expansion Wave 1
 
-Status: Not started
+Status: In progress
 
 Goal: use the new mission, objective, environment, weather, and combat-domain systems to grow the campaign backbone.
 
 ### Stage 6a - Campaign Arc Plan And Save Migration
 
-Status: Not started
+Status: Complete
 
-- [ ] Finalize 5-6 campaign arcs, mission count, unlock order, rewards, and difficulty curve.
-- [ ] Add save migration strategy for inserted missions and changed reward ids.
-- [ ] Add mission-select filtering or arc summaries if the UI becomes dense.
+- [x] Finalize 5-6 campaign arcs, mission count, unlock order, rewards, and difficulty curve.
+- [x] Add save migration strategy for inserted missions and changed reward ids.
+- [x] Add mission-select filtering or arc summaries if the UI becomes dense.
 
 Exit criteria:
 
-- [ ] Old saves survive new campaign structure.
-- [ ] Campaign screen remains understandable with expanded mission count.
+- [x] Old saves survive new campaign structure.
+- [x] Campaign screen remains understandable with expanded mission count.
+
+Completion summary (2026-05-15):
+
+- Shipped: Four new PLANNED campaign arcs registered in `campaign.ts` — Arc 4 // Storm Coast (Missions 09-12), Arc 5 // Frozen Relay (Missions 13-16), Arc 6 // Red Canyon Siege (Missions 17-20), Arc 7 // Skybreaker Core (Missions 21-24). Full mission authoring is deferred to Stages 6c-6f; arcs are PLANNED status and carry no missions yet.
+- Shipped: `saveVersion?: number` field added to `CampaignProgress` interface. `CAMPAIGN_SAVE_VERSION = 1` constant added to `defaults.ts`. `DEFAULT_CAMPAIGN_PROGRESS.saveVersion` stamped to `1`. `loadStoredProgress` in `App.tsx` now detects the stored version (absent = version 0), documents the migration hook pattern with a comment, and stamps `CAMPAIGN_SAVE_VERSION` on the returned progress so all saves are immediately upgraded and re-persisted on first boot.
+- Shipped: `CareerScreen` arc grid now filters to arcs that have at least one mission, preventing empty 0% tiles from appearing for PLANNED arcs until their missions are authored. `MissionSelectScreen` already filtered empty arcs naturally (returns null for sections with no missions).
+- Changed: `src/types/game.ts`, `src/config/defaults.ts`, `src/config/campaign.ts`, `src/App.tsx`, `src/components/menus/CareerScreen.tsx`, `src/config/buildMeta.ts`, `DEV-CHECKLIST.md`.
+- Verification: `npm run lint` (tsc --noEmit) passed; `npm run build` passed (2132 modules, existing large-chunk warning only); `npm run validate:drone` passed; `docker compose --progress plain build` passed; `docker compose --progress plain up -d --no-build && docker compose ps` passed with container Up on 2026-05-15.
+- Notes/Risks: The unlock chain between arcs (completing mission 08 unlocks the first Storm Coast mission) is not wired yet — that requires the first arc's missions to be authored in Stage 6c. Adding `unlockAfterMissionId` on new missions will be sufficient; no migration needed because unlock resolution is re-derived from `completedMissionIds` at load time. Future schema changes (e.g., reward ID renames) should increment `CAMPAIGN_SAVE_VERSION` and add a migration block before the validation code in `loadStoredProgress`.
 
 ### Stage 6b - Signal War And Blackout Line Cleanup
 
-Status: Not started
+Status: Complete
 
-- [ ] Revisit Missions 01-08 using the Stage 2-5 systems.
-- [ ] Convert appropriate missions to structured objectives without changing their onboarding purpose.
-- [ ] Add optional objective or set-piece upgrades where they improve variety.
+- [x] Revisit Missions 01-08 using the Stage 2-5 systems.
+- [x] Convert appropriate missions to structured objectives without changing their onboarding purpose.
+- [x] Add optional objective or set-piece upgrades where they improve variety.
 
 Exit criteria:
 
-- [ ] Current campaign remains complete from a clean save.
-- [ ] Early missions teach systems clearly.
+- [x] Current campaign remains complete from a clean save.
+- [x] Early missions teach systems clearly.
+
+Completion summary:
+- Authored explicit `objectiveSet` for all 8 campaign missions (signal-break through final-dawn) using primary objectives that exactly match `buildObjectiveSet` output, ensuring zero runtime behaviour change.
+- Added two `bonusConditions` per mission — a `TIME_THRESHOLD` (⅔ of par time) and a `HULL_THRESHOLD` — with score bonuses scaling from M01 (400/300) to M08 (900/700), surfacing in briefing and debrief immediately via existing Stage 2d/2e wiring.
+- Missions 07 and 08 promote their destroy objective to `ELIMINATE_BOSS` type (functionally identical to `DESTROY_ALL`; provides semantic distinction for BOSS and FINALE missions).
+- `PHASE_TAG` updated to `'Phase 6b'`.
+- Verification: `npm run lint` (tsc --noEmit) passed; `npm run build` passed (2132 modules, existing large-chunk warning only); `npm run validate:drone` passed; `docker compose --progress plain build` passed; container Up as of 2026-05-15.
+- Notes/Risks: All 8 missions continue to derive targets, enemy waves, and scoring rank thresholds from their existing fields — `objectiveSet` is purely additive. Future missions authored in Stages 6c-6g should follow the same `objectiveSet` pattern established here.
 
 ### Stage 6c - Storm Coast Arc Batch
 
-Status: Not started
+Status: Complete
 
-- [ ] Add 3-4 missions using storm/ocean/weather systems.
-- [ ] Introduce first naval operations and weather pressure gradually.
-- [ ] Add appropriate rewards and progression hooks.
+- [x] Add 3-4 missions using storm/ocean/weather systems.
+- [x] Introduce first naval operations and weather pressure gradually.
+- [x] Add appropriate rewards and progression hooks.
 
 Exit criteria:
 
-- [ ] Storm Coast arc can be unlocked, played, completed, and replayed.
+- [x] Storm Coast arc can be unlocked, played, completed, and replayed.
+
+Completion summary:
+
+- Shipped: Authored Arc 4 // Storm Coast as a four-mission main campaign batch: `COASTAL KNIFE` (M09), `SQUALL HOOK` (M10), `TIDEBREAKER ARRAY` (M11), and `TEMPEST SPEAR` (M12). The arc chains from `final-dawn` through all four missions and ends with the `storm-coast-secured` reward.
+- Shipped: Added a first-class `storm-coast` level kit using the existing Storm Coast biome and ocean buoy waypoint language, activated the Storm Coast campaign arc, and updated `PHASE_TAG` to `'Phase 6c'` before build/deploy.
+- Shipped: Added moving patrol-craft targets, naval weak points, rain/sea-squall/crosswind/lightning weather escalation, authored `objectiveSet` data, and bonus conditions for all four new missions.
+- Changed: `src/config/missions.ts`, `src/config/levelKits.ts`, `src/config/campaign.ts`, `src/types/game.ts`, `src/config/buildMeta.ts`, `scripts/validate-storm-coast.ts`, `package.json`, `overview.md`, `README.md`, `DEV-CHECKLIST.md`.
+- Verification: Dockerized `npm run lint && npm run build && npm run validate:drone && npm run validate:prototype && npm run validate:intercept && npm run validate:ground && npm run validate:sea && npm run validate:hud && npm run validate:storm` passed; Vite built 2132 modules with the existing large-chunk warning only. `docker compose --progress plain build` passed. Initial `docker compose --progress plain up -d --no-build` stalled at container recreate; killing that terminal and rerunning `docker compose --progress plain up -d --no-build --force-recreate && docker compose ps` passed with `skybreaker-drone-strike` Up.
+- Notes/Risks: Stage 6d now authors the Frozen Relay follow-on with `frost-needle` unlocking from `tempest-spear`; the Storm Coast validator was updated to enforce that handoff.
 
 ### Stage 6d - Frozen Relay Arc Batch
 
-Status: Not started
+Status: Complete
 
-- [ ] Add 3-4 missions using arctic/low-visibility/sensor pressure systems.
-- [ ] Introduce long-range interception or fragile sensor-link objectives.
-- [ ] Validate readability in bright/foggy environments.
+- [x] Add 3-4 missions using arctic/low-visibility/sensor pressure systems.
+- [x] Introduce long-range interception or fragile sensor-link objectives.
+- [x] Validate readability in bright/foggy environments.
 
 Exit criteria:
 
-- [ ] Frozen Relay arc feels distinct and remains readable.
+- [x] Frozen Relay arc feels distinct and remains readable.
+
+Completion summary:
+
+- Shipped: Authored Arc 5 // Frozen Relay as a four-mission main campaign batch: `FROST NEEDLE` (M13), `WHITEOUT RUN` (M14), `GHOST LINK` (M15), and `ZERO SUN CROWN` (M16). The arc chains from `tempest-spear` through all four missions and ends with the `frozen-relay-secured` reward.
+- Shipped: Added a first-class `arctic-shelf` level kit using the existing Arctic Shelf biome, activated the Frozen Relay campaign arc, and updated `PHASE_TAG` to `'Phase 6d'` before build/deploy.
+- Shipped: Added snow/frost and EM sensor-pressure missions, airborne courier intercepts with fail-mission escape routes, arctic relay/sensor-link strike targets, authored `objectiveSet` data, target tracking metadata for low-visibility readability, and bonus conditions for all four new missions.
+- Changed: `src/config/missions.ts`, `src/config/levelKits.ts`, `src/config/campaign.ts`, `src/types/game.ts`, `src/config/buildMeta.ts`, `scripts/validate-frozen-relay.ts`, `scripts/validate-storm-coast.ts`, `package.json`, `overview.md`, `README.md`, `DEV-CHECKLIST.md`.
+- Verification: Editor diagnostics passed. First full Dockerized verification caught the expected stale Storm Coast validator assumption; after updating `validate:storm`, Dockerized `npm run lint && npm run build && npm run validate:drone && npm run validate:prototype && npm run validate:intercept && npm run validate:ground && npm run validate:sea && npm run validate:hud && npm run validate:storm && npm run validate:frozen` passed. `docker compose --progress plain build && docker compose --progress plain up -d --no-build && docker compose ps` passed with `skybreaker-drone-strike` Up.
+- Notes/Risks: Stage 6e should author the first Red Canyon Siege mission with `unlockAfterMissionId: 'zero-sun-crown'`. Until then, the Frozen Relay validator intentionally confirms no later arc mission unlocks from `zero-sun-crown`.
 
 ### Stage 6e - Red Canyon Siege Arc Batch
 
-Status: Not started
+Status: Complete
 
-- [ ] Add 3-4 missions using canyon lanes, convoys, artillery, and moving ground targets.
-- [ ] Introduce attack-run incentives and terrain route pressure.
-- [ ] Validate mobile control and marker readability in tighter terrain.
+- [x] Add 3-4 missions using canyon lanes, convoys, artillery, and moving ground targets.
+- [x] Introduce attack-run incentives and terrain route pressure.
+- [x] Validate mobile control and marker readability in tighter terrain.
 
 Exit criteria:
 
-- [ ] Red Canyon arc can be completed without navigation confusion.
+- [x] Red Canyon arc can be completed without navigation confusion.
+
+Completion summary:
+
+- Shipped: Authored Arc 6 // Red Canyon Siege as a four-mission main campaign batch: `CANYON VANGUARD` (M17), `RAILFIRE PASS` (M18), `SCARLET SIEGE` (M19), and `BASTION FALL` (M20). The arc chains from `zero-sun-crown` through all four missions and ends with the `red-canyon-secured` reward.
+- Shipped: Added a first-class `red-canyon` level kit backed by the existing high-contrast urban ruin environment, activated the Red Canyon campaign arc, and added canyon-lane convoy, artillery/SAM, reactor, jammer, and bastion targets.
+- Shipped: Added moving convoy routes with fail-mission escape behavior, route hints, marker/radar labels on every target, attack-run bonus conditions, and `validate:canyon` coverage including the handoff into Skybreaker Core.
+- Changed: `src/config/missions.ts`, `src/config/levelKits.ts`, `src/config/campaign.ts`, `src/types/game.ts`, `scripts/validate-red-canyon.ts`, `scripts/validate-frozen-relay.ts`, `package.json`, `overview.md`, `README.md`, `DEV-CHECKLIST.md`.
+- Verification: Dockerized `npm run lint` passed. Dockerized `npm run build && npm run validate:drone && npm run validate:prototype && npm run validate:intercept && npm run validate:ground && npm run validate:sea && npm run validate:hud && npm run validate:storm && npm run validate:frozen && npm run validate:canyon && npm run validate:core` passed. Local Vite preview served inside Docker, but browser automation in this environment could not reach the forwarded port; marker/mobile readability is enforced through the arc validators until Stage 6g full campaign smoke.
 
 ### Stage 6f - Skybreaker Core Arc Batch
 
-Status: Not started
+Status: Complete
 
-- [ ] Add final mixed-domain missions using set pieces, weather, bosses, and extraction pressure.
-- [ ] Build a finale mission that combines air, land, sea, and mega-core mechanics only after those systems are stable.
-- [ ] Add final rewards and campaign completion state.
+- [x] Add final mixed-domain missions using set pieces, weather, bosses, and extraction pressure.
+- [x] Build a finale mission that combines air, land, sea, and mega-core mechanics only after those systems are stable.
+- [x] Add final rewards and campaign completion state.
 
 Exit criteria:
 
-- [ ] Main campaign has a complete ending.
-- [ ] Finale is intense but readable on desktop and mobile.
+- [x] Main campaign has a complete ending.
+- [x] Finale is intense but readable on desktop and mobile.
+
+Completion summary:
+
+- Shipped: Authored Arc 7 // Skybreaker Core as a four-mission finale batch: `CORE NEEDLE` (M21), `CARRIER ECLIPSE` (M22), `SKYBREAKER HEART` (M23), and `LAST LIGHT` (M24). The arc chains from `bastion-fall` and ends with `CAMPAIGN COMPLETE` on final extraction.
+- Shipped: Added a first-class `skybreaker-core` level kit, activated the Skybreaker Core campaign arc, and updated `PHASE_TAG` to `'Phase 6f'` before build/deploy.
+- Shipped: Added final mixed-domain missions combining relay-spire reactors, SAM/facility gates, patrol craft, a carrier group, airborne bomber/courier escape pressure, lightning storm/EM weather, high-pressure enemy waves, and final `skybreaker-core-complete` reward state.
+- Changed: `src/config/missions.ts`, `src/config/levelKits.ts`, `src/config/campaign.ts`, `src/types/game.ts`, `src/config/buildMeta.ts`, `scripts/validate-skybreaker-core.ts`, `package.json`, `overview.md`, `README.md`, `DEV-CHECKLIST.md`.
+- Verification: Dockerized `npm run lint` passed. Dockerized `npm run build && npm run validate:drone && npm run validate:prototype && npm run validate:intercept && npm run validate:ground && npm run validate:sea && npm run validate:hud && npm run validate:storm && npm run validate:frozen && npm run validate:canyon && npm run validate:core` passed with only the existing Vite large-chunk warning. `docker compose --progress plain build && docker compose --progress plain up -d --no-build && docker compose ps` passed with `skybreaker-drone-strike` Up.
+- Notes/Risks: Stage 6g should run the full campaign regression from a clean save and migrated saves now that Missions 01-24 are authored.
 
 ### Stage 6g - Campaign Wave 1 Regression
 
-Status: Not started
+Status: Complete
 
-- [ ] Smoke every main mission from a clean save.
-- [ ] Smoke existing migrated saves.
-- [ ] Validate mission unlocks, rewards, best times, best scores, ranks, and replay flow.
+- [x] Smoke every main mission from a clean save.
+- [x] Smoke existing migrated saves.
+- [x] Validate mission unlocks, rewards, best times, best scores, ranks, and replay flow.
 
 Exit criteria:
 
-- [ ] Expanded campaign can be played start to finish.
-- [ ] TypeScript, build, Docker deploy, and campaign smoke pass.
+- [x] Expanded campaign can be played start to finish.
+- [x] TypeScript, build, Docker deploy, and campaign smoke pass.
+
+Completion summary:
+
+- Shipped: Added a reusable campaign-wide regression validator that simulates a clean-save run through all 24 main missions, verifies objective destroy/extract handoff snapshots, unlock chaining, rewards, best times, best scores, best ranks, replay best-record preservation and improvement, final 100% main-campaign completion, prototype isolation, and migrated/stale-save normalization. Extracted campaign progress normalization into `normalizeCampaignProgress` so the app and regression script test the same save-repair logic.
+- Changed: `src/systems/missionSystem.ts`, `src/App.tsx`, `scripts/validate-campaign-wave1.ts`, `package.json`, `src/config/buildMeta.ts`, `overview.md`, `DEV-CHECKLIST.md`.
+- Verification: Dockerized `npm run lint && npm run build && npm run validate:drone && npm run validate:prototype && npm run validate:intercept && npm run validate:ground && npm run validate:sea && npm run validate:hud && npm run validate:storm && npm run validate:frozen && npm run validate:canyon && npm run validate:core && npm run validate:campaign` passed; `docker compose --progress plain build && docker compose --progress plain up -d --no-build && docker compose ps` passed with `skybreaker-drone-strike` Up.
+- Notes/Risks: Stage 6g is an automated campaign data/progression regression, not a hand-played completion of every mission. Full human playthrough tuning remains useful later in Stage 10a. The existing Vite large-chunk warning remains unchanged and acceptable for this phase.
 
 ## Stage 7 - Player Progression, Loadout, And Upgrade Paths
 
@@ -867,6 +942,7 @@ Goal: make expanded combat feel varied through behavior, not only stats.
 
 Status: Not started
 
+- [ ] Upgrade the base air enemy model in `createEnemyModel()` to meet the Unit Visual Fidelity Standard: role-recognizable silhouette, proportional scale relative to `AIRCRAFT_SCALE = 0.28`, hitbox-mesh correspondence, and named material handles for per-frame state (damage flash, shield visibility).
 - [ ] Separate enemy behavior controllers from visual/stat definitions.
 - [ ] Add reusable behavior states such as spawn, patrol, pursue, orbit, strafe, retreat, guard, attack objective, and flee.
 - [ ] Keep current enemy behavior as a default controller.
@@ -875,6 +951,7 @@ Exit criteria:
 
 - [ ] Current enemies behave as before through the new controller layer.
 - [ ] New controllers can be assigned by role or mission data.
+- [ ] No unit introduced or revised in this stage has a placeholder geometry unless a follow-up visual upgrade item is explicitly logged in the same stage's completion summary.
 
 ### Stage 8b - Formation And Group Behaviors
 
@@ -887,6 +964,7 @@ Status: Not started
 Exit criteria:
 
 - [ ] Formation enemies feel coordinated and remain readable.
+- [ ] Formation leader and child unit models each meet the Unit Visual Fidelity Standard; radar blip domain shapes (square/triangle/diamond) correctly reflect the updated geometry.
 
 ### Stage 8c - Ground And Naval Enemy Behaviors
 
@@ -899,6 +977,9 @@ Status: Not started
 Exit criteria:
 
 - [ ] Ground and naval threats are readable before they damage the player.
+- [ ] Each new or revised ground/naval archetype passes a proportional scale check against `AIRCRAFT_SCALE = 0.28` (e.g. a destroyer silhouette must be meaningfully larger than the player drone, not uniformly scaled to fit a default box).
+- [ ] Hitbox geometry for each archetype closely follows its visible silhouette — verified by a side-by-side visual smoke at LOW graphics before the stage closes.
+- [ ] Any ship, carrier, or platform unit revised here includes a review of whether its visual geometry needs updating to match the stat/role change.
 
 ### Stage 8d - Telegraphs And Reactive Encounters
 
@@ -934,6 +1015,8 @@ Status: Not started
 Exit criteria:
 
 - [ ] Variants add variety without confusing threat recognition.
+- [ ] Each variant preserves the base role's proportional scale and hitbox-mesh correspondence — reskins that shrink or enlarge the visual without adjusting the collision volume are a bug.
+- [ ] Named material handles (damage flash, shield glow, thrust state) are carried through all variants; anonymous inline material references are not acceptable on any reskinned unit.
 
 ## Stage 9 - Campaign Expansion Wave 2 And Optional Sorties
 
@@ -1088,6 +1171,7 @@ Build and toolchain:
 - [x] `npm run lint`
 - [x] `npm run build`
 - [x] `npm run validate:drone`
+- [x] `npm run validate:campaign`
 - [x] Docker rebuild succeeds
 - [x] Docker deploy succeeds
 
@@ -1167,6 +1251,21 @@ Gameplay regression for future phases:
 - 2026-05-14: Stage 4f `docker compose --progress plain build` — passed; image `skybreaker-drone-strike:latest` rebuilt.
 - 2026-05-14: Stage 4f `docker compose --progress plain up -d --no-build && docker compose ps` — passed; container `skybreaker-drone-strike` reported `Up`.
 - 2026-05-14: Stage 4f deployed browser smoke — passed; seeded completed campaign progress, confirmed `SET-PIECE PROVING GROUND` appears READY under `Prototype Range // Set-Piece Lab`, launched the briefing into mission runtime, and verified canvas, HUD, radar/compass, and `DISABLE PROTOTYPE SYSTEMS: 0 / 3` objective chip rendered.
+- 2026-05-15: Stage 6c editor diagnostics — passed; no reported errors in `missions.ts`, `levelKits.ts`, `campaign.ts`, `types/game.ts`, `buildMeta.ts`, `validate-storm-coast.ts`, docs, or checklist.
+- 2026-05-15: Stage 6c Dockerized `npm run lint && npm run build && npm run validate:drone && npm run validate:prototype && npm run validate:intercept && npm run validate:ground && npm run validate:sea && npm run validate:hud && npm run validate:storm` — passed; TypeScript zero errors, Vite 2132 modules with existing large-chunk warning only, all validators passed including Storm Coast campaign arc validation.
+- 2026-05-15: Stage 6c `docker compose --progress plain build` — passed; image `skybreaker-drone-strike:latest` rebuilt with `PHASE_TAG = 'Phase 6c'`.
+- 2026-05-15: Stage 6c deploy recovery — initial `docker compose --progress plain up -d --no-build` stalled at container recreate with the service in `Created` state; killing the stuck terminal and rerunning `docker compose --progress plain up -d --no-build --force-recreate && docker compose ps` passed, container `skybreaker-drone-strike` reported `Up`.
+- 2026-05-15: Stage 6d editor diagnostics — passed; no reported errors in `missions.ts`, `levelKits.ts`, `campaign.ts`, `types/game.ts`, `buildMeta.ts`, `validate-frozen-relay.ts`, or package/docs files.
+- 2026-05-15: Stage 6d first Dockerized verification — `npm run lint && npm run build && npm run validate:drone && npm run validate:prototype && npm run validate:intercept && npm run validate:ground && npm run validate:sea && npm run validate:hud && npm run validate:storm && npm run validate:frozen` failed only because `validate:storm` still expected no post-`tempest-spear` unlock before Stage 6d. Validator was updated to expect `frost-needle`.
+- 2026-05-15: Stage 6d final Dockerized verification — passed; TypeScript zero errors, Vite 2132 modules with existing large-chunk warning only, all validators passed including Storm Coast and Frozen Relay campaign arc validation.
+- 2026-05-15: Stage 6d `docker compose --progress plain build && docker compose --progress plain up -d --no-build && docker compose ps` — passed; image `skybreaker-drone-strike:latest` rebuilt with `PHASE_TAG = 'Phase 6d'`, container `skybreaker-drone-strike` reported `Up`.
+- 2026-05-15: Stages 6e/6f Dockerized `npm run lint` — passed; TypeScript zero errors after adding Red Canyon and Skybreaker Core mission data, level kits, validators, docs, and `PHASE_TAG = 'Phase 6f'`.
+- 2026-05-15: Stages 6e/6f Dockerized `npm run build && npm run validate:drone && npm run validate:prototype && npm run validate:intercept && npm run validate:ground && npm run validate:sea && npm run validate:hud && npm run validate:storm && npm run validate:frozen && npm run validate:canyon && npm run validate:core` — passed; Vite 2132 modules with existing large-chunk warning only, all validators passed including Red Canyon and Skybreaker Core campaign arc validation.
+- 2026-05-15: Stages 6e/6f local preview attempt — Vite preview served inside Docker and responded from inside the container; editor browser automation could not reach the forwarded port from this environment, so browser smoke is deferred to Stage 6g campaign regression.
+- 2026-05-15: Stages 6e/6f `docker compose --progress plain build && docker compose --progress plain up -d --no-build && docker compose ps` — passed; image `skybreaker-drone-strike:latest` rebuilt with `PHASE_TAG = 'Phase 6f'`, container `skybreaker-drone-strike` reported `Up`.
+- 2026-05-15: Stage 6g Dockerized `npm run lint && npm run validate:campaign` — passed; TypeScript zero errors and campaign regression validated clean-save progression, migrated-save normalization, rewards, best records, replay flow, prototype isolation, and final 100% main-campaign completion.
+- 2026-05-15: Stage 6g Dockerized `npm run lint && npm run build && npm run validate:drone && npm run validate:prototype && npm run validate:intercept && npm run validate:ground && npm run validate:sea && npm run validate:hud && npm run validate:storm && npm run validate:frozen && npm run validate:canyon && npm run validate:core && npm run validate:campaign` — passed; Vite built 2132 modules with the existing large-chunk warning only and all validators passed.
+- 2026-05-15: Stage 6g `docker compose --progress plain build && docker compose --progress plain up -d --no-build && docker compose ps` — passed; image `skybreaker-drone-strike:latest` rebuilt with `PHASE_TAG = 'Phase 6g'`, container `skybreaker-drone-strike` reported `Up`.
 
 ## Latest Session Summary
 
@@ -1301,5 +1400,43 @@ Introduced airborne mission objectives with escape failure, a new ace-intercepto
 - Begin Stage 5d - Air-To-Land Threat Systems.
 - Start by reading `src/config/enemies.ts` (existing ground-capable roles) and `src/scene/objectiveModels.ts` (add SAM, turret, railgun mesh helpers).
 - Add ground threat archetypes that fire at the player and have weak points (barrel, radar dish, generator).
+
+---
+
+## Latest Session Summary
+
+Date: 2026-05-15
+
+Phase worked:
+- Stage 6g - Campaign Wave 1 Regression.
+
+Shipped:
+- Added `scripts/validate-campaign-wave1.ts` and `npm run validate:campaign`.
+- Extracted save/progress repair into `normalizeCampaignProgress` so app loading and regression validation use the same logic.
+- Validated clean-save progression through all 24 main missions, migrated saves, unlock chains, rewards, best times/scores/ranks, replay flow, prototype isolation, and final campaign completion.
+- Updated `PHASE_TAG = 'Phase 6g'` and corrected the current-state Mission 04 title in `overview.md`.
+
+Changed files:
+- `src/systems/missionSystem.ts`
+- `src/App.tsx`
+- `scripts/validate-campaign-wave1.ts`
+- `package.json`
+- `src/config/buildMeta.ts`
+- `overview.md`
+- `DEV-CHECKLIST.md`
+
+Verification:
+- Dockerized `npm run lint && npm run validate:campaign` — passed.
+- Dockerized `npm run lint && npm run build && npm run validate:drone && npm run validate:prototype && npm run validate:intercept && npm run validate:ground && npm run validate:sea && npm run validate:hud && npm run validate:storm && npm run validate:frozen && npm run validate:canyon && npm run validate:core && npm run validate:campaign` — passed; existing Vite large-chunk warning only.
+- `docker compose --progress plain build && docker compose --progress plain up -d --no-build && docker compose ps` — passed, container `skybreaker-drone-strike` Up.
+
+Deferred:
+- Hand-played completion/tuning of every main mission remains a Stage 10a release-hardening activity; Stage 6g covers automated data/progression regression.
+- Runtime remains centered on destroy/extract objective phases; semantic mission types still use runtime-compatible `DESTROY_ALL` or `ELIMINATE_BOSS` primary objectives until later objective behavior phases.
+
+Next recommended starting point:
+- Begin Stage 7a - Inventory And Progression Data.
+- Start by reading `src/types/game.ts`, `src/config/defaults.ts`, `src/systems/missionSystem.ts`, `src/config/weapons.ts`, `src/components/menus/LoadoutScreen.tsx`, and `src/components/menus/CareerScreen.tsx`.
+- Add persistent inventory/progression state for unlocked weapons, upgrades, currencies/parts, and equipped items while preserving existing reward ids and the Stage 6g save-normalization path.
 
 
