@@ -839,6 +839,13 @@ export default function Game({
               const leaderPos = leaderSpawnPositions.get(formationId)!;
               const off = WING_OFFSETS[wingIndex % WING_OFFSETS.length];
               spawnPos = leaderPos.clone().add(new THREE.Vector3(off[0], off[1], off[2]));
+            } else if (enemyDefinition.navalThreat) {
+              // Stage 8c: naval units spawn on the sea surface (y = 0)
+              spawnPos = new THREE.Vector3(
+                (Math.random() - 0.5) * 1400,
+                0,
+                (Math.random() - 0.5) * 1400
+              );
             } else if (enemyDefinition.groundThreat) {
               spawnPos = new THREE.Vector3(
                 (Math.random() - 0.5) * 1200,
@@ -872,7 +879,8 @@ export default function Game({
               destroyed: false,
               velocity: new THREE.Vector3(),
               // Stage 5d: grant ground threats a brief startup delay so first fire isn't instant
-              lastFireTime: enemyDefinition.groundThreat ? Date.now() + 2500 : 0,
+              // Stage 8c: same startup delay for naval threats
+              lastFireTime: (enemyDefinition.groundThreat || enemyDefinition.navalThreat) ? Date.now() + 2500 : 0,
               definition: enemyDefinition,
               // Stage 8a: behavior controller architecture
               behaviorState: 'spawn',
@@ -899,7 +907,8 @@ export default function Game({
               },
               false,
               // Stage 5f: domain drives radar blip shape; Stage 8b: formationRole drives blip size
-              { domain: enemyDefinition.groundThreat ? 'ground' : undefined, formationRole },
+              // Stage 8c: naval threats use 'sea' domain (diamond blip)
+              { domain: enemyDefinition.navalThreat ? 'sea' : enemyDefinition.groundThreat ? 'ground' : undefined, formationRole },
             );
           });
         }

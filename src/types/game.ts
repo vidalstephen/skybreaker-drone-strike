@@ -85,7 +85,7 @@ export interface PlayerInventory {
 
 export type WeaponSlot = 'PRIMARY' | 'SECONDARY';
 export type WeaponId = 'pulse-cannon' | 'ion-missile';
-export type EnemyRole = 'fast-interceptor' | 'heavy-gunship' | 'missile-platform' | 'shielded-warden' | 'mini-boss' | 'ace-interceptor' | 'sam-battery' | 'flak-cannon' | 'railgun-emplacement';
+export type EnemyRole = 'fast-interceptor' | 'heavy-gunship' | 'missile-platform' | 'shielded-warden' | 'mini-boss' | 'ace-interceptor' | 'sam-battery' | 'flak-cannon' | 'railgun-emplacement' | 'patrol-craft' | 'destroyer';
 
 export interface WeaponDefinition {
   id: WeaponId;
@@ -125,6 +125,8 @@ export interface EnemyDefinition {
   scale: [number, number, number];
   /** Stage 5d: marks this enemy as a surface (ground) emplacement. Affects spawn Y, AI, and HUD presentation. */
   groundThreat?: boolean;
+  /** Stage 8c: marks this enemy as a naval surface unit. Affects spawn Y (sea level), AI, and HUD presentation (sea domain blip). */
+  navalThreat?: boolean;
 }
 
 export interface MissionRewardDefinition {
@@ -1050,7 +1052,9 @@ export interface TargetWeakPoint {
 /** Stage 8a: behavior states for the enemy controller architecture. */
 export type EnemyBehaviorStateId =
   | 'spawn' | 'patrol' | 'pursue' | 'orbit'
-  | 'strafe' | 'retreat' | 'guard' | 'attack-objective' | 'flee';
+  | 'strafe' | 'retreat' | 'guard' | 'attack-objective' | 'flee'
+  /** Stage 8c: pre-fire telegraph (visible wind-up before a heavy shot) and reload idle. */
+  | 'pre-fire' | 'reload';
 
 /** Stage 8a: named visual handles for per-frame material updates (damage flash, shield visibility, glow). */
 export interface EnemyVisualHandles {

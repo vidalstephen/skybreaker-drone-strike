@@ -14,6 +14,9 @@ export interface EnemyModelResult {
  * unchanged from Stage 5d.
  */
 export function createEnemyModel(def: EnemyDefinition): EnemyModelResult {
+  if (def.navalThreat) {
+    return createNavalModel(def);
+  }
   if (def.groundThreat) {
     return createGroundThreatModel(def);
   }
@@ -315,3 +318,136 @@ function createGroundThreatModel(def: EnemyDefinition): EnemyModelResult {
   return { group, visualHandles: { shieldMesh, bodyMeshes, engineGlows } };
 }
 
+// ---------------------------------------------------------------------------
+// Naval unit models — Stage 8c
+// Surface vessels. Geometry is anchored to AIRCRAFT_SCALE = 0.28 but scaled
+// significantly larger so ships are unmistakably bigger than the player drone.
+// ---------------------------------------------------------------------------
+
+/** Stage 8c: Creates a naval surface-unit model for sea-threat enemies. */
+function createNavalModel(def: EnemyDefinition): EnemyModelResult {
+  const group = new THREE.Group();
+  const sx = def.scale[0];
+  const sy = def.scale[1];
+  const sz = def.scale[2];
+  const bodyMeshes: THREE.Mesh[] = [];
+  const engineGlows: THREE.Mesh[] = [];
+
+  const baseMat   = () => new THREE.MeshStandardMaterial({ color: def.color,   emissive: def.emissive, emissiveIntensity: 0.35, roughness: 0.75 });
+  const accentMat = () => new THREE.MeshBasicMaterial({ color: def.emissive });
+
+  const addPart = (geo: THREE.BufferGeometry, mat: THREE.Material, pos?: [number, number, number]): THREE.Mesh => {
+    const mesh = new THREE.Mesh(geo, mat);
+    if (pos) mesh.position.set(...pos);
+    group.add(mesh);
+    bodyMeshes.push(mesh);
+    return mesh;
+  };
+
+  switch (def.silhouette) {
+    // -------------------------------------------------------------------
+    // patrol-craft: fast lightly-armed naval craft — flat hull, bridge, forward gun
+    // -------------------------------------------------------------------
+    case 'naval-patrol-frame': {
+      // Main flat hull
+      addPart(new THREE.BoxGeometry(2.2 * sx, 0.5 * sy, 5.0 * sz), baseMat(), [0, 0, 0]);
+      // Raised bow
+      addPart(new THREE.BoxGeometry(1.4 * sx, 0.7 * sy, 1.2 * sz), baseMat(), [0, 0.3 * sy, -2.3 * sz]);
+      // Bridge/superstructure
+      addPart(new THREE.BoxGeometry(1.0 * sx, 1.2 * sy, 1.0 * sz), baseMat(), [0, 0.85 * sy, 0.2 * sz]);
+      // Bridge windows (accent strip)
+      addPart(new THREE.BoxGeometry(1.05 * sx, 0.28 * sy, 0.12 * sz), accentMat(), [0, 1.0 * sy, -0.32 * sz]);
+      // Forward gun turret + barrel
+      {
+        const turret = new THREE.Mesh(new THREE.CylinderGeometry(0.4 * sx, 0.5 * sx, 0.5 * sy, 8), baseMat());
+        turret.position.set(0, 0.5 * sy, -1.6 * sz);
+        group.add(turret); bodyMeshes.push(turret);
+        const barrelGeo = new THREE.CylinderGeometry(0.12 * sx, 0.12 * sx, 1.4 * sz, 6);
+        barrelGeo.rotateX(Math.PI / 2);
+        const barrel = new THREE.Mesh(barrelGeo, baseMat());
+        barrel.position.set(0, 0.75 * sy, -2.4 * sz);
+        group.add(barrel); bodyMeshes.push(barrel);
+      }
+      // Stern engine glows
+      for (const ox of [-0.55 * sx, 0.55 * sx]) {
+        const glow = new THREE.Mesh(new THREE.SphereGeometry(0.22 * sx, 6, 4), accentMat());
+        glow.position.set(ox, -0.1 * sy, 2.6 * sz);
+        group.add(glow); engineGlows.push(glow);
+      }
+      break;
+    }
+
+    // -------------------------------------------------------------------
+    // destroyer: heavy warship — long wide hull, superstructure, twin guns, missile launchers
+    // -------------------------------------------------------------------
+    case 'naval-destroyer-frame': {
+      // Main hull
+      addPart(new THREE.BoxGeometry(3.0 * sx, 0.65 * sy, 7.5 * sz), baseMat(), [0, 0, 0]);
+      // Angled bow
+      {
+        const bowGeo = new THREE.CylinderGeometry(0, 1.4 * sx, 1.8 * sz, 4);
+        bowGeo.rotateY(Math.PI / 4);
+        bowGeo.rotateX(Math.PI / 2);
+        const bow = new THREE.Mesh(bowGeo, baseMat());
+        bow.position.set(0, 0, -4.65 * sz);
+        group.add(bow); bodyMeshes.push(bow);
+      }
+      // Main superstructure
+      addPart(new THREE.BoxGeometry(1.8 * sx, 1.6 * sy, 2.4 * sz), baseMat(), [0, 0.95 * sy, 0]);
+      // Radar mast
+      addPart(new THREE.CylinderGeometry(0.12 * sx, 0.12 * sx, 1.6 * sy, 6), baseMat(), [0, 2.55 * sy, -0.1 * sz]);
+      // Radar dish
+      addPart(new THREE.SphereGeometry(0.35 * sx, 8, 6), accentMat(), [0, 3.4 * sy, -0.1 * sz]);
+      // Forward gun turret (twin barrels)
+      {
+        const turret = new THREE.Mesh(new THREE.CylinderGeometry(0.55 * sx, 0.65 * sx, 0.7 * sy, 8), baseMat());
+        turret.position.set(0, 0.65 * sy, -3.2 * sz);
+        group.add(turret); bodyMeshes.push(turret);
+        for (const ox of [-0.3 * sx, 0.3 * sx]) {
+          const barrelGeo = new THREE.CylinderGeometry(0.14 * sx, 0.14 * sx, 2.0 * sz, 6);
+          barrelGeo.rotateX(Math.PI / 2);
+          const barrel = new THREE.Mesh(barrelGeo, baseMat());
+          barrel.position.set(ox, 0.9 * sy, -4.4 * sz);
+          group.add(barrel); bodyMeshes.push(barrel);
+        }
+      }
+      // Missile launcher boxes (amidships)
+      for (const ox of [-1.6 * sx, 1.6 * sx]) {
+        addPart(new THREE.BoxGeometry(0.55 * sx, 0.55 * sy, 1.0 * sz), accentMat(), [ox, 1.0 * sy, 0.8 * sz]);
+      }
+      // Aft gun turret
+      {
+        const turret2 = new THREE.Mesh(new THREE.CylinderGeometry(0.5 * sx, 0.6 * sx, 0.6 * sy, 8), baseMat());
+        turret2.position.set(0, 0.6 * sy, 3.0 * sz);
+        group.add(turret2); bodyMeshes.push(turret2);
+        const barrelGeo2 = new THREE.CylinderGeometry(0.13 * sx, 0.13 * sx, 1.6 * sz, 6);
+        barrelGeo2.rotateX(Math.PI / 2);
+        const barrel2 = new THREE.Mesh(barrelGeo2, baseMat());
+        barrel2.position.set(0, 0.85 * sy, 3.9 * sz);
+        group.add(barrel2); bodyMeshes.push(barrel2);
+      }
+      // Stern exhausts
+      for (const ox of [-0.9 * sx, 0, 0.9 * sx]) {
+        const glow = new THREE.Mesh(new THREE.SphereGeometry(0.28 * sx, 6, 4), accentMat());
+        glow.position.set(ox, -0.1 * sy, 4.0 * sz);
+        group.add(glow); engineGlows.push(glow);
+      }
+      break;
+    }
+
+    default: {
+      addPart(new THREE.BoxGeometry(2.5 * sx, 0.6 * sy, 4.0 * sz), baseMat());
+      break;
+    }
+  }
+
+  let shieldMesh: THREE.Mesh | null = null;
+  if (def.shields > 0) {
+    const shieldGeo = new THREE.SphereGeometry(4.5 * Math.max(sx, sz), 16, 8);
+    const shieldMat = new THREE.MeshBasicMaterial({ color: 0x66ccff, transparent: true, opacity: 0.12, wireframe: true });
+    shieldMesh = new THREE.Mesh(shieldGeo, shieldMat);
+    group.add(shieldMesh);
+  }
+
+  return { group, visualHandles: { shieldMesh, bodyMeshes, engineGlows } };
+}

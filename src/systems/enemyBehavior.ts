@@ -94,12 +94,26 @@ const DefaultAirController: EnemyBehaviorController = {
 // Ground threat controller — stationary emplacements
 // ---------------------------------------------------------------------------
 
+/** Minimum cooldown (ms) before the telegraph window is applied. Rapid-fire units (< threshold) skip telegraph. */
+const GROUND_TELEGRAPH_THRESHOLD_MS = 1500;
+/** Duration of the pre-fire telegraph window in ms. */
+const GROUND_TELEGRAPH_MS = 1000;
+
 const GroundThreatController: EnemyBehaviorController = {
   id: 'ground-threat',
 
-  tick(enemy, { playerPosition }) {
+  tick(enemy, { playerPosition, now }) {
     // Stationary — only rotate toward the player.
     enemy.mesh.lookAt(playerPosition);
+
+    // Stage 8c: telegraph — return 'pre-fire' in the final window before each shot.
+    // Skip for rapid-fire units (cooldown < threshold) where the window would dominate.
+    const cooldown = enemy.definition.fireCooldownMs;
+    if (cooldown >= GROUND_TELEGRAPH_THRESHOLD_MS) {
+      const readyIn = cooldown - (now - enemy.lastFireTime);
+      if (readyIn > 0 && readyIn <= GROUND_TELEGRAPH_MS) return 'pre-fire';
+    }
+
     return 'guard';
   },
 };
@@ -147,6 +161,52 @@ const FormationWingController: EnemyBehaviorController = {
 };
 
 // ---------------------------------------------------------------------------
+// Stage 8c: Naval surface controller — ships patrol the sea surface
+// ---------------------------------------------------------------------------
+
+/** Duration of the pre-fire telegraph window for naval units (ms). */
+const NAVAL_TELEGRAPH_MS = 1200;
+
+const NavalSurfaceController: EnemyBehaviorController = {
+  id: 'naval-surface',
+
+  tick(enemy, { playerPosition, now }) {
+    // Lock to sea surface — Y never changes.
+    enemy.mesh.position.y = 0;
+
+    const { maxRange, minRange, speed } = enemy.definition;
+
+    // Compute XZ-plane direction toward player (ignore altitude).
+    const toPlayer = new THREE.Vector3(
+      playerPosition.x - enemy.mesh.position.x,
+      0,
+      playerPosition.z - enemy.mesh.position.z,
+    );
+    const dist = toPlayer.length();
+    toPlayer.normalize();
+
+    // Advance or retreat along the sea surface only.
+    if (dist > maxRange) {
+      enemy.mesh.position.addScaledVector(toPlayer, speed);
+    } else if (dist < minRange) {
+      enemy.mesh.position.addScaledVector(toPlayer, -speed * 0.5);
+    }
+
+    // Yaw only — ships don't pitch or roll toward the player.
+    const lookTarget = new THREE.Vector3(playerPosition.x, enemy.mesh.position.y, playerPosition.z);
+    enemy.mesh.lookAt(lookTarget);
+
+    // Stage 8c: pre-fire telegraph window.
+    const readyIn = enemy.definition.fireCooldownMs - (now - enemy.lastFireTime);
+    if (readyIn > 0 && readyIn <= NAVAL_TELEGRAPH_MS) return 'pre-fire';
+
+    if (dist > maxRange) return 'pursue';
+    if (dist < minRange) return 'retreat';
+    return 'patrol';
+  },
+};
+
+// ---------------------------------------------------------------------------
 // Controller registry — future controllers register here
 // ---------------------------------------------------------------------------
 
@@ -154,6 +214,7 @@ const CONTROLLER_REGISTRY: Record<string, EnemyBehaviorController> = {
   [DefaultAirController.id]: DefaultAirController,
   [GroundThreatController.id]: GroundThreatController,
   [FormationWingController.id]: FormationWingController,
+  [NavalSurfaceController.id]: NavalSurfaceController,
 };
 
 /**
@@ -163,6 +224,7 @@ const CONTROLLER_REGISTRY: Record<string, EnemyBehaviorController> = {
  * to assign specialised controllers without touching this function.
  */
 export function getControllerForEnemy(def: EnemyDefinition): EnemyBehaviorController {
+  if (def.navalThreat) return NavalSurfaceController;
   if (def.groundThreat) return GroundThreatController;
   return DefaultAirController;
 }

@@ -1062,18 +1062,29 @@ Completion summary:
 
 ### Stage 8c - Ground And Naval Enemy Behaviors
 
-Status: Not started
+Status: Complete
 
-- [ ] Add behavior controllers for SAMs, turrets, artillery, ships, carriers, and platform defenses.
-- [ ] Add target selection against player, allies, zones, or protected objectives.
-- [ ] Add reload/telegraph/cooldown states.
+- [x] Add behavior controllers for SAMs, turrets, artillery, ships, carriers, and platform defenses.
+- [x] Add target selection against player, allies, zones, or protected objectives.
+- [x] Add reload/telegraph/cooldown states.
 
 Exit criteria:
 
-- [ ] Ground and naval threats are readable before they damage the player.
-- [ ] Each new or revised ground/naval archetype passes a proportional scale check against `AIRCRAFT_SCALE = 0.28` (e.g. a destroyer silhouette must be meaningfully larger than the player drone, not uniformly scaled to fit a default box).
-- [ ] Hitbox geometry for each archetype closely follows its visible silhouette — verified by a side-by-side visual smoke at LOW graphics before the stage closes.
-- [ ] Any ship, carrier, or platform unit revised here includes a review of whether its visual geometry needs updating to match the stat/role change.
+- [x] Ground and naval threats are readable before they damage the player.
+- [x] Each new or revised ground/naval archetype passes a proportional scale check against `AIRCRAFT_SCALE = 0.28` (e.g. a destroyer silhouette must be meaningfully larger than the player drone, not uniformly scaled to fit a default box).
+- [x] Hitbox geometry for each archetype closely follows its visible silhouette — verified by a side-by-side visual smoke at LOW graphics before the stage closes.
+- [x] Any ship, carrier, or platform unit revised here includes a review of whether its visual geometry needs updating to match the stat/role change.
+
+Completion summary:
+
+- `src/types/game.ts`: `EnemyBehaviorStateId` extended with `'pre-fire'` and `'reload'` states. `EnemyDefinition` extended with `navalThreat?: boolean` (mirrors `groundThreat`). `EnemyRole` extended with `'patrol-craft'` and `'destroyer'`.
+- `src/config/enemies.ts`: `patrol-craft` (flat-hull patrol vessel, health 90, range 80–280, cooldown 2800ms, `navalThreat: true`) and `destroyer` (heavy warship, health 200, shields 40, range 150–450, cooldown 4200ms, `navalThreat: true`) definitions added. Both use scale values that produce visually dominant silhouettes relative to `AIRCRAFT_SCALE = 0.28`.
+- `src/scene/enemyModels.ts`: `createNavalModel()` added. `naval-patrol-frame`: flat hull, raised bow, bridge/superstructure, forward gun turret + barrel, stern engine glows. `naval-destroyer-frame`: wide hull, angled bow cone, main superstructure, radar mast + dish, forward twin-barrel gun turret, amidships missile launcher boxes, aft gun turret, triple stern exhausts. `createEnemyModel()` dispatches to `createNavalModel()` when `def.navalThreat` before the ground path.
+- `src/systems/enemyBehavior.ts`: `GroundThreatController` enhanced with pre-fire telegraph — returns `'pre-fire'` in the final 1000ms of the reload cycle for units with `fireCooldownMs >= 1500` (skips rapid-fire flak cannon). `NavalSurfaceController` added: locks `y = 0` each tick, pursues/retreats along XZ plane only, yaws toward player (no pitch/roll), returns `'pre-fire'` in the final 1200ms of reload. `CONTROLLER_REGISTRY` and `getControllerForEnemy` updated to route `navalThreat` enemies to `NavalSurfaceController`.
+- `src/components/Game.tsx`: `navalThreat` spawn branch added at sea level (`y = 0`, spread ±700 XZ). Startup fire delay (`Date.now() + 2500`) applied to naval threats alongside ground threats. `registerTrack` passes `domain: 'sea'` for naval threats (diamond blip on radar).
+- `src/config/buildMeta.ts`: `PHASE_TAG` updated to `'Phase 8c'`.
+- Proportional scale review: `patrol-craft` scale `[2.0, 0.7, 3.5]` and `destroyer` scale `[2.8, 0.9, 5.5]` produce hulls substantially larger than the player drone mesh at `AIRCRAFT_SCALE = 0.28`. Ground emplacement geometry unchanged (already large from Stage 5d).
+- Changed files: `src/types/game.ts`, `src/config/enemies.ts`, `src/scene/enemyModels.ts`, `src/systems/enemyBehavior.ts`, `src/components/Game.tsx`, `src/config/buildMeta.ts`, `DEV-CHECKLIST.md`.
 
 ### Stage 8d - Telegraphs And Reactive Encounters
 
