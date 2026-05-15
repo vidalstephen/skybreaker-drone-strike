@@ -890,17 +890,43 @@ Completion summary (2026-05-15):
 
 ### Stage 7b - Loadout Selection Screen
 
-Status: Not started
+Status: Complete ✓
 
-- [ ] Convert Loadout Review into Loadout Selection.
-- [ ] Add primary, secondary, payload, and module slots as appropriate.
-- [ ] Add mission recommendation tags based on mission type, combat domain, weather, and objectives.
-- [ ] Keep a fast launch path for players who do not want to tinker.
+- [x] Convert Loadout Review into Loadout Selection.
+- [x] Add primary, secondary, payload, and module slots as appropriate.
+- [x] Add mission recommendation tags based on mission type, combat domain, weather, and objectives.
+- [x] Keep a fast launch path for players who do not want to tinker.
 
 Exit criteria:
 
-- [ ] Player can change equipment before launch.
-- [ ] Launch flow remains quick and obvious.
+- [x] Player can change equipment before launch.
+- [x] Launch flow remains quick and obvious.
+
+Completion summary (2026-05-15):
+- Converted `LoadoutScreen` from a read-only review panel to an interactive slot picker.
+- `WeaponCard` is now a `<button>` — clicking an online (unlocked) weapon equips it to its slot; the equipped card highlights with an emerald ring and shows a `EQUIPPED` badge with a checkmark icon.
+- Added `recommendations?: Array<CombatDomain | MissionType>` to `WeaponDefinition` in `src/types/game.ts`.
+- Populated recommendations on both weapons in `src/config/weapons.ts`: pulse-cannon for `AIR_TO_LAND / AIR_TO_SEA / STRIKE / SABOTAGE`; ion-missile for `AIR_TO_AIR / INTERCEPT / DEFENSE`.
+- Added `getEquippedWeapons(progress)` and `getWeaponRecommendation(weapon, mission)` helpers to `src/config/weapons.ts`.
+- Added `onEquipWeapon: (slot: WeaponSlot, weaponId: WeaponId) => void` prop to `LoadoutScreenProps`; `App.tsx` now passes `handleEquipWeapon` which updates `progress.inventory.equippedWeaponIds` via `setProgress`.
+- `Game.tsx` now calls `getEquippedWeapons(progress)` instead of `getUnlockedWeapons(progress)` so the player's equipped selection is used in-mission.
+- Fast launch path preserved — SortiePanel and Launch button remain on the sortie tab and desktop sidebar.
+- Ordnance Authority header subtitle updated to "Select active loadout — tap a weapon to equip".
+
+Changed files:
+- `src/types/game.ts`
+- `src/config/weapons.ts`
+- `src/components/menus/LoadoutScreen.tsx`
+- `src/App.tsx`
+- `src/components/Game.tsx`
+- `src/config/buildMeta.ts`
+
+Verification:
+- Dockerized `npm run lint` — passed (0 TypeScript errors).
+- Dockerized `npm run build` — passed; Vite 2132 modules.
+- `npm run validate:drone && npm run validate:campaign` — passed.
+- `docker compose --progress plain build && docker compose --progress plain up -d --no-build && docker compose ps` — passed; container Up.
+- Commit `e6768b7` pushed to `main`.
 
 ### Stage 7c - Upgrade Definitions And Trees
 
@@ -1311,14 +1337,15 @@ Verification:
 Deferred:
 - `parts` earning from missions — Stage 7d (reward and currency model).
 - `upgradeLevels` runtime effects — Stage 7c (upgrade definitions and trees).
-- LoadoutScreen active weapon selection — Stage 7b (loadout selection screen).
-- Mission recommendation tags on LoadoutScreen — Stage 7b.
+- LoadoutScreen active weapon selection — Stage 7b — DONE.
+- Mission recommendation tags on LoadoutScreen — Stage 7b — DONE.
 
 Next recommended starting point:
-- Begin Stage 7b - Loadout Selection Screen.
-- Start by reading `src/components/menus/LoadoutScreen.tsx` and `src/config/weapons.ts`.
-- Convert the current review-only `LoadoutScreen` to an interactive slot picker that reads `progress.inventory.equippedWeaponIds` and `progress.inventory.unlockedWeaponIds`, lets the player equip different unlocked weapons per slot, and updates `progress.inventory.equippedWeaponIds` via a callback from `App.tsx`.
-- Add mission recommendation tags (based on `CombatDomain`, `MissionType`, and `weatherId`) to each weapon entry when a mission is pre-selected.
+- Begin Stage 7c - Upgrade Definitions And Trees.
+- Start by reading `src/types/game.ts` (UpgradeCoreId, PlayerInventory.upgradeLevels) and `src/config/weapons.ts` to understand the existing data shape.
+- Define upgrade trees per core (flight, weapons, defense, sensor, payload) with levels, costs (in parts), and runtime multipliers/bonuses.
+- Add effects that influence existing game constants (e.g. weapon damage, energy regen, radar range) using the upgradeLevels from inventory.
+- Show upgrade state in CareerScreen or a new UpgradeScreen.
 
 Phase worked:
 - Stage 4f - Set-Piece Prototype Mission.
