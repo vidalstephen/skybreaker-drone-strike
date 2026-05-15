@@ -26,7 +26,7 @@ import {
 import { DEFAULT_MISSION_ID, getMissionById, MISSIONS } from './config/missions';
 import { useAudio } from './hooks/useAudio';
 import { completeMission, isMissionUnlocked, normalizeCampaignProgress } from './systems/missionSystem';
-import { GamePhase, type AppSettings, type CampaignProgress, type MissionCompletionResult } from './types/game';
+import { GamePhase, type AppSettings, type CampaignProgress, type MissionCompletionResult, type WeaponId, type WeaponSlot } from './types/game';
 
 function loadStoredJson(key: string): unknown {
   try {
@@ -194,6 +194,21 @@ export default function App() {
     setSelectedMissionId(DEFAULT_MISSION_ID);
   }, [playCue]);
 
+  /** Stage 7b: equip a weapon to a slot and persist via the progress state. */
+  const handleEquipWeapon = useCallback((slot: WeaponSlot, weaponId: WeaponId) => {
+    playCue('ui');
+    setProgress(current => ({
+      ...current,
+      inventory: {
+        ...current.inventory!,
+        equippedWeaponIds: {
+          ...current.inventory?.equippedWeaponIds,
+          [slot]: weaponId,
+        },
+      },
+    }));
+  }, [playCue]);
+
   const gamePhase = (phase === GamePhase.SETTINGS && settingsReturnPhase === GamePhase.PAUSED) || (phase === GamePhase.CONTROLS && controlsReturnPhase === GamePhase.PAUSED) ? GamePhase.PAUSED : phase;
   const shouldRenderGame = gamePhase === GamePhase.IN_MISSION || gamePhase === GamePhase.PAUSED || gamePhase === GamePhase.DEBRIEF;
 
@@ -262,7 +277,7 @@ export default function App() {
 
       {phase === GamePhase.BRIEFING && <BriefingScreen mission={selectedMission} onContinue={launchMission} onLoadout={() => setPhase(GamePhase.LOADOUT)} onBack={() => setPhase(GamePhase.MISSION_SELECT)} />}
 
-      {phase === GamePhase.LOADOUT && <LoadoutScreen mission={selectedMission} progress={progress} onLaunch={launchMission} onBack={() => setPhase(GamePhase.BRIEFING)} />}
+      {phase === GamePhase.LOADOUT && <LoadoutScreen mission={selectedMission} progress={progress} onLaunch={launchMission} onBack={() => setPhase(GamePhase.BRIEFING)} onEquipWeapon={handleEquipWeapon} />}
 
       {phase === GamePhase.CAREER && <CareerScreen missions={MISSIONS} progress={progress} onBack={() => setPhase(GamePhase.MAIN_MENU)} />}
 

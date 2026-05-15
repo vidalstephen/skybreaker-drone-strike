@@ -101,6 +101,8 @@ export interface WeaponDefinition {
   blastRadius?: number;
   homing?: boolean;       // Stage 5b: true = missile homes on locked target
   unlockRewardId?: string;
+  /** Stage 7b: domains/types where this weapon is especially effective. Drives recommendation tags in loadout. */
+  recommendations?: Array<CombatDomain | MissionType>;
 }
 
 export interface EnemyDefinition {

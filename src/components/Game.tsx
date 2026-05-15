@@ -29,7 +29,7 @@ import {
   MISSILE_MIN_LOCK,
 } from '../config/constants';
 import { expandEnemyWave } from '../config/enemies';
-import { DEFAULT_PRIMARY_WEAPON, getUnlockedWeapons } from '../config/weapons';
+import { getEquippedWeapons } from '../config/weapons';
 import type { AudioCue } from '../hooks/useAudio';
 import {
   SPEED_STREAK_OPACITY,
@@ -236,9 +236,9 @@ export default function Game({
   // Derive effective radar range so the Radar HUD component can scale accordingly.
   const effectiveRadarRange = RADAR_RANGE * (weatherDef.sensors.radarRangeMultiplier ?? 1);
 
-  const initialWeapons = getUnlockedWeapons(progress);
-  const initialPrimaryWeapon = initialWeapons.find(weapon => weapon.slot === 'PRIMARY') ?? DEFAULT_PRIMARY_WEAPON;
-  const initialSecondaryWeapon = initialWeapons.find(weapon => weapon.slot === 'SECONDARY') ?? null;
+  const initialWeapons = getEquippedWeapons(progress);
+  const initialPrimaryWeapon = initialWeapons.primary;
+  const initialSecondaryWeapon = initialWeapons.secondary;
   
   // Game state for UI
   const [gameState, setGameState] = useState<GameState>({
@@ -498,9 +498,9 @@ export default function Game({
     if (!containerRef.current || !canvasRef.current) return;
     tracksRef.current.reset();
     const hullFailure = mission.failureConditions.find(condition => condition.id === 'hull-depleted');
-    const unlockedWeapons = getUnlockedWeapons(progress);
-    const primaryWeapon = unlockedWeapons.find(weapon => weapon.slot === 'PRIMARY') ?? DEFAULT_PRIMARY_WEAPON;
-    const secondaryWeapon = unlockedWeapons.find(weapon => weapon.slot === 'SECONDARY') ?? null;
+    const unlockedWeapons = getEquippedWeapons(progress);
+    const primaryWeapon = unlockedWeapons.primary;
+    const secondaryWeapon = unlockedWeapons.secondary;
     const graphicsProfile = getGraphicsProfile(settings);
 
     // --- Scene Setup ---

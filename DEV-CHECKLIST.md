@@ -862,22 +862,31 @@ Completion summary:
 
 ## Stage 7 - Player Progression, Loadout, And Upgrade Paths
 
-Status: Not started
+Status: In progress
 
 Goal: add meaningful between-mission decisions and make rewards mechanically useful.
 
 ### Stage 7a - Inventory And Progression Data
 
-Status: Not started
+Status: Complete
 
-- [ ] Add player inventory/progression state for unlocked weapons, upgrades, currencies/parts, and equipped items.
-- [ ] Add save migration for current campaign progress.
-- [ ] Keep current reward ids compatible or migrate them explicitly.
+- [x] Add player inventory/progression state for unlocked weapons, upgrades, currencies/parts, and equipped items.
+- [x] Add save migration for current campaign progress.
+- [x] Keep current reward ids compatible or migrate them explicitly.
 
 Exit criteria:
 
-- [ ] Existing saves load safely.
-- [ ] Inventory data persists and validates on reload.
+- [x] Existing saves load safely.
+- [x] Inventory data persists and validates on reload.
+
+Completion summary (2026-05-15):
+
+- Shipped: `UpgradeCoreId` type and `PlayerInventory` interface added to `src/types/game.ts`. `PlayerInventory` carries `parts` (spare-parts currency), `unlockedWeaponIds`, `equippedWeaponIds` (per slot), and `upgradeLevels` (upgrade id → level; absent key = level 0). `CampaignProgress` extended with optional `inventory?: PlayerInventory`. `DEFAULT_PLAYER_INVENTORY` added to `src/config/defaults.ts` (0 parts, pulse-cannon unlocked and equipped). `DEFAULT_CAMPAIGN_PROGRESS.saveVersion` bumped to 2. `CAMPAIGN_SAVE_VERSION` bumped to 2 with a comment documenting the version history.
+- Shipped: `normalizeInventory` helper in `src/systems/missionSystem.ts` validates and sanitizes the inventory field from stored data — clamps negative parts to 0, ensures `pulse-cannon` is always in `unlockedWeaponIds`, drops equipped weapons that are not in `unlockedWeaponIds`, and drops non-positive upgrade levels. `normalizeCampaignProgress` returns `inventory: normalizeInventory(stored?.inventory)` so all saves — new, migrated, and stale — receive a valid inventory object.
+- Shipped: `validate:campaign` extended with inventory assertions: default progress has expected inventory, migrated saves without inventory receive `DEFAULT_PLAYER_INVENTORY` defaults, saves with valid inventory preserve parts/equipped/levels, saves with bad inventory (negative parts, locked equipped weapon, negative level) are corrected by normalization.
+- Changed: `src/types/game.ts`, `src/config/defaults.ts`, `src/systems/missionSystem.ts`, `scripts/validate-campaign-wave1.ts`, `src/config/buildMeta.ts`.
+- Verification: Dockerized `npm run lint` passed (0 TypeScript errors); Dockerized `npm run build && npm run validate:drone && ...all validators... && npm run validate:campaign` passed; `docker compose --progress plain build && docker compose --progress plain up -d --no-build && docker compose ps` passed with container Up. Commit `93a95c6` on `main`.
+- Notes/Risks: Inventory is data-only at this stage — `parts` earns nothing yet, and `upgradeLevels` have no runtime effect until Stage 7d wires reward bonuses and Stage 7c wires upgrade effects. `equippedWeaponIds` is stored but the `LoadoutScreen` still shows review-only mode; Stage 7b will convert it to active selection. Existing saves (saveVersion 0 or 1) migrate safely — `normalizeCampaignProgress` already ran for all of them at app load time and will now also populate `inventory`.
 
 ### Stage 7b - Loadout Selection Screen
 
@@ -1266,10 +1275,50 @@ Gameplay regression for future phases:
 - 2026-05-15: Stage 6g Dockerized `npm run lint && npm run validate:campaign` — passed; TypeScript zero errors and campaign regression validated clean-save progression, migrated-save normalization, rewards, best records, replay flow, prototype isolation, and final 100% main-campaign completion.
 - 2026-05-15: Stage 6g Dockerized `npm run lint && npm run build && npm run validate:drone && npm run validate:prototype && npm run validate:intercept && npm run validate:ground && npm run validate:sea && npm run validate:hud && npm run validate:storm && npm run validate:frozen && npm run validate:canyon && npm run validate:core && npm run validate:campaign` — passed; Vite built 2132 modules with the existing large-chunk warning only and all validators passed.
 - 2026-05-15: Stage 6g `docker compose --progress plain build && docker compose --progress plain up -d --no-build && docker compose ps` — passed; image `skybreaker-drone-strike:latest` rebuilt with `PHASE_TAG = 'Phase 6g'`, container `skybreaker-drone-strike` reported `Up`.
+- 2026-05-15: Stage 7a Dockerized `npm run lint` — passed; TypeScript zero errors after adding `UpgradeCoreId`, `PlayerInventory`, inventory migration, and updated campaign validator.
+- 2026-05-15: Stage 7a Dockerized `npm run build && npm run validate:drone && npm run validate:prototype && npm run validate:intercept && npm run validate:ground && npm run validate:sea && npm run validate:hud && npm run validate:storm && npm run validate:frozen && npm run validate:canyon && npm run validate:core && npm run validate:campaign` — passed; Vite 2132 modules with existing large-chunk warning only, all validators passed including updated inventory regression coverage in validate:campaign.
+- 2026-05-15: Stage 7a `docker compose --progress plain build && docker compose --progress plain up -d --no-build && docker compose ps` — passed; image `skybreaker-drone-strike:latest` rebuilt with `PHASE_TAG = 'Phase 7a'`, container `skybreaker-drone-strike` reported `Up`.
 
 ## Latest Session Summary
 
-Date: 2026-05-14
+Date: 2026-05-15
+
+Phase worked:
+- Stage 7a - Inventory And Progression Data.
+
+Shipped:
+- `UpgradeCoreId` type and `PlayerInventory` interface (parts, unlockedWeaponIds, equippedWeaponIds, upgradeLevels) added to `src/types/game.ts`.
+- `CampaignProgress` extended with optional `inventory?: PlayerInventory`.
+- `DEFAULT_PLAYER_INVENTORY` and updated `DEFAULT_CAMPAIGN_PROGRESS` (saveVersion 2, inventory included) in `src/config/defaults.ts`.
+- `CAMPAIGN_SAVE_VERSION` bumped to 2 with version-history comment.
+- `normalizeInventory` helper + updated `normalizeCampaignProgress` in `missionSystem.ts` — sanitizes inventory from any stored save including pre-7a saves.
+- Extended `validate:campaign` with inventory normalization regression assertions (good data preserved, bad data corrected, missing data defaults).
+- `PHASE_TAG = 'Phase 7a'`.
+
+Changed files:
+- `src/types/game.ts`
+- `src/config/defaults.ts`
+- `src/systems/missionSystem.ts`
+- `scripts/validate-campaign-wave1.ts`
+- `src/config/buildMeta.ts`
+
+Verification:
+- Dockerized `npm run lint` — passed (0 TypeScript errors).
+- Dockerized `npm run build && all validators including validate:campaign` — passed; Vite 2132 modules, all validators including inventory regression passed.
+- `docker compose --progress plain build && docker compose --progress plain up -d --no-build && docker compose ps` — passed; container Up.
+- Commit `93a95c6` pushed to `main`.
+
+Deferred:
+- `parts` earning from missions — Stage 7d (reward and currency model).
+- `upgradeLevels` runtime effects — Stage 7c (upgrade definitions and trees).
+- LoadoutScreen active weapon selection — Stage 7b (loadout selection screen).
+- Mission recommendation tags on LoadoutScreen — Stage 7b.
+
+Next recommended starting point:
+- Begin Stage 7b - Loadout Selection Screen.
+- Start by reading `src/components/menus/LoadoutScreen.tsx` and `src/config/weapons.ts`.
+- Convert the current review-only `LoadoutScreen` to an interactive slot picker that reads `progress.inventory.equippedWeaponIds` and `progress.inventory.unlockedWeaponIds`, lets the player equip different unlocked weapons per slot, and updates `progress.inventory.equippedWeaponIds` via a callback from `App.tsx`.
+- Add mission recommendation tags (based on `CombatDomain`, `MissionType`, and `weatherId`) to each weapon entry when a mission is pre-selected.
 
 Phase worked:
 - Stage 4f - Set-Piece Prototype Mission.
