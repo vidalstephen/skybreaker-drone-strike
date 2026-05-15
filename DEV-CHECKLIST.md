@@ -958,16 +958,27 @@ Completion summary:
 
 ### Stage 7d - Reward And Currency Model
 
-Status: Not started
+Status: Complete ✓
 
-- [ ] Add parts/currency/upgrade point rewards to mission completion.
-- [ ] Add optional objective bonuses without forcing grind.
-- [ ] Update debrief and career screens to show meaningful rewards.
+- [x] Add parts/currency/upgrade point rewards to mission completion.
+- [x] Add optional objective bonuses without forcing grind.
+- [x] Update debrief and career screens to show meaningful rewards.
 
 Exit criteria:
 
-- [ ] Rewards alter player choices and gameplay options.
-- [ ] Campaign balance remains playable without grinding.
+- [x] Rewards alter player choices and gameplay options.
+- [x] Campaign balance remains playable without grinding.
+
+Completion summary:
+
+- `src/types/game.ts`: added `partsEarned: number` to `MissionCompletionResult`.
+- `src/systems/missionSystem.ts`: `calculateMissionResult()` computes `partsEarned` = rank base (C=10, B=20, A=30, S=50) + 5 per bonus condition earned. `completeMission()` accumulates `partsEarned` into `progress.inventory.parts` on every completion.
+- `src/components/overlays/MissionComplete.tsx`: added sky-blue "Parts Earned" banner in the result panel showing `+N` with rank and bonus-condition context.
+- `src/components/menus/CareerScreen.tsx`: added "Spare Parts" balance tile to the sidebar stat block.
+- `scripts/validate-set-piece-prototype.ts`: added required `partsEarned: 0` to the manually constructed `MissionCompletionResult` fixture.
+- `src/config/buildMeta.ts`: updated `PHASE_TAG` to `'Phase 7d'`.
+- Verification: `npm run lint` ✓ · `npm run build` ✓ · all validators ✓ · `docker compose build` ✓ · deployed ✓ · commit `8bbfde0`.
+- Notes: Rank-based formula (C=10, B=20, A=30, S=50) gives clear incentive to score well. Stage 7e will tune amounts against the 24-mission campaign arc. Optional `partsReward` field in `MissionScoringDefinition` is reserved for Stage 7e per-mission overrides.
 
 ### Stage 7e - Balance And Progression Pass
 
@@ -1350,7 +1361,7 @@ Verification:
 - Commit `93a95c6` pushed to `main`.
 
 Deferred:
-- `parts` earning from missions — Stage 7d (reward and currency model).
+- `parts` earning from missions — Stage 7d — DONE.
 - `upgradeLevels` runtime effects — Stage 7c — DONE.
 - Mission recommendation tags on LoadoutScreen — Stage 7b — DONE.
 
