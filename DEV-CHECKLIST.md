@@ -862,7 +862,7 @@ Completion summary:
 
 ## Stage 7 - Player Progression, Loadout, And Upgrade Paths
 
-Status: In progress
+Status: Complete
 
 Goal: add meaningful between-mission decisions and make rewards mechanically useful.
 
@@ -982,37 +982,58 @@ Completion summary:
 
 ### Stage 7e - Balance And Progression Pass
 
-Status: Not started
+Status: Complete — commit `a8d1019`
 
-- [ ] Tune upgrades against early, mid, and late campaign missions.
-- [ ] Validate that required missions do not demand optional upgrades.
-- [ ] Add reset/respec rules if needed.
+- [x] Tune upgrades against early, mid, and late campaign missions.
+- [x] Validate that required missions do not demand optional upgrades.
+- [x] Add reset/respec rules if needed.
 
 Exit criteria:
 
-- [ ] Progression feels rewarding without breaking mission difficulty.
-- [ ] Save/load and migration tests pass.
+- [x] Progression feels rewarding without breaking mission difficulty.
+- [x] Save/load and migration tests pass.
+
+#### Completion Summary
+
+- `partsReward?: number` added to `MissionScoringDefinition` — optional per-mission flat parts bonus, falls back to arc-tier formula when absent.
+- Arc-tier earning escalation wired in `calculateMissionResult`: M09-12 +5, M13-16 +8, M17-20 +10, M21-24 +15. Prototype missions (order 90+) and early arcs (M01-08) receive no arc bonus. Authored `partsReward` overrides the formula on a per-mission basis.
+- Starter parts lowered from 50 → 25. Enough for one tier-1 upgrade on a fresh save; first mission reward feels immediately meaningful.
+- Tier-2 upgrade costs raised by +10 each (flight-speed-2: 40, weapons-damage-2: 40, defense-shield-2: 45, sensor-lock-2: 35, payload-blast-2: 45). New total tree cost: 345 parts. Forces specialization in the early campaign rather than rushing all nodes.
+- Full respec added to `UpgradeScreen`: amber button appears when any upgrade is owned, shows exact refund total, clears `upgradeLevels` and returns all parts.
+- `handleRespecUpgrades` callback in `App.tsx` reads current upgrade levels, sums refund, and resets inventory atomically.
+- Validator `validate-campaign-wave1.ts` uses `DEFAULT_PLAYER_INVENTORY.parts` dynamically — no literal update needed.
+- All 11 validators pass. TypeScript clean. Docker image built and deployed.
+- Phase tag updated to `Phase 7e`.
 
 ## Stage 8 - Enemy AI, Factions, Bosses, And Reactive Encounters
 
-Status: Not started
+Status: In progress
 
 Goal: make expanded combat feel varied through behavior, not only stats.
 
 ### Stage 8a - Enemy Behavior Controller Architecture
 
-Status: Not started
+Status: Complete — commit pending
 
-- [ ] Upgrade the base air enemy model in `createEnemyModel()` to meet the Unit Visual Fidelity Standard: role-recognizable silhouette, proportional scale relative to `AIRCRAFT_SCALE = 0.28`, hitbox-mesh correspondence, and named material handles for per-frame state (damage flash, shield visibility).
-- [ ] Separate enemy behavior controllers from visual/stat definitions.
-- [ ] Add reusable behavior states such as spawn, patrol, pursue, orbit, strafe, retreat, guard, attack objective, and flee.
-- [ ] Keep current enemy behavior as a default controller.
+- [x] Upgrade the base air enemy model in `createEnemyModel()` to meet the Unit Visual Fidelity Standard: role-recognizable silhouette, proportional scale relative to `AIRCRAFT_SCALE = 0.28`, hitbox-mesh correspondence, and named material handles for per-frame state (damage flash, shield visibility).
+- [x] Separate enemy behavior controllers from visual/stat definitions.
+- [x] Add reusable behavior states such as spawn, patrol, pursue, orbit, strafe, retreat, guard, attack objective, and flee.
+- [x] Keep current enemy behavior as a default controller.
 
 Exit criteria:
 
-- [ ] Current enemies behave as before through the new controller layer.
-- [ ] New controllers can be assigned by role or mission data.
-- [ ] No unit introduced or revised in this stage has a placeholder geometry unless a follow-up visual upgrade item is explicitly logged in the same stage's completion summary.
+- [x] Current enemies behave as before through the new controller layer.
+- [x] New controllers can be assigned by role or mission data.
+- [x] No unit introduced or revised in this stage has a placeholder geometry unless a follow-up visual upgrade item is explicitly logged in the same stage's completion summary.
+
+Completion summary:
+
+- Shipped: `EnemyBehaviorStateId` union type (`spawn | patrol | pursue | orbit | strafe | retreat | guard | attack-objective | flee`) added to `src/types/game.ts`. `EnemyVisualHandles` interface added with `shieldMesh`, `bodyMeshes[]`, and `engineGlows[]` fields. `Enemy` interface extended with `behaviorState: EnemyBehaviorStateId` and `visualHandles: EnemyVisualHandles`.
+- Shipped: `src/scene/enemyModels.ts` completely rewritten. All six air enemy roles now have distinct role-recognizable silhouettes anchored to `AIRCRAFT_SCALE = 0.28`: `needle-frame` (fast-interceptor, ace-interceptor — slim fuselage, swept wings, nose cone, twin engine glows), `wide-armored-frame` (heavy-gunship — wide fuselage, stubby wings, weapon pods, nacelle), `long-range-rail-frame` (missile-platform — long slim fuselage, canard fins, twin launcher pods), `shield-core-frame` (shielded-warden — stocky body, forward cannon, emitter arms, shield sphere), `boss-command-frame` (mini-boss — large fuselage, swept wings, command dome, triple engines). Ground threat model geometry preserved. Every mesh uses `baseMat.clone()` for per-mesh material handles; `EnemyModelResult { group, visualHandles }` returned instead of bare `THREE.Group`.
+- Shipped: new file `src/systems/enemyBehavior.ts` — `EnemyBehaviorController` interface, `DefaultAirController` (exact port of inline Game.tsx AI: pursue/retreat/orbit+drift, no `dt` multiplication to preserve frame-rate coupling), `GroundThreatController` (stationary, guard), `CONTROLLER_REGISTRY`, `getControllerForEnemy()`, `tickEnemyBehavior()`.
+- Wired: `Game.tsx` enemy spawn block destructures `EnemyModelResult` and sets `behaviorState: 'spawn'` and `visualHandles` on every spawned enemy. AI loop replaced with `tickEnemyBehavior` call (movement/orientation). Hit handler uses `visualHandles.shieldMesh` (hide on shields reaching 0) and `visualHandles.bodyMeshes` (80 ms emissive flash on any hit).
+- Changed files: `src/types/game.ts`, `src/scene/enemyModels.ts`, `src/systems/enemyBehavior.ts` (new), `src/components/Game.tsx`, `src/config/buildMeta.ts`, `DEV-CHECKLIST.md`.
+- Verification: VS Code language server — 0 errors project-wide. `docker compose --progress plain build` — ✓ built in 18 s, 1182 kB bundle. `docker compose --progress plain up -d --no-build` — container Up. Phase tag updated to `Phase 8a`.
 
 ### Stage 8b - Formation And Group Behaviors
 

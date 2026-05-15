@@ -74,6 +74,7 @@ import {
 import { calculateMissionResult, buildObjectiveSnapshot, evaluateBonusConditions, formatMissionObjective, getActiveObjective } from '../systems/missionSystem';
 import { advanceTargetSetPiecePhase, applyTargetSetPieceVisibility, isTargetComponentDamageable, syncTargetSetPieceRuntime } from '../systems/setPieceSystem';
 import { updateTargetMovement } from '../systems/targetMovementSystem';
+import { tickEnemyBehavior } from '../systems/enemyBehavior';
 import { GamePhase, TrackedEntityType, type AppSettings, type CampaignProgress, type MissionCompletionResult, type MissionDefinition, type Target, type TargetWeakPoint, type Enemy, type Projectile, type Explosion, type GameState, type WeaponDefinition, type MissionEvent, type ObjectiveRuntimeState, type SetPieceMissionStats, type TargetComponentRuntimeState, type TrackedEntityState, type TargetLockSnapshot } from '../types/game';
 import { createTrackingSystem } from '../systems/trackingSystem';
 import { RADAR_RANGE } from '../config/constants';
@@ -827,7 +828,7 @@ export default function Game({
           
           const waveDefinitions = expandEnemyWave(mission.enemyWave.composition).slice(0, mission.enemyWave.count);
           waveDefinitions.forEach(enemyDefinition => {
-            const enemyGroup = createEnemyModel(enemyDefinition);
+            const { group: enemyGroup, visualHandles: enemyVisualHandles } = createEnemyModel(enemyDefinition);
             // Stage 5d: ground threats spawn at surface level around the mission area;
             // air enemies spawn relative to the player at altitude.
             const spawnPos = enemyDefinition.groundThreat
@@ -856,6 +857,9 @@ export default function Game({
               // Stage 5d: grant ground threats a brief startup delay so first fire isn't instant
               lastFireTime: enemyDefinition.groundThreat ? Date.now() + 2500 : 0,
               definition: enemyDefinition,
+              // Stage 8a: behavior controller architecture
+              behaviorState: 'spawn',
+              visualHandles: enemyVisualHandles,
             });
             tracksRef.current.registerTrack(
               enemyId,
@@ -879,31 +883,20 @@ export default function Game({
           });
         }
 
-        // Update Enemies AI
+        // Update Enemies AI — Stage 8a: behavior routed through controller system
         enemiesRef.current = enemiesRef.current.filter(enemy => {
           if (enemy.destroyed) return false;
 
-          const toPlayer = droneRef.current!.position.clone().sub(enemy.mesh.position);
-          const dist = toPlayer.length();
-          toPlayer.normalize();
+          // Stage 8a: delegate movement/orientation to the behavior controller.
+          enemy.behaviorState = tickEnemyBehavior(enemy, {
+            playerPosition: droneRef.current!.position,
+            frameId: frameIdRef.current,
+            now: Date.now(),
+            dt,
+          });
 
-          // Stage 5d: ground threats are stationary emplacements — skip movement and drift AI
-          if (!enemy.definition.groundThreat) {
-            // Move towards player but keep role-defined distance
-            if (dist > enemy.definition.maxRange) {
-              enemy.mesh.position.addScaledVector(toPlayer, enemy.definition.speed);
-            } else if (dist < enemy.definition.minRange) {
-              enemy.mesh.position.addScaledVector(toPlayer, -enemy.definition.speed * 0.5);
-            }
-            // Orbit/drift
-            const drift = new THREE.Vector3(Math.cos(frameIdRef.current * 0.01), Math.sin(frameIdRef.current * 0.02), 0);
-            drift.applyQuaternion(enemy.mesh.quaternion);
-            enemy.mesh.position.addScaledVector(drift, enemy.definition.drift);
-          }
-
-          enemy.mesh.lookAt(droneRef.current!.position);
-
-          // Enemy Firing
+          // Enemy Firing (unchanged — controller handles movement only)
+          const dist = droneRef.current!.position.distanceTo(enemy.mesh.position);
           const nowTime = Date.now();
           if (dist < enemy.definition.maxRange + 80 && nowTime - enemy.lastFireTime > enemy.definition.fireCooldownMs) {
             enemy.lastFireTime = nowTime + Math.random() * 1000;
@@ -1263,10 +1256,26 @@ export default function Game({
                   const absorbed = Math.min(enemy.shields, p.damage);
                   enemy.shields -= absorbed;
                   enemy.health -= p.damage - absorbed;
+                  // Stage 8a: hide shield mesh when shields are fully depleted
+                  if (enemy.shields <= 0 && enemy.visualHandles.shieldMesh) {
+                    enemy.visualHandles.shieldMesh.visible = false;
+                  }
                   setGameState(prev => ({ ...prev, message: `${enemy.label.toUpperCase()} SHIELDS HIT` }));
                 } else {
                   enemy.health -= p.damage;
                 }
+
+                // Stage 8a: body flash on hit using named material handles
+                enemy.visualHandles.bodyMeshes.forEach(mesh => {
+                  (mesh.material as THREE.MeshStandardMaterial).emissiveIntensity = 3.5;
+                });
+                setTimeout(() => {
+                  if (!enemy.destroyed) {
+                    enemy.visualHandles.bodyMeshes.forEach(mesh => {
+                      (mesh.material as THREE.MeshStandardMaterial).emissiveIntensity = 0.5;
+                    });
+                  }
+                }, 80);
                 
                 // Hit sparks
                 const sparkGroup = new THREE.Group();

@@ -1041,6 +1041,21 @@ export interface TargetWeakPoint {
   damageMesh?: THREE.Object3D;
 }
 
+/** Stage 8a: behavior states for the enemy controller architecture. */
+export type EnemyBehaviorStateId =
+  | 'spawn' | 'patrol' | 'pursue' | 'orbit'
+  | 'strafe' | 'retreat' | 'guard' | 'attack-objective' | 'flee';
+
+/** Stage 8a: named visual handles for per-frame material updates (damage flash, shield visibility, glow). */
+export interface EnemyVisualHandles {
+  /** Wireframe shield bubble mesh — hidden when shields reach 0. Null if the definition has no shields. */
+  shieldMesh: THREE.Mesh | null;
+  /** All structural body/wing/component meshes — used for damage flash. Each has its own cloned material. */
+  bodyMeshes: THREE.Mesh[];
+  /** Engine glow spheres — available for future thrust-state intensity updates. */
+  engineGlows: THREE.Mesh[];
+}
+
 export interface Enemy {
   id: string;
   role: EnemyRole;
@@ -1052,6 +1067,10 @@ export interface Enemy {
   velocity: THREE.Vector3;
   lastFireTime: number;
   definition: EnemyDefinition;
+  /** Stage 8a: current behavior state — set by the controller on each tick. */
+  behaviorState: EnemyBehaviorStateId;
+  /** Stage 8a: named material handles for per-frame visual updates. */
+  visualHandles: EnemyVisualHandles;
 }
 
 export interface Projectile {
