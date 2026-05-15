@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { GamePhase, type AppSettings } from '../types/game';
 
-export type AudioCue = 'ui' | 'primary-fire' | 'secondary-fire' | 'hit' | 'damage' | 'success' | 'failure' | 'component-break' | 'phase-change' | 'set-piece-destroyed' | 'enemy-warning' | 'railgun-charge';
+export type AudioCue = 'ui' | 'primary-fire' | 'secondary-fire' | 'hit' | 'damage' | 'success' | 'failure' | 'component-break' | 'phase-change' | 'set-piece-destroyed' | 'enemy-warning' | 'railgun-charge' | 'boss-phase-shift';
 
 type AudioNodes = {
   context: AudioContext;
@@ -45,6 +45,8 @@ function cueProfile(cue: AudioCue) {
       return { frequency: 180, endFrequency: 720, duration: 0.32, type: 'sawtooth' as OscillatorType, gain: 0.07 };
     case 'railgun-charge':
       return { frequency: 80, endFrequency: 1400, duration: 0.52, type: 'sawtooth' as OscillatorType, gain: 0.10 };
+    case 'boss-phase-shift':
+      return { frequency: 55, endFrequency: 320, duration: 0.60, type: 'sawtooth' as OscillatorType, gain: 0.14 };
     case 'ui':
     default:
       return { frequency: 520, endFrequency: 680, duration: 0.06, type: 'triangle' as OscillatorType, gain: 0.045 };

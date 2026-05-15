@@ -1111,15 +1111,22 @@ Exit criteria:
 
 ### Stage 8e - Boss Phase Framework
 
-Status: Not started
+Status: Complete
 
-- [ ] Add boss phase controller with health thresholds, exposed weak points, attack patterns, and retreat/extraction windows.
-- [ ] Prototype Command Frigate, Carrier Group, or Skybreaker Core boss behavior.
-- [ ] Integrate boss phase state with objective tracking and debrief.
+- [x] Add boss phase controller with health thresholds, exposed weak points, attack patterns, and retreat/extraction windows.
+- [x] Prototype Command Frigate, Carrier Group, or Skybreaker Core boss behavior.
+- [x] Integrate boss phase state with objective tracking and debrief.
 
 Exit criteria:
 
-- [ ] A boss prototype has readable phases and can be completed without custom one-off mission code.
+- [x] A boss prototype has readable phases and can be completed without custom one-off mission code.
+
+Implementation notes:
+- `src/types/game.ts`: boss states (`boss-phase-1/2/3`, `boss-expose`, `boss-retreat`) added to `EnemyBehaviorStateId`; `bossPhase` (1|2|3) and `bossExposeUntil` (epoch ms) added to `Enemy`.
+- `src/hooks/useAudio.ts`: `boss-phase-shift` AudioCue added (55→320 Hz sawtooth, 0.60s, deep dramatic hit).
+- `src/systems/enemyBehavior.ts`: `BossPhaseController` added — 3 health threshold phases (60%/30%), 1800ms expose window on each transition, critical retreat at 15% HP, phase 3 pure aggression; registered and routed to `role === 'mini-boss'`.
+- `src/components/Game.tsx`: boss `boss-expose`/`boss-retreat` transition detection (audio cue + HUD message); expose window visual emissive pulse (sin oscillation); 1.5× damage multiplier in hit handler during expose state.
+- `src/config/buildMeta.ts`: `PHASE_TAG` → `'Phase 8e'`.
 
 ### Stage 8f - Faction And Theater Variants
 

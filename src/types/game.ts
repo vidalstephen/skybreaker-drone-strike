@@ -1056,7 +1056,9 @@ export type EnemyBehaviorStateId =
   | 'spawn' | 'patrol' | 'pursue' | 'orbit'
   | 'strafe' | 'retreat' | 'guard' | 'attack-objective' | 'flee'
   /** Stage 8c: pre-fire telegraph (visible wind-up before a heavy shot) and reload idle. */
-  | 'pre-fire' | 'reload';
+  | 'pre-fire' | 'reload'
+  /** Stage 8e: boss multi-phase states, expose window, and retreat sequence. */
+  | 'boss-phase-1' | 'boss-phase-2' | 'boss-phase-3' | 'boss-expose' | 'boss-retreat';
 
 /** Stage 8a: named visual handles for per-frame material updates (damage flash, shield visibility, glow). */
 export interface EnemyVisualHandles {
@@ -1089,6 +1091,10 @@ export interface Enemy {
   formationRole?: 'leader' | 'wing';
   /** Stage 8b: desired offset from the formation leader in world space (pre-computed at spawn). */
   formationOffset: THREE.Vector3;
+  /** Stage 8e: current boss phase (1/2/3), set by BossPhaseController on first tick and phase transitions. */
+  bossPhase?: 1 | 2 | 3;
+  /** Stage 8e: epoch ms when the current expose window expires; undefined when not in expose. */
+  bossExposeUntil?: number;
 }
 
 export interface Projectile {

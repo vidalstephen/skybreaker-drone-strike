@@ -966,6 +966,24 @@ export default function Game({
             });
           }
 
+          // Stage 8e: boss phase transitions — cue + message on expose entry and retreat entry
+          if (enemy.behaviorState === 'boss-expose' && prevBehaviorState !== 'boss-expose') {
+            onSound('boss-phase-shift');
+            setGameState(prev => ({ ...prev, message: `${enemy.label.toUpperCase()} STRUCTURE EXPOSED — CRITICAL WINDOW` }));
+          }
+          if (enemy.behaviorState === 'boss-retreat' && prevBehaviorState !== 'boss-retreat') {
+            onSound('enemy-warning');
+            setGameState(prev => ({ ...prev, message: `${enemy.label.toUpperCase()} RETREATING — INTERCEPT NOW` }));
+          }
+          // Stage 8e: expose window visual — strong full-body pulse to signal vulnerability
+          if (enemy.behaviorState === 'boss-expose' && !settingsRef.current.reduceEffects) {
+            const exposePulse = 1.0 + 1.2 * Math.abs(Math.sin(now * 0.018));
+            enemy.visualHandles.bodyMeshes.forEach(mesh => {
+              const mat = mesh.material as THREE.MeshStandardMaterial;
+              if (mat.emissiveIntensity < 3.0) mat.emissiveIntensity = exposePulse;
+            });
+          }
+
           // Enemy Firing (unchanged — controller handles movement only)
           const dist = droneRef.current!.position.distanceTo(enemy.mesh.position);
           const nowTime = Date.now();
@@ -1323,17 +1341,19 @@ export default function Game({
                 collided = true;
                 hitTimeRef.current = Date.now();
                 onSound('hit');
+                // Stage 8e: expose window grants 1.5x damage to the boss
+                const damageMult = enemy.behaviorState === 'boss-expose' ? 1.5 : 1.0;
                 if (enemy.shields > 0) {
                   const absorbed = Math.min(enemy.shields, p.damage);
                   enemy.shields -= absorbed;
-                  enemy.health -= p.damage - absorbed;
+                  enemy.health -= (p.damage - absorbed) * damageMult;
                   // Stage 8a: hide shield mesh when shields are fully depleted
                   if (enemy.shields <= 0 && enemy.visualHandles.shieldMesh) {
                     enemy.visualHandles.shieldMesh.visible = false;
                   }
                   setGameState(prev => ({ ...prev, message: `${enemy.label.toUpperCase()} SHIELDS HIT` }));
                 } else {
-                  enemy.health -= p.damage;
+                  enemy.health -= p.damage * damageMult;
                 }
 
                 // Stage 8a: body flash on hit using named material handles

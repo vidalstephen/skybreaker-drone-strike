@@ -207,6 +207,84 @@ const NavalSurfaceController: EnemyBehaviorController = {
 };
 
 // ---------------------------------------------------------------------------
+// Stage 8e: Boss phase controller — multi-phase behavior for mini-boss role
+// ---------------------------------------------------------------------------
+
+/** HP ratio thresholds that trigger phase escalation. */
+const BOSS_PHASE2_HP_RATIO = 0.60;
+const BOSS_PHASE3_HP_RATIO = 0.30;
+/** HP ratio at which the boss abandons combat and retreats off-map. */
+const BOSS_RETREAT_HP_RATIO = 0.15;
+/** Duration (ms) of the expose vulnerability window after each phase transition. */
+const BOSS_EXPOSE_DURATION_MS = 1800;
+
+const BossPhaseController: EnemyBehaviorController = {
+  id: 'boss-phase',
+
+  tick(enemy, { playerPosition, frameId, now }) {
+    const maxHp = enemy.definition.health;
+    const hpRatio = enemy.health / maxHp;
+
+    // Determine target phase from current HP.
+    const targetPhase: 1 | 2 | 3 =
+      hpRatio > BOSS_PHASE2_HP_RATIO ? 1
+      : hpRatio > BOSS_PHASE3_HP_RATIO ? 2
+      : 3;
+
+    // Initialise phase on first tick and escalate on phase change.
+    if (!enemy.bossPhase) enemy.bossPhase = 1;
+    if (targetPhase > enemy.bossPhase) {
+      enemy.bossPhase = targetPhase;
+      enemy.bossExposeUntil = now + BOSS_EXPOSE_DURATION_MS;
+    }
+
+    // Expose window — boss stops advancing and becomes vulnerable.
+    if (enemy.bossExposeUntil && now < enemy.bossExposeUntil) {
+      enemy.mesh.lookAt(playerPosition);
+      return 'boss-expose';
+    }
+
+    // Retreat at critical HP — moves away from player at high speed.
+    if (hpRatio <= BOSS_RETREAT_HP_RATIO) {
+      const awayFromPlayer = enemy.mesh.position.clone().sub(playerPosition).normalize();
+      enemy.mesh.position.addScaledVector(awayFromPlayer, enemy.definition.speed * 2.2);
+      enemy.mesh.lookAt(playerPosition);
+      return 'boss-retreat';
+    }
+
+    // Phase-specific engagement.
+    const { maxRange, minRange, speed, drift } = enemy.definition;
+    const toPlayer = playerPosition.clone().sub(enemy.mesh.position);
+    const dist = toPlayer.length();
+    toPlayer.normalize();
+
+    // Higher phases tighten the engagement envelope and increase aggression.
+    const speedMult = enemy.bossPhase === 3 ? 1.85 : enemy.bossPhase === 2 ? 1.40 : 1.0;
+    const rangeMult = enemy.bossPhase === 3 ? 0.70 : enemy.bossPhase === 2 ? 0.85 : 1.0;
+    const effectiveMax = maxRange * rangeMult;
+    const effectiveMin = minRange * rangeMult;
+
+    if (dist > effectiveMax) {
+      enemy.mesh.position.addScaledVector(toPlayer, speed * speedMult);
+    } else if (dist < effectiveMin && enemy.bossPhase < 3) {
+      // Phase 3: no retreat — pure aggression.
+      enemy.mesh.position.addScaledVector(toPlayer, -speed * 0.5);
+    }
+
+    // Slow drift oscillation (more deliberate than standard air enemies).
+    const driftVec = new THREE.Vector3(Math.cos(frameId * 0.008), Math.sin(frameId * 0.015), 0);
+    driftVec.applyQuaternion(enemy.mesh.quaternion);
+    enemy.mesh.position.addScaledVector(driftVec, drift);
+
+    enemy.mesh.lookAt(playerPosition);
+
+    if (enemy.bossPhase === 3) return 'boss-phase-3';
+    if (enemy.bossPhase === 2) return 'boss-phase-2';
+    return 'boss-phase-1';
+  },
+};
+
+// ---------------------------------------------------------------------------
 // Controller registry — future controllers register here
 // ---------------------------------------------------------------------------
 
@@ -215,6 +293,7 @@ const CONTROLLER_REGISTRY: Record<string, EnemyBehaviorController> = {
   [GroundThreatController.id]: GroundThreatController,
   [FormationWingController.id]: FormationWingController,
   [NavalSurfaceController.id]: NavalSurfaceController,
+  [BossPhaseController.id]: BossPhaseController,
 };
 
 /**
@@ -226,6 +305,8 @@ const CONTROLLER_REGISTRY: Record<string, EnemyBehaviorController> = {
 export function getControllerForEnemy(def: EnemyDefinition): EnemyBehaviorController {
   if (def.navalThreat) return NavalSurfaceController;
   if (def.groundThreat) return GroundThreatController;
+  // Stage 8e: mini-boss uses the multi-phase boss controller.
+  if (def.role === 'mini-boss') return BossPhaseController;
   return DefaultAirController;
 }
 
