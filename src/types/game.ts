@@ -58,7 +58,7 @@ export type CampaignRank = 'S' | 'A' | 'B' | 'C';
 
 export type WeaponSlot = 'PRIMARY' | 'SECONDARY';
 export type WeaponId = 'pulse-cannon' | 'ion-missile';
-export type EnemyRole = 'fast-interceptor' | 'heavy-gunship' | 'missile-platform' | 'shielded-warden' | 'mini-boss' | 'ace-interceptor';
+export type EnemyRole = 'fast-interceptor' | 'heavy-gunship' | 'missile-platform' | 'shielded-warden' | 'mini-boss' | 'ace-interceptor' | 'sam-battery' | 'flak-cannon' | 'railgun-emplacement';
 
 export interface WeaponDefinition {
   id: WeaponId;
@@ -94,6 +94,8 @@ export interface EnemyDefinition {
   color: number;
   emissive: number;
   scale: [number, number, number];
+  /** Stage 5d: marks this enemy as a surface (ground) emplacement. Affects spawn Y, AI, and HUD presentation. */
+  groundThreat?: boolean;
 }
 
 export interface MissionRewardDefinition {
@@ -1206,4 +1208,6 @@ export interface GameState {
   objectiveSnapshot: MissionObjectiveSnapshot | null;
   /** Serializable target lock state for the HUD lock indicator. Null when no target is selected. */
   targetLock: TargetLockSnapshot | null;
+  /** Stage 5d: true when a ground threat emplacement has the player within firing range. */
+  surfaceWarning?: boolean;
 }

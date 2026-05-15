@@ -750,6 +750,76 @@ export const MISSIONS: MissionDefinition[] = [
     },
     unlockAfterMissionId: 'final-dawn',
   }),
+  // Stage 5d: ground threat prototype mission
+  defineMission({
+    id: 'ground-defense-prototype',
+    order: 92,
+    title: 'IRON PERIMETER',
+    levelKitId: 'ash-ridge',
+    campaignArc: 'Prototype Range // Ground Defense Lab',
+    difficulty: 6,
+    combatDomain: 'AIR_TO_LAND',
+    missionType: 'STRIKE',
+    timeOfDay: 'day',
+    weatherId: 'clear',
+    targetLabel: 'Command Tower',
+    initialObjective: 'DESTROY THE COMMAND TOWER',
+    targetDestroyedMessage: 'COMMAND TOWER DESTROYED',
+    nextTargetMessage: 'TARGET ELIMINATED...',
+    allTargetsDestroyedMessage: 'PRIMARY TARGET DOWN // PROCEED TO EXTRACTION',
+    briefing: [
+      { label: 'Objective', value: 'Destroy the fortified command tower' },
+      { label: 'Threat', value: 'SAM batteries, flak cannons, railgun emplacement — surface fire' },
+      { label: 'Warning', value: 'Surface lock indicator activates when emplacements acquire range' },
+    ],
+    targets: [
+      {
+        id: 'command_tower',
+        position: [0, 0, -600],
+        health: 300,
+        archetype: 'facility-node',
+        trackingMeta: { radarLabel: 'CMD', markerLabel: 'COMMAND TOWER', priorityBonus: 100, attentionReason: 'Primary strike target' },
+      },
+    ],
+    extraction: {
+      label: 'Extraction Point',
+      position: [0, 0, 600],
+      activationObjective: 'RETURN TO EXTRACTION POINT',
+      approachObjective: 'APPROACH EXTRACTION',
+      completionObjective: 'IRON PERIMETER COMPLETE',
+      radius: 120,
+      trackingMeta: { radarLabel: 'EXT', markerLabel: 'EXTRACTION', priorityBonus: 50 },
+    },
+    enemyWave: {
+      triggerTargetsDestroyed: 0,
+      count: 5,
+      message: 'WARNING: SURFACE DEFENSE GRID ONLINE',
+      composition: [
+        { role: 'sam-battery', count: 2 },
+        { role: 'flak-cannon', count: 2 },
+        { role: 'railgun-emplacement', count: 1 },
+      ],
+    },
+    failureConditions: [
+      { id: 'hull-depleted', label: 'Hull Integrity', message: 'CRITICAL HULL FAILURE' },
+      { id: 'out-of-bounds', label: 'Strike Boundary', message: 'RETURN TO STRIKE ZONE' },
+    ],
+    scoring: {
+      parTimeMs: 180000,
+      baseScore: 2000,
+      targetBonus: 1400,
+      enemyBonus: 500,
+      healthBonus: 12,
+      timeBonus: 900,
+      rankThresholds: { S: 7000, A: 5200, B: 3400, C: 0 },
+    },
+    reward: {
+      id: 'ground-defense-calibration',
+      label: 'Ground Defense Calibration',
+      description: 'Prototype validates SAM battery, flak cannon, and railgun emplacement threat systems and surface warning HUD.',
+    },
+    unlockAfterMissionId: 'final-dawn',
+  }),
 ];
 
 export const DEFAULT_MISSION_ID = MISSIONS[0].id;

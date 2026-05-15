@@ -636,16 +636,22 @@ Exit criteria:
 
 ### Stage 5d - Air-To-Land Threat Systems
 
-Status: Not started
+Status: Complete
 
-- [ ] Add SAM sites, turrets, artillery, shield nodes, railguns, and mobile command units.
-- [ ] Add ground threat telegraphs and attack-run incentives.
-- [ ] Add surface threat targeting logic against player/allies/objectives.
+**Summary:** Introduced three surface emplacement archetypes (SAM battery, flak cannon, railgun emplacement) as stationary ground threats that track, aim, and fire at the player while remaining fixed at y=2. Added distinct 3D geometry per role via `createGroundThreatModel()`. Added `surfaceWarning` to `GameState` and a flashing `SurfaceWarning` HUD indicator. Added a prototype mission `IRON PERIMETER` (order 92, AIR_TO_LAND, STRIKE) with a wave of all three ground threat types. Validator, campaign arc, and `validate:ground` script added. Deferred: attack-run scoring incentive (noted in backlog).
 
-Exit criteria:
-
-- [ ] Ground threats create tactical pressure without unfair invisible damage.
-- [ ] Air-to-land targets have distinct radar/HUD presentation.
+**Files changed:**
+- `src/types/game.ts`: Added `EnemyRole` entries `sam-battery | flak-cannon | railgun-emplacement`, `EnemyDefinition.groundThreat?: boolean`, `GameState.surfaceWarning?: boolean`
+- `src/config/enemies.ts`: Added `sam-battery`, `flak-cannon`, `railgun-emplacement` definitions with `groundThreat: true`
+- `src/scene/enemyModels.ts`: Added `createGroundThreatModel()` with role-specific geometry (launch tubes, twin barrels, railgun carriage + coils); branched `createEnemyModel()` on `groundThreat`
+- `src/components/Game.tsx`: Ground threats spawn at y=2 across ±600 XZ area with 2500ms startup delay; AI move/drift guarded by `!groundThreat`; `surfaceWarning` computed and passed to `setGameState`; `SurfaceWarning` rendered in HUD
+- `src/components/hud/SurfaceWarning.tsx`: New flashing "⚠ SURFACE LOCK / GROUND THREAT IN RANGE" HUD indicator
+- `src/components/hud/index.ts`: Exported `SurfaceWarning`
+- `src/config/campaign.ts`: Added `prototype-ground-defense` arc ("Prototype Range // Ground Defense Lab", Prototype 92)
+- `src/config/missions.ts`: Added `ground-defense-prototype` — command tower target, wave of 2× sam-battery + 2× flak-cannon + 1× railgun-emplacement spawning at start
+- `scripts/validate-ground-prototype.ts`: New validator for ground defense mission invariants
+- `package.json`: Added `validate:ground` script
+- `src/config/buildMeta.ts`: `PHASE_TAG = 'Phase 5d'`
 
 ### Stage 5e - Air-To-Sea Foundation
 

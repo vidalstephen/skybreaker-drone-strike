@@ -42,4 +42,13 @@ export const CAMPAIGN_ARCS: CampaignArcDefinition[] = [
     escalation: 'Single bomber with ace escort; validates AIR_TO_AIR domain and bomber archetype without inserting into main campaign.',
     status: 'PLANNED',
   },
+  // Stage 5d: air-to-land ground threat prototype arc
+  {
+    id: 'prototype-ground-defense',
+    label: 'Prototype Range // Ground Defense Lab',
+    missionRange: 'Prototype 92',
+    focus: 'Isolated ground threat prototype for SAM batteries, flak cannons, railgun emplacements, and surface warning HUD.',
+    escalation: 'Static surface emplacements firing at player without inserting into main campaign.',
+    status: 'PLANNED',
+  },
 ];

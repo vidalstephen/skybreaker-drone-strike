@@ -10,7 +10,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { Compass, Crosshair, Objectives, Radar, SpeedDisplay, TargetLock, Vitals } from './hud';
+import { Compass, Crosshair, Objectives, Radar, SpeedDisplay, SurfaceWarning, TargetLock, Vitals } from './hud';
 import { GameOver, MissionComplete, OutOfBoundsWarning } from './overlays';
 
 // --- Phase 1: types and constants live in dedicated modules ---
@@ -825,11 +825,19 @@ export default function Game({
           const waveDefinitions = expandEnemyWave(mission.enemyWave.composition).slice(0, mission.enemyWave.count);
           waveDefinitions.forEach(enemyDefinition => {
             const enemyGroup = createEnemyModel(enemyDefinition);
-            const spawnPos = droneRef.current.position.clone().add(new THREE.Vector3(
-              (Math.random() - 0.5) * 400,
-              50,
-              (Math.random() - 0.5) * 400
-            ));
+            // Stage 5d: ground threats spawn at surface level around the mission area;
+            // air enemies spawn relative to the player at altitude.
+            const spawnPos = enemyDefinition.groundThreat
+              ? new THREE.Vector3(
+                  (Math.random() - 0.5) * 1200,
+                  2,
+                  (Math.random() - 0.5) * 1200
+                )
+              : droneRef.current.position.clone().add(new THREE.Vector3(
+                  (Math.random() - 0.5) * 400,
+                  50,
+                  (Math.random() - 0.5) * 400
+                ));
             enemyGroup.position.copy(spawnPos);
             scene.add(enemyGroup);
             const enemyId = `enemy_${enemySequenceRef.current++}`;
@@ -842,7 +850,8 @@ export default function Game({
               shields: enemyDefinition.shields,
               destroyed: false,
               velocity: new THREE.Vector3(),
-              lastFireTime: 0,
+              // Stage 5d: grant ground threats a brief startup delay so first fire isn't instant
+              lastFireTime: enemyDefinition.groundThreat ? Date.now() + 2500 : 0,
               definition: enemyDefinition,
             });
             tracksRef.current.registerTrack(
@@ -872,17 +881,19 @@ export default function Game({
           const dist = toPlayer.length();
           toPlayer.normalize();
 
-          // Move towards player but keep role-defined distance
-          if (dist > enemy.definition.maxRange) {
-            enemy.mesh.position.addScaledVector(toPlayer, enemy.definition.speed);
-          } else if (dist < enemy.definition.minRange) {
-            enemy.mesh.position.addScaledVector(toPlayer, -enemy.definition.speed * 0.5);
+          // Stage 5d: ground threats are stationary emplacements — skip movement and drift AI
+          if (!enemy.definition.groundThreat) {
+            // Move towards player but keep role-defined distance
+            if (dist > enemy.definition.maxRange) {
+              enemy.mesh.position.addScaledVector(toPlayer, enemy.definition.speed);
+            } else if (dist < enemy.definition.minRange) {
+              enemy.mesh.position.addScaledVector(toPlayer, -enemy.definition.speed * 0.5);
+            }
+            // Orbit/drift
+            const drift = new THREE.Vector3(Math.cos(frameIdRef.current * 0.01), Math.sin(frameIdRef.current * 0.02), 0);
+            drift.applyQuaternion(enemy.mesh.quaternion);
+            enemy.mesh.position.addScaledVector(drift, enemy.definition.drift);
           }
-          
-          // Orbit/drift
-          const drift = new THREE.Vector3(Math.cos(frameIdRef.current * 0.01), Math.sin(frameIdRef.current * 0.02), 0);
-          drift.applyQuaternion(enemy.mesh.quaternion);
-          enemy.mesh.position.addScaledVector(drift, enemy.definition.drift);
 
           enemy.mesh.lookAt(droneRef.current!.position);
 
@@ -1510,6 +1521,12 @@ export default function Game({
           }
           // ---- end lock computation -------------------------------------
 
+          // Stage 5d: surface warning — true while any ground threat has the player within firing range
+          const surfaceWarning = enemiesRef.current.some(e =>
+            e.definition.groundThreat && !e.destroyed &&
+            droneRef.current!.position.distanceTo(e.mesh.position) < e.definition.maxRange + 80
+          );
+
           setGameState(prev => ({
             ...prev,
             speed: Math.round(currentSpeed * 960),
@@ -1531,6 +1548,7 @@ export default function Game({
             aimScreenPos: { x: aimScreenX, y: aimScreenY },
             droneScreenPos: { x: droneScreenX, y: droneScreenY },
             targetLock: targetLockSnapshot,
+            surfaceWarning,
           }));
         }
       }
@@ -1578,6 +1596,8 @@ export default function Game({
       <div className="absolute inset-0 pointer-events-none z-20 p-3 pt-[calc(0.75rem+env(safe-area-inset-top))] pb-[calc(0.75rem+env(safe-area-inset-bottom))] flex flex-col justify-between sm:p-5 md:p-8" data-hud-root style={{ transform: `scale(${hudScale})`, transformOrigin: 'center center' }}>
         
         {gameState.outOfBounds && <OutOfBoundsWarning />}
+        {/* Stage 5d: surface warning — absolute top-center, independent of bottom HUD layout */}
+        <SurfaceWarning active={gameState.surfaceWarning} reduceEffects={settings.reduceEffects} />
         
         {/* HUD: Top Bar */}
         <div className="flex justify-between items-start gap-3" data-hud-region="top">
