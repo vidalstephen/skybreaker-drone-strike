@@ -1088,15 +1088,26 @@ Completion summary:
 
 ### Stage 8d - Telegraphs And Reactive Encounters
 
-Status: Not started
+Status: Complete
 
-- [ ] Add visual/audio telegraphs for missiles, railguns, beams, area denial, boss attacks, and emergency extraction.
-- [ ] Add objective-triggered reinforcements and escalation hooks.
-- [ ] Respect reduced-effects settings without removing tactical warning meaning.
+- [x] Add visual/audio telegraphs for missiles, railguns, beams, area denial, boss attacks, and emergency extraction.
+- [x] Add objective-triggered reinforcements and escalation hooks.
+- [x] Respect reduced-effects settings without removing tactical warning meaning.
 
 Exit criteria:
 
-- [ ] Players can understand and react to high-threat attacks.
+- [x] Players can understand and react to high-threat attacks.
+
+**Implementation notes (commit `feat(stage-8d)`):**
+- `src/hooks/useAudio.ts`: Added `'enemy-warning'` (rising sawtooth, 180→720 Hz, 0.32s) and `'railgun-charge'` (deep sweep, 80→1400 Hz, 0.52s) `AudioCue` values.
+- `src/types/game.ts`: Added optional `escalationWave?: MissionEnemyWaveDefinition` to `MissionDefinition` for secondary spawn hooks.
+- `src/components/Game.tsx`:
+  - Pre-fire transition detection: captures `prevBehaviorState` before `tickEnemyBehavior` each frame; on first entry to `'pre-fire'` plays `'railgun-charge'` (railgun-emplacement) or `'enemy-warning'` (all others); resets tracking when leaving `'pre-fire'`.
+  - Pre-fire visual pulse: when `behaviorState === 'pre-fire'` and `!reduceEffects`, oscillates `bodyMesh.material.emissiveIntensity` between 1.05–2.15 via `sin(now * 0.012)`; restores to 0.5 when pre-fire ends; respects active hit-flash (skips update if intensity ≥ 3.0).
+  - Spawn logic refactored into `spawnEnemyWave(waveDef)` closure; both `enemyWave` and `escalationWave` call this helper.
+  - Added `escalationSpawnedRef` to prevent double-spawning the second wave.
+- `src/config/missions.ts`: Added `escalationWave` to three missions — iron-veil (ace-interceptors on 3rd spire), coastal-knife (naval escort on 2nd patrol craft), bastion-fall (last-stand ground+air on 4th target).
+- `src/config/buildMeta.ts`: `PHASE_TAG` → `'Phase 8d'`.
 
 ### Stage 8e - Boss Phase Framework
 

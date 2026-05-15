@@ -993,6 +993,8 @@ export interface MissionDefinition {
   targets: MissionTargetDefinition[];
   extraction: MissionExtractionDefinition;
   enemyWave: MissionEnemyWaveDefinition;
+  /** Stage 8d: optional second wave that spawns at a higher targets-destroyed threshold. */
+  escalationWave?: MissionEnemyWaveDefinition;
   environment: MissionEnvironmentDefinition;
   failureConditions: MissionFailureConditionDefinition[];
   scoring: MissionScoringDefinition;

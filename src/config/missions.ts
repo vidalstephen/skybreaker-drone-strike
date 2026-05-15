@@ -156,6 +156,16 @@ export const MISSIONS: MissionDefinition[] = [
         { role: 'missile-platform', count: 1 },
       ],
     },
+    // Stage 8d: escalation — ace interceptors scramble on third spire destroyed
+    escalationWave: {
+      triggerTargetsDestroyed: 3,
+      count: 3,
+      message: 'WARNING: ACE FLIGHT SCRAMBLED // COVER THE REMAINING SPIRE',
+      composition: [
+        { role: 'ace-interceptor', count: 2 },
+        { role: 'shielded-warden', count: 1 },
+      ],
+    },
     failureConditions: [
       { id: 'hull-depleted', label: 'Hull Integrity', message: 'CRITICAL HULL FAILURE' },
       { id: 'out-of-bounds', label: 'Mission Boundary', message: 'RETURN TO EASTERN COMBAT ZONE' },
@@ -742,6 +752,16 @@ export const MISSIONS: MissionDefinition[] = [
       composition: [
         { role: 'fast-interceptor', count: 2 },
         { role: 'heavy-gunship', count: 1 },
+      ],
+    },
+    // Stage 8d: escalation — naval escort commits on second patrol craft destroyed
+    escalationWave: {
+      triggerTargetsDestroyed: 2,
+      count: 3,
+      message: 'WARNING: NAVAL ESCORT CLOSING — DESTROYERS INBOUND',
+      composition: [
+        { role: 'patrol-craft', count: 2 },
+        { role: 'missile-platform', count: 1 },
       ],
     },
     failureConditions: [
@@ -1660,6 +1680,8 @@ export const MISSIONS: MissionDefinition[] = [
     ],
     extraction: { label: 'Canyon Crown', position: [0, 0, 1460], activationObjective: 'RETREAT TO CANYON CROWN', approachObjective: 'RETREAT TO CANYON CROWN', completionObjective: 'RED CANYON SECURED', radius: 150, trackingMeta: { radarLabel: 'EXT', markerLabel: 'CANYON CROWN', priorityBonus: 70 } },
     enemyWave: { triggerTargetsDestroyed: 2, count: 8, message: 'WARNING: BASTION COMMAND ESCORT INBOUND', composition: [{ role: 'mini-boss', count: 1, formationId: 'command-screen', formationRole: 'leader' }, { role: 'shielded-warden', count: 2, formationId: 'command-screen', formationRole: 'wing' }, { role: 'railgun-emplacement', count: 2 }, { role: 'missile-platform', count: 2 }, { role: 'fast-interceptor', count: 1 }] },
+    // Stage 8d: escalation — last-stand interception as convoy approaches escape
+    escalationWave: { triggerTargetsDestroyed: 4, count: 5, message: 'WARNING: LAST-STAND INTERCEPT COMMITTING', composition: [{ role: 'ace-interceptor', count: 2 }, { role: 'railgun-emplacement', count: 1 }, { role: 'flak-cannon', count: 2 }] },
     failureConditions: [{ id: 'hull-depleted', label: 'Hull Integrity', message: 'CRITICAL HULL FAILURE' }, { id: 'out-of-bounds', label: 'Red Canyon Boundary', message: 'RETURN TO BASTION FALL' }],
     objectiveSet: { primary: [{ id: 'destroy-targets', type: 'ELIMINATE_BOSS', label: 'Canyon Bastion', required: true, totalCount: 5, hudText: 'DESTROY CANYON BASTION', completionMessage: 'CANYON BASTION FALLEN // PROCEED TO EXTRACTION', activatesExtraction: true, successorObjectiveId: 'extract' }, { id: 'extract', type: 'EXTRACT', label: 'Canyon Crown', required: true, hudText: 'RETREAT TO CANYON CROWN', completionMessage: 'RED CANYON SECURED' }], bonusConditions: [{ id: 'bastion-break', type: 'TIME_THRESHOLD', label: 'Bastion Break', description: 'Collapse the bastion in under 6 minutes 30 seconds', goalValue: 390000, scoreBonus: 1250 }, { id: 'crown-run', type: 'HULL_THRESHOLD', label: 'Crown Run', description: 'Exit with 55% hull or better through bastion fire', goalValue: 55, scoreBonus: 900 }] },
     scoring: { parTimeMs: 585000, baseScore: 7600, targetBonus: 1550, enemyBonus: 625, healthBonus: 10, timeBonus: 2250, setPieceComponentBonus: 120, setPiecePhaseBonus: 250, setPieceOptionalComponentBonus: 300, rankThresholds: { S: 20500, A: 16400, B: 12300, C: 0 } },

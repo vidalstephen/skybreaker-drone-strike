@@ -75,7 +75,7 @@ import { calculateMissionResult, buildObjectiveSnapshot, evaluateBonusConditions
 import { advanceTargetSetPiecePhase, applyTargetSetPieceVisibility, isTargetComponentDamageable, syncTargetSetPieceRuntime } from '../systems/setPieceSystem';
 import { updateTargetMovement } from '../systems/targetMovementSystem';
 import { tickEnemyBehavior } from '../systems/enemyBehavior';
-import { GamePhase, TrackedEntityType, type AppSettings, type CampaignProgress, type MissionCompletionResult, type MissionDefinition, type Target, type TargetWeakPoint, type Enemy, type Projectile, type Explosion, type GameState, type WeaponDefinition, type MissionEvent, type ObjectiveRuntimeState, type SetPieceMissionStats, type TargetComponentRuntimeState, type TrackedEntityState, type TargetLockSnapshot } from '../types/game';
+import { GamePhase, TrackedEntityType, type AppSettings, type CampaignProgress, type MissionCompletionResult, type MissionDefinition, type MissionEnemyWaveDefinition, type Target, type TargetWeakPoint, type Enemy, type Projectile, type Explosion, type GameState, type WeaponDefinition, type MissionEvent, type ObjectiveRuntimeState, type SetPieceMissionStats, type TargetComponentRuntimeState, type TrackedEntityState, type TargetLockSnapshot } from '../types/game';
 import { createTrackingSystem } from '../systems/trackingSystem';
 import { RADAR_RANGE } from '../config/constants';
 import { resolveMissionWeather } from '../config/weather';
@@ -350,6 +350,10 @@ export default function Game({
   const tracksRef = useRef(createTrackingSystem());
   const boundaryRef = useRef<number>(1500);
   const enemiesSpawned = useRef(false);
+  // Stage 8d: tracks which enemies have already triggered a pre-fire warning this cycle
+  const preFiringEnemies = useRef<Set<string>>(new Set());
+  // Stage 8d: escalation wave (second enemy wave at higher threshold)
+  const escalationSpawnedRef = useRef(false);
   const extractionMeshRef = useRef<THREE.Group | null>(null);
   const lastDamageTime = useRef(0);
   const fpsSample = useRef({ frames: 0, elapsed: 0, value: 60 });
@@ -817,30 +821,26 @@ export default function Game({
         }
 
         // Spawn Enemies Trigger
-        if (gameLogicRef.current.targetsDestroyed >= mission.enemyWave.triggerTargetsDestroyed && !enemiesSpawned.current) {
-          enemiesSpawned.current = true;
+        // Stage 8d: Shared helper — spawns an enemy wave definition into the scene.
+        const spawnEnemyWave = (waveDef: MissionEnemyWaveDefinition) => {
           gameLogicRef.current.missionEvents.events.push({
             type: 'REINFORCEMENTS_INBOUND',
             timestamp: Date.now(),
-            data: { count: mission.enemyWave.count },
+            data: { count: waveDef.count },
           });
-          setGameState(prev => ({ ...prev, message: mission.enemyWave.message }));
-          
-          const waveDefinitions = expandEnemyWaveGrouped(mission.enemyWave.composition).slice(0, mission.enemyWave.count);
+          setGameState(prev => ({ ...prev, message: waveDef.message }));
+
+          const waveDefinitions = expandEnemyWaveGrouped(waveDef.composition).slice(0, waveDef.count);
           // Stage 8b: track leader spawn positions by formationId so wings spawn near the leader
           const leaderSpawnPositions = new Map<string, THREE.Vector3>();
           waveDefinitions.forEach(({ definition: enemyDefinition, formationId, formationRole, wingIndex }) => {
             const { group: enemyGroup, visualHandles: enemyVisualHandles } = createEnemyModel(enemyDefinition);
-            // Stage 5d: ground threats spawn at surface level around the mission area;
-            // air enemies spawn relative to the player at altitude.
-            // Stage 8b: formation wings spawn adjacent to their leader.
             let spawnPos: THREE.Vector3;
             if (formationId && formationRole === 'wing' && leaderSpawnPositions.has(formationId)) {
               const leaderPos = leaderSpawnPositions.get(formationId)!;
               const off = WING_OFFSETS[wingIndex % WING_OFFSETS.length];
               spawnPos = leaderPos.clone().add(new THREE.Vector3(off[0], off[1], off[2]));
             } else if (enemyDefinition.navalThreat) {
-              // Stage 8c: naval units spawn on the sea surface (y = 0)
               spawnPos = new THREE.Vector3(
                 (Math.random() - 0.5) * 1400,
                 0,
@@ -853,7 +853,7 @@ export default function Game({
                 (Math.random() - 0.5) * 1200
               );
             } else {
-              spawnPos = droneRef.current.position.clone().add(new THREE.Vector3(
+              spawnPos = droneRef.current!.position.clone().add(new THREE.Vector3(
                 (Math.random() - 0.5) * 400,
                 50,
                 (Math.random() - 0.5) * 400
@@ -865,7 +865,6 @@ export default function Game({
             enemyGroup.position.copy(spawnPos);
             scene.add(enemyGroup);
             const enemyId = `enemy_${enemySequenceRef.current++}`;
-            // Compute this wing's offset relative to leader (stored for FormationWingController)
             const formationOffset = formationId && formationRole === 'wing' && leaderSpawnPositions.has(formationId)
               ? spawnPos.clone().sub(leaderSpawnPositions.get(formationId)!)
               : new THREE.Vector3();
@@ -878,14 +877,10 @@ export default function Game({
               shields: enemyDefinition.shields,
               destroyed: false,
               velocity: new THREE.Vector3(),
-              // Stage 5d: grant ground threats a brief startup delay so first fire isn't instant
-              // Stage 8c: same startup delay for naval threats
               lastFireTime: (enemyDefinition.groundThreat || enemyDefinition.navalThreat) ? Date.now() + 2500 : 0,
               definition: enemyDefinition,
-              // Stage 8a: behavior controller architecture
               behaviorState: 'spawn',
               visualHandles: enemyVisualHandles,
-              // Stage 8b: formation group membership
               formationId,
               formationRole,
               formationOffset,
@@ -906,11 +901,21 @@ export default function Game({
                 state: 'detected',
               },
               false,
-              // Stage 5f: domain drives radar blip shape; Stage 8b: formationRole drives blip size
-              // Stage 8c: naval threats use 'sea' domain (diamond blip)
               { domain: enemyDefinition.navalThreat ? 'sea' : enemyDefinition.groundThreat ? 'ground' : undefined, formationRole },
             );
           });
+        };
+
+        // Spawn Enemies Trigger (primary wave)
+        if (gameLogicRef.current.targetsDestroyed >= mission.enemyWave.triggerTargetsDestroyed && !enemiesSpawned.current) {
+          enemiesSpawned.current = true;
+          spawnEnemyWave(mission.enemyWave);
+        }
+
+        // Stage 8d: Escalation wave — second reinforcement at higher target threshold
+        if (mission.escalationWave && gameLogicRef.current.targetsDestroyed >= mission.escalationWave.triggerTargetsDestroyed && !escalationSpawnedRef.current) {
+          escalationSpawnedRef.current = true;
+          spawnEnemyWave(mission.escalationWave);
         }
 
         // Update Enemies AI — Stage 8a: behavior routed through controller system
@@ -927,6 +932,7 @@ export default function Game({
           }
 
           // Stage 8a: delegate movement/orientation to the behavior controller.
+          const prevBehaviorState = enemy.behaviorState;
           enemy.behaviorState = tickEnemyBehavior(enemy, {
             playerPosition: droneRef.current!.position,
             frameId: frameIdRef.current,
@@ -934,6 +940,31 @@ export default function Game({
             dt,
             formationLeaderPosition,
           });
+
+          // Stage 8d: pre-fire telegraph — audio on first transition into pre-fire
+          if (enemy.behaviorState === 'pre-fire' && prevBehaviorState !== 'pre-fire') {
+            if (!preFiringEnemies.current.has(enemy.id)) {
+              preFiringEnemies.current.add(enemy.id);
+              onSound(enemy.role === 'railgun-emplacement' ? 'railgun-charge' : 'enemy-warning');
+            }
+          } else if (enemy.behaviorState !== 'pre-fire') {
+            preFiringEnemies.current.delete(enemy.id);
+          }
+
+          // Stage 8d: pre-fire telegraph — pulse body mesh emissive (skipped when reduceEffects)
+          if (enemy.behaviorState === 'pre-fire' && !settingsRef.current.reduceEffects) {
+            const pulse = 0.6 + 0.55 * Math.sin(now * 0.012);
+            enemy.visualHandles.bodyMeshes.forEach(mesh => {
+              const mat = mesh.material as THREE.MeshStandardMaterial;
+              if (mat.emissiveIntensity < 3.0) mat.emissiveIntensity = 1.0 + pulse;
+            });
+          } else if (enemy.behaviorState !== 'pre-fire') {
+            // Restore default emissive so glow doesn't linger after pre-fire ends
+            enemy.visualHandles.bodyMeshes.forEach(mesh => {
+              const mat = mesh.material as THREE.MeshStandardMaterial;
+              if (mat.emissiveIntensity > 0.5 && mat.emissiveIntensity < 3.0) mat.emissiveIntensity = 0.5;
+            });
+          }
 
           // Enemy Firing (unchanged — controller handles movement only)
           const dist = droneRef.current!.position.distanceTo(enemy.mesh.position);
