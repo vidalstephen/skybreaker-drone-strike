@@ -1,7 +1,7 @@
-import type { BonusCondition, CampaignProgress, MissionCompletionResult, MissionCompletionStats, MissionDefinition, MissionEventAccumulator, MissionObjectiveSet, MissionObjectiveSnapshot, ObjectiveDefinition, ObjectivePhaseDefinition, ObjectiveRuntimeState } from '../types/game';
+import type { BonusCondition, CampaignProgress, MissionCompletionResult, MissionCompletionStats, MissionDefinition, MissionEventAccumulator, MissionObjectiveSet, MissionObjectiveSnapshot, ObjectiveDefinition, ObjectivePhaseDefinition, PlayerInventory, ObjectiveRuntimeState } from '../types/game';
 import { CAMPAIGN_ARCS } from '../config/campaign';
 import { DEV_UNLOCK_PROTOTYPES } from '../config/buildMeta';
-import { CAMPAIGN_SAVE_VERSION, DEFAULT_CAMPAIGN_PROGRESS } from '../config/defaults';
+import { CAMPAIGN_SAVE_VERSION, DEFAULT_CAMPAIGN_PROGRESS, DEFAULT_PLAYER_INVENTORY } from '../config/defaults';
 
 function stringArray(value: unknown) {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
@@ -107,12 +107,49 @@ export function getMissionBestRank(missionId: string, progress: CampaignProgress
   return progress.bestMissionRanks[missionId] ?? null;
 }
 
+function normalizeInventory(raw: unknown): PlayerInventory {
+  const stored = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
+  const parts = typeof stored['parts'] === 'number' && Number.isFinite(stored['parts'])
+    ? Math.max(0, Math.floor(stored['parts']))
+    : DEFAULT_PLAYER_INVENTORY.parts;
+  const unlockedWeaponIds = Array.isArray(stored['unlockedWeaponIds'])
+    ? Array.from(new Set([
+        ...DEFAULT_PLAYER_INVENTORY.unlockedWeaponIds,
+        ...(stored['unlockedWeaponIds'] as unknown[]).filter((id): id is string => typeof id === 'string'),
+      ]))
+    : [...DEFAULT_PLAYER_INVENTORY.unlockedWeaponIds];
+  const rawEquipped = stored['equippedWeaponIds'] && typeof stored['equippedWeaponIds'] === 'object'
+    ? stored['equippedWeaponIds'] as Record<string, unknown>
+    : {};
+  const equippedWeaponIds: PlayerInventory['equippedWeaponIds'] = {};
+  const validSlots = ['PRIMARY', 'SECONDARY'] as const;
+  for (const slot of validSlots) {
+    const val = rawEquipped[slot];
+    if (typeof val === 'string' && unlockedWeaponIds.includes(val)) {
+      equippedWeaponIds[slot] = val as PlayerInventory['equippedWeaponIds'][typeof slot];
+    } else if (slot === 'PRIMARY') {
+      equippedWeaponIds[slot] = DEFAULT_PLAYER_INVENTORY.equippedWeaponIds.PRIMARY;
+    }
+  }
+  const rawLevels = stored['upgradeLevels'] && typeof stored['upgradeLevels'] === 'object'
+    ? stored['upgradeLevels'] as Record<string, unknown>
+    : {};
+  const upgradeLevels: Record<string, number> = {};
+  for (const [key, val] of Object.entries(rawLevels)) {
+    if (typeof val === 'number' && Number.isFinite(val) && val > 0) {
+      upgradeLevels[key] = Math.floor(val);
+    }
+  }
+  return { parts, unlockedWeaponIds, equippedWeaponIds, upgradeLevels };
+}
+
 export function normalizeCampaignProgress(
   stored: Partial<CampaignProgress> | null | undefined,
   missions: MissionDefinition[],
 ): CampaignProgress {
   const storedVersion = typeof stored?.saveVersion === 'number' ? stored.saveVersion : 0;
   // v0 -> v1: no structural data change; version stamp is added below.
+  // v1 -> v2 (Stage 7a): inventory field added; absent field is populated from DEFAULT_PLAYER_INVENTORY.
   // Add version-ordered migration blocks here when future CampaignProgress schemas change.
   void storedVersion;
 
@@ -151,6 +188,7 @@ export function normalizeCampaignProgress(
       ...stringArray(stored?.earnedRewardIds),
       ...missions.filter(mission => completedMissionIdSet.has(mission.id)).map(mission => mission.reward.id),
     ])),
+    inventory: normalizeInventory(stored?.inventory),
   } satisfies CampaignProgress;
 }
 

@@ -1,5 +1,5 @@
 import { CAMPAIGN_ARCS } from '../src/config/campaign';
-import { CAMPAIGN_SAVE_VERSION, DEFAULT_CAMPAIGN_PROGRESS } from '../src/config/defaults';
+import { CAMPAIGN_SAVE_VERSION, DEFAULT_CAMPAIGN_PROGRESS, DEFAULT_PLAYER_INVENTORY } from '../src/config/defaults';
 import { MISSIONS } from '../src/config/missions';
 import {
   buildObjectiveSnapshot,
@@ -82,6 +82,9 @@ prototypeMissions.forEach(mission => {
 
 let progress: CampaignProgress = structuredClone(DEFAULT_CAMPAIGN_PROGRESS);
 assert(progress.saveVersion === CAMPAIGN_SAVE_VERSION, 'Default progress should be stamped with current save version');
+assert(progress.inventory !== undefined, 'Default progress should include inventory (Stage 7a)');
+assert(progress.inventory?.parts === DEFAULT_PLAYER_INVENTORY.parts, 'Default progress inventory should have default parts');
+assert(progress.inventory?.equippedWeaponIds?.PRIMARY === DEFAULT_PLAYER_INVENTORY.equippedWeaponIds?.PRIMARY, 'Default progress inventory should have default primary weapon equipped');
 assert(getMissionStatus(mainMissions[0], progress) === 'READY', 'Clean save should start with Mission 01 READY');
 assert(getMissionStatus(mainMissions[1], progress) === 'LOCKED', 'Clean save should keep Mission 02 locked before Mission 01 clear');
 
@@ -131,6 +134,8 @@ const migratedMidCampaign = normalizeCampaignProgress({
 }, MISSIONS);
 
 assert(migratedMidCampaign.saveVersion === CAMPAIGN_SAVE_VERSION, 'Migrated save should be stamped with current save version');
+assert(migratedMidCampaign.inventory !== undefined, 'Migrated save with no inventory should receive default inventory');
+assert(migratedMidCampaign.inventory?.parts === 0, 'Migrated save inventory should start with 0 parts');
 assert(migratedMidCampaign.completedMissionIds.join(',') === 'signal-break,iron-veil,black-sky-hook', 'Migrated save should keep valid completed ids once, in stored order');
 assert(migratedMidCampaign.unlockedMissionIds.includes(mainMissions[3].id), 'Migrated save should unlock the next mission from completed ids');
 assert(!migratedMidCampaign.unlockedMissionIds.includes('retired-mission'), 'Migrated save should drop stale unlocked mission ids');
@@ -154,6 +159,46 @@ const migratedLateCampaign = normalizeCampaignProgress({
 }, MISSIONS);
 assert(migratedLateCampaign.unlockedMissionIds.includes('last-light'), 'Migrated late-campaign save should unlock Mission 24 from Mission 23 completion');
 assert(getMissionStatus(mainMissions[23], migratedLateCampaign) === 'READY', 'Migrated late-campaign save should make finale READY');
+
+// Stage 7a: validate inventory round-trip for saves that already have inventory data
+const savedWithInventory = normalizeCampaignProgress({
+  saveVersion: 2,
+  completedMissionIds: [],
+  unlockedMissionIds: ['signal-break'],
+  bestMissionTimes: {},
+  bestMissionScores: {},
+  bestMissionRanks: {},
+  earnedRewardIds: [],
+  inventory: {
+    parts: 750,
+    unlockedWeaponIds: ['pulse-cannon', 'ion-missile'],
+    equippedWeaponIds: { PRIMARY: 'pulse-cannon', SECONDARY: 'ion-missile' },
+    upgradeLevels: { 'flight-boost-1': 2, 'weapons-damage-1': 1 },
+  },
+}, MISSIONS);
+assert(savedWithInventory.inventory?.parts === 750, 'Normalized save should preserve valid parts value');
+assert(savedWithInventory.inventory?.unlockedWeaponIds.includes('ion-missile'), 'Normalized save should preserve unlocked weapon ids');
+assert(savedWithInventory.inventory?.equippedWeaponIds?.SECONDARY === 'ion-missile', 'Normalized save should preserve equipped secondary weapon');
+assert(savedWithInventory.inventory?.upgradeLevels['flight-boost-1'] === 2, 'Normalized save should preserve positive upgrade levels');
+
+const savedWithBadInventory = normalizeCampaignProgress({
+  saveVersion: 2,
+  completedMissionIds: [],
+  unlockedMissionIds: ['signal-break'],
+  bestMissionTimes: {},
+  bestMissionScores: {},
+  bestMissionRanks: {},
+  earnedRewardIds: [],
+  inventory: {
+    parts: -100,
+    unlockedWeaponIds: ['pulse-cannon'],
+    equippedWeaponIds: { PRIMARY: 'pulse-cannon', SECONDARY: 'locked-weapon' as never },
+    upgradeLevels: { 'bad-upgrade': -1 },
+  },
+}, MISSIONS);
+assert(savedWithBadInventory.inventory?.parts === 0, 'Normalized save should clamp negative parts to 0');
+assert(savedWithBadInventory.inventory?.equippedWeaponIds?.SECONDARY === undefined, 'Normalized save should drop equipped weapon not in unlockedWeaponIds');
+assert(savedWithBadInventory.inventory?.upgradeLevels['bad-upgrade'] === undefined, 'Normalized save should drop negative upgrade levels');
 
 if (failures.length > 0) {
   console.error('\nCampaign Wave 1 regression validation FAILED:\n');

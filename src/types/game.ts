@@ -45,6 +45,8 @@ export interface CampaignProgress {
   bestMissionScores: Record<string, number>;
   bestMissionRanks: Record<string, CampaignRank>;
   earnedRewardIds: string[];
+  /** Stage 7a: Player loadout and upgrade state. Absent in pre-7a saves; populated by normalizeCampaignProgress. */
+  inventory?: PlayerInventory;
 }
 
 export interface CampaignArcDefinition {
@@ -57,6 +59,28 @@ export interface CampaignArcDefinition {
 }
 
 export type CampaignRank = 'S' | 'A' | 'B' | 'C';
+
+// ---------------------------------------------------------------------------
+// Stage 7a: Player inventory and upgrade progression data model
+// ---------------------------------------------------------------------------
+
+/** The five upgrade cores covering different mechanical domains. Stage 7c adds per-tree definitions. */
+export type UpgradeCoreId = 'flight' | 'weapons' | 'defense' | 'sensor' | 'payload';
+
+/**
+ * Per-player loadout and upgrade state. Stored inside CampaignProgress.
+ * All fields are individually validated during normalizeCampaignProgress.
+ */
+export interface PlayerInventory {
+  /** Spare parts — earned from mission bonuses and completion rewards; spent on upgrades. */
+  parts: number;
+  /** Ids of weapons the player has unlocked (mirrored from earnedRewardIds for loadout slot resolution). */
+  unlockedWeaponIds: string[];
+  /** Currently equipped weapon per slot. Partial so slots can be empty before unlock. */
+  equippedWeaponIds: Partial<Record<WeaponSlot, WeaponId>>;
+  /** Current upgrade level per upgrade id. Absent key = level 0 (not purchased). Stage 7c populates this. */
+  upgradeLevels: Record<string, number>;
+}
 
 export type WeaponSlot = 'PRIMARY' | 'SECONDARY';
 export type WeaponId = 'pulse-cannon' | 'ion-missile';
