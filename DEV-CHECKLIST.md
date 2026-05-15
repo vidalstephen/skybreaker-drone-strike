@@ -930,16 +930,31 @@ Verification:
 
 ### Stage 7c - Upgrade Definitions And Trees
 
-Status: Not started
+Status: Complete ✓
 
-- [ ] Define upgrade trees for Flight Core, Weapons Core, Defense Core, Sensor Core, and Payload Core.
-- [ ] Add upgrade costs, requirements, caps, and mutually exclusive choices where useful.
-- [ ] Add upgrade effects without scattering tuning branches across runtime code.
+- [x] Define upgrade trees for Flight Core, Weapons Core, Defense Core, Sensor Core, and Payload Core.
+- [x] Add upgrade costs, requirements, caps, and mutually exclusive choices where useful.
+- [x] Add upgrade effects without scattering tuning branches across runtime code.
 
 Exit criteria:
 
-- [ ] At least three upgrade trees have playable mechanical effects.
-- [ ] Upgrade effects are visible in UI and gameplay.
+- [x] At least three upgrade trees have playable mechanical effects.
+- [x] Upgrade effects are visible in UI and gameplay.
+
+Completion summary:
+
+- New file `src/config/upgrades.ts`: `UpgradeEffects` interface (8 multiplier fields), 5 `UpgradeTree` definitions (flight, weapons, defense, sensor, payload) with 12 nodes across them, `resolveUpgradeEffects()` accumulates per-node deltas, `canPurchaseUpgrade()` checks parts, prereqs, and not-already-owned, `applyUpgradePurchase()` deducts parts and records level.
+- New file `src/components/menus/UpgradeScreen.tsx`: interactive color-coded tree browser; Install/Locked/Insufficient button states; parts count sidebar; back navigation.
+- `src/components/menus/index.ts`: exported `UpgradeScreen`.
+- `src/components/menus/MainMenu.tsx`: added `Upgrades` button (Zap icon) in command tab grid; `onOpenUpgrades` prop.
+- `src/App.tsx`: added `handlePurchaseUpgrade` callback, `UPGRADES` phase routing, `UpgradeScreen` render.
+- `src/types/game.ts`: added `UPGRADES = 'UPGRADES'` to `GamePhase` enum.
+- `src/config/defaults.ts`: `DEFAULT_PLAYER_INVENTORY.parts` set to 50 (testing scaffold; 7d will balance earning properly).
+- `src/components/Game.tsx`: `resolveUpgradeEffects()` called at component level; all 7 multipliers wired — radar range, shield recharge, weapon energy regen, boost energy regen, max speed, weapon damage, lock speed, missile blast radius.
+- `scripts/validate-campaign-wave1.ts`: updated migrated-save parts assertion to match `DEFAULT_PLAYER_INVENTORY.parts` (was hardcoded 0, now correctly mirrors the default).
+- `src/config/buildMeta.ts`: updated `PHASE_TAG` to `'Phase 7c'`.
+- Verification: `npm run lint` ✓ · `npm run build` ✓ · `validate:drone` ✓ · `validate:campaign` ✓ · `docker compose build` ✓ · deployed ✓ · commit `7a9d1c0`.
+- Notes: `missileBlastRadiusMultiplier` only activates when ion-missile (earned via `extraction-protocol` reward) is equipped. Starter 50 parts allows immediate upgrade tree exploration; Stage 7d will wire proper mission-reward earning.
 
 ### Stage 7d - Reward And Currency Model
 
@@ -1336,8 +1351,7 @@ Verification:
 
 Deferred:
 - `parts` earning from missions — Stage 7d (reward and currency model).
-- `upgradeLevels` runtime effects — Stage 7c (upgrade definitions and trees).
-- LoadoutScreen active weapon selection — Stage 7b — DONE.
+- `upgradeLevels` runtime effects — Stage 7c — DONE.
 - Mission recommendation tags on LoadoutScreen — Stage 7b — DONE.
 
 Next recommended starting point:
