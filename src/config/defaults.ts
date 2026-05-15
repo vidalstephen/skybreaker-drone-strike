@@ -18,7 +18,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
 
 /** Stage 7a: Default player inventory applied to new saves and to saves missing the inventory field. */
 export const DEFAULT_PLAYER_INVENTORY: PlayerInventory = {
-  parts: 0,
+  parts: 50, // Stage 7c: starter parts so upgrade trees are immediately testable; 7d will properly balance earning
   unlockedWeaponIds: ['pulse-cannon'],
   equippedWeaponIds: { PRIMARY: 'pulse-cannon' },
   upgradeLevels: {},

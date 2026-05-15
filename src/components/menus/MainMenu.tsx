@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Award, Gamepad2, Info, ListChecks, Play, RotateCcw, Settings, ShieldCheck, SlidersHorizontal, Terminal, Trophy } from 'lucide-react';
+import { Award, Gamepad2, Info, ListChecks, Play, RotateCcw, Settings, ShieldCheck, SlidersHorizontal, Terminal, Trophy, Zap } from 'lucide-react';
 import { CAMPAIGN_ARCS } from '../../config/campaign';
 import type { CampaignProgress, MissionDefinition } from '../../types/game';
 import { MenuButton } from './MenuButton';
@@ -15,6 +15,7 @@ export interface MainMenuProps {
   onOpenCampaign: () => void;
   onOpenLoadout: () => void;
   onOpenCareer: () => void;
+  onOpenUpgrades: () => void;
   onOpenSettings: () => void;
   onOpenControls: () => void;
   onOpenCredits: () => void;
@@ -29,7 +30,7 @@ const TABS: TabItem[] = [
   { id: 'system', label: 'System', icon: <Terminal size={11} /> },
 ];
 
-export function MainMenu({ missions, nextMissionId, progress, onContinue, onOpenCampaign, onOpenLoadout, onOpenCareer, onOpenSettings, onOpenControls, onOpenCredits, onResetProgress }: MainMenuProps) {
+export function MainMenu({ missions, nextMissionId, progress, onContinue, onOpenCampaign, onOpenLoadout, onOpenCareer, onOpenUpgrades, onOpenSettings, onOpenControls, onOpenCredits, onResetProgress }: MainMenuProps) {
   const [activeTab, setActiveTab] = useState<MainMenuTab>('command');
   const nextMission = missions.find(mission => mission.id === nextMissionId) ?? missions[0];
   const summary = getCareerSummary(missions, progress);
@@ -92,6 +93,7 @@ export function MainMenu({ missions, nextMissionId, progress, onContinue, onOpen
                 <MenuButton icon={<Play size={18} />} onClick={onContinue} className="hidden md:flex">Next Sortie</MenuButton>
                 <MenuButton icon={<ListChecks size={18} />} onClick={onOpenCampaign}>Campaign</MenuButton>
                 <MenuButton icon={<SlidersHorizontal size={18} />} onClick={onOpenLoadout}>Loadout</MenuButton>
+                <MenuButton icon={<Zap size={18} />} onClick={onOpenUpgrades}>Upgrades</MenuButton>
                 <MenuButton icon={<Trophy size={18} />} onClick={onOpenCareer}>Pilot Record</MenuButton>
               </div>
 

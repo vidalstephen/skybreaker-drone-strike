@@ -16,6 +16,7 @@ import {
   PauseMenu,
   SettingsMenu,
   SplashScreen,
+  UpgradeScreen,
 } from './components/menus';
 import {
   DEFAULT_APP_SETTINGS,
@@ -24,6 +25,7 @@ import {
   SETTINGS_STORAGE_KEY,
 } from './config/defaults';
 import { DEFAULT_MISSION_ID, getMissionById, MISSIONS } from './config/missions';
+import { applyUpgradePurchase } from './config/upgrades';
 import { useAudio } from './hooks/useAudio';
 import { completeMission, isMissionUnlocked, normalizeCampaignProgress } from './systems/missionSystem';
 import { GamePhase, type AppSettings, type CampaignProgress, type MissionCompletionResult, type WeaponId, type WeaponSlot } from './types/game';
@@ -209,6 +211,15 @@ export default function App() {
     }));
   }, [playCue]);
 
+  /** Stage 7c: purchase an upgrade node and deduct parts. */
+  const handlePurchaseUpgrade = useCallback((nodeId: string) => {
+    playCue('ui');
+    setProgress(current => ({
+      ...current,
+      inventory: current.inventory ? applyUpgradePurchase(current.inventory, nodeId) : current.inventory,
+    }));
+  }, [playCue]);
+
   const gamePhase = (phase === GamePhase.SETTINGS && settingsReturnPhase === GamePhase.PAUSED) || (phase === GamePhase.CONTROLS && controlsReturnPhase === GamePhase.PAUSED) ? GamePhase.PAUSED : phase;
   const shouldRenderGame = gamePhase === GamePhase.IN_MISSION || gamePhase === GamePhase.PAUSED || gamePhase === GamePhase.DEBRIEF;
 
@@ -257,6 +268,7 @@ export default function App() {
           onOpenCampaign={() => setPhase(GamePhase.MISSION_SELECT)}
           onOpenLoadout={() => setPhase(GamePhase.LOADOUT)}
           onOpenCareer={() => setPhase(GamePhase.CAREER)}
+          onOpenUpgrades={() => setPhase(GamePhase.UPGRADES)}
           onOpenSettings={() => openSettings(GamePhase.MAIN_MENU)}
           onOpenControls={() => openControls(GamePhase.MAIN_MENU)}
           onOpenCredits={() => setPhase(GamePhase.CREDITS)}
@@ -280,6 +292,8 @@ export default function App() {
       {phase === GamePhase.LOADOUT && <LoadoutScreen mission={selectedMission} progress={progress} onLaunch={launchMission} onBack={() => setPhase(GamePhase.BRIEFING)} onEquipWeapon={handleEquipWeapon} />}
 
       {phase === GamePhase.CAREER && <CareerScreen missions={MISSIONS} progress={progress} onBack={() => setPhase(GamePhase.MAIN_MENU)} />}
+
+      {phase === GamePhase.UPGRADES && <UpgradeScreen progress={progress} onPurchaseUpgrade={handlePurchaseUpgrade} onBack={() => setPhase(GamePhase.MAIN_MENU)} />}
 
       {phase === GamePhase.CONTROLS && <ControlsScreen onBack={() => setPhase(controlsReturnPhase)} />}
 

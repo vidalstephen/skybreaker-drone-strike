@@ -30,6 +30,7 @@ import {
 } from '../config/constants';
 import { expandEnemyWave } from '../config/enemies';
 import { getEquippedWeapons } from '../config/weapons';
+import { resolveUpgradeEffects } from '../config/upgrades';
 import type { AudioCue } from '../hooks/useAudio';
 import {
   SPEED_STREAK_OPACITY,
@@ -233,8 +234,10 @@ export default function Game({
 
   // Resolve weather definition once for this mission (immutable for mission duration).
   const weatherDef = resolveMissionWeather(mission.weatherId);
+  // Stage 7c: resolve upgrade effects once for this mission start (based on equipped upgrades at launch).
+  const upgradeEffects = resolveUpgradeEffects(progress.inventory?.upgradeLevels ?? {});
   // Derive effective radar range so the Radar HUD component can scale accordingly.
-  const effectiveRadarRange = RADAR_RANGE * (weatherDef.sensors.radarRangeMultiplier ?? 1);
+  const effectiveRadarRange = RADAR_RANGE * (weatherDef.sensors.radarRangeMultiplier ?? 1) * upgradeEffects.radarRangeMultiplier;
 
   const initialWeapons = getEquippedWeapons(progress);
   const initialPrimaryWeapon = initialWeapons.primary;
@@ -647,13 +650,13 @@ export default function Game({
         
         // Shield Regeneration (after 5 seconds of peace)
         if (now - lastDamageTime.current > 5000 && currentSystems.current.shields < 100) {
-          currentSystems.current.shields = Math.min(100, currentSystems.current.shields + 0.1 * (weatherDef.gameplay.shieldRechargeMultiplier ?? 1) * dt);
+          currentSystems.current.shields = Math.min(100, currentSystems.current.shields + 0.1 * (weatherDef.gameplay.shieldRechargeMultiplier ?? 1) * upgradeEffects.shieldRechargeMultiplier * dt);
         }
 
         // Weapon Energy Regeneration
-        currentSystems.current.energy = Math.min(100, currentSystems.current.energy + 0.2 * dt);
+        currentSystems.current.energy = Math.min(100, currentSystems.current.energy + 0.2 * upgradeEffects.weaponEnergyRegenMultiplier * dt);
         // Boost Energy Regeneration (slightly faster when not boosting)
-        currentSystems.current.boostEnergy = Math.min(100, currentSystems.current.boostEnergy + 0.3 * (weatherDef.gameplay.boostRecoveryMultiplier ?? 1) * dt);
+        currentSystems.current.boostEnergy = Math.min(100, currentSystems.current.boostEnergy + 0.3 * (weatherDef.gameplay.boostRecoveryMultiplier ?? 1) * upgradeEffects.boostEnergyRegenMultiplier * dt);
 
         // --- Controls & Energy Consumption ---
         const flightControls: FlightControlState = {
@@ -677,7 +680,7 @@ export default function Game({
         currentSystems.current.boostEnergy = consumeBoostEnergy(currentSystems.current.boostEnergy, isBoosting, dt);
   throttleRef.current = updateThrottle(throttleRef.current, flightControls, dt);
 
-  const currentSpeed = getFlightSpeed(isBoosting, dt, throttleRef.current, isBraking);
+  const currentSpeed = getFlightSpeed(isBoosting, dt, throttleRef.current, isBraking) * upgradeEffects.maxSpeedMultiplier;
 
         // Visual Speed Feedback: named drone material and thruster handles
         const throttleTarget = isBoosting ? 1.0 : 0.4;
@@ -784,9 +787,9 @@ export default function Game({
             mesh: projectile,
             velocity: projectileVelocity,
             life: weapon.projectileLife / dt,
-            damage: weapon.damage,
+          damage: weapon.damage * upgradeEffects.weaponDamageMultiplier,
             weaponId: weapon.id,
-            blastRadius: weapon.blastRadius,
+            blastRadius: weapon.blastRadius != null ? weapon.blastRadius * upgradeEffects.missileBlastRadiusMultiplier : undefined,
             targetId: homingTargetId,
           });
         };
@@ -1495,7 +1498,7 @@ export default function Game({
             const inCone     = dotProduct >= LOCK_CONE_DOT && selectedSnap.distanceToPlayer <= LOCK_RANGE;
 
             if (inCone) {
-              gameLogicRef.current.lockProgress = Math.min(1, gameLogicRef.current.lockProgress + LOCK_ACQUIRE_RATE * delta);
+              gameLogicRef.current.lockProgress = Math.min(1, gameLogicRef.current.lockProgress + LOCK_ACQUIRE_RATE * upgradeEffects.lockSpeedMultiplier * delta);
             } else {
               gameLogicRef.current.lockProgress = Math.max(0, gameLogicRef.current.lockProgress - LOCK_DRAIN_RATE * delta);
             }

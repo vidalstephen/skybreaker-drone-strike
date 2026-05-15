@@ -135,7 +135,7 @@ const migratedMidCampaign = normalizeCampaignProgress({
 
 assert(migratedMidCampaign.saveVersion === CAMPAIGN_SAVE_VERSION, 'Migrated save should be stamped with current save version');
 assert(migratedMidCampaign.inventory !== undefined, 'Migrated save with no inventory should receive default inventory');
-assert(migratedMidCampaign.inventory?.parts === 0, 'Migrated save inventory should start with 0 parts');
+assert(migratedMidCampaign.inventory?.parts === DEFAULT_PLAYER_INVENTORY.parts, 'Migrated save inventory should start with default parts');
 assert(migratedMidCampaign.completedMissionIds.join(',') === 'signal-break,iron-veil,black-sky-hook', 'Migrated save should keep valid completed ids once, in stored order');
 assert(migratedMidCampaign.unlockedMissionIds.includes(mainMissions[3].id), 'Migrated save should unlock the next mission from completed ids');
 assert(!migratedMidCampaign.unlockedMissionIds.includes('retired-mission'), 'Migrated save should drop stale unlocked mission ids');
