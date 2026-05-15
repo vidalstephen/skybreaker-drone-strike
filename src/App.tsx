@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Game from './components/Game';
 import {
   BriefingScreen,
@@ -21,9 +21,12 @@ import {
 import {
   DEFAULT_APP_SETTINGS,
   DEFAULT_CAMPAIGN_PROGRESS,
+  DEV_MODE_STORAGE_KEY,
+  DEV_PROGRESS_STORAGE_KEY,
   PROGRESS_STORAGE_KEY,
   SETTINGS_STORAGE_KEY,
 } from './config/defaults';
+import { buildDevProgress } from './config/devMode';
 import { DEFAULT_MISSION_ID, getMissionById, MISSIONS } from './config/missions';
 import { applyUpgradePurchase } from './config/upgrades';
 import { useAudio } from './hooks/useAudio';
@@ -70,8 +73,8 @@ function loadStoredSettings() {
   } satisfies AppSettings;
 }
 
-function loadStoredProgress() {
-  const stored = loadStoredJson(PROGRESS_STORAGE_KEY) as Partial<CampaignProgress> | null;
+function loadStoredProgress(key: string = PROGRESS_STORAGE_KEY) {
+  const stored = loadStoredJson(key) as Partial<CampaignProgress> | null;
   return normalizeCampaignProgress(stored, MISSIONS);
 }
 
@@ -82,7 +85,20 @@ export default function App() {
   const [selectedMissionId, setSelectedMissionId] = useState(DEFAULT_MISSION_ID);
   const [missionRunId, setMissionRunId] = useState(0);
   const [settings, setSettings] = useState<AppSettings>(loadStoredSettings);
-  const [progress, setProgress] = useState<CampaignProgress>(loadStoredProgress);
+  const [devModeActive, setDevModeActive] = useState(() =>
+    window.localStorage.getItem(DEV_MODE_STORAGE_KEY) === 'true'
+  );
+  const [progress, setProgress] = useState<CampaignProgress>(() =>
+    loadStoredProgress(
+      window.localStorage.getItem(DEV_MODE_STORAGE_KEY) === 'true'
+        ? DEV_PROGRESS_STORAGE_KEY
+        : PROGRESS_STORAGE_KEY
+    )
+  );
+  const activeProgress = useMemo(
+    () => (devModeActive ? buildDevProgress(progress) : progress),
+    [devModeActive, progress]
+  );
   // Portrait lock: true when width < height on a touch device
   const [showPortraitOverlay, setShowPortraitOverlay] = useState(() => {
     if (typeof window === 'undefined') return false;
@@ -111,7 +127,7 @@ export default function App() {
     };
   }, []);
 
-  const nextSortieMission = MISSIONS.find(mission => isMissionUnlocked(mission, progress) && !progress.completedMissionIds.includes(mission.id))
+  const nextSortieMission = MISSIONS.find(mission => isMissionUnlocked(mission, activeProgress) && !activeProgress.completedMissionIds.includes(mission.id))
     ?? MISSIONS.find(mission => mission.id === selectedMissionId)
     ?? MISSIONS[0];
 
@@ -120,8 +136,9 @@ export default function App() {
   }, [settings]);
 
   useEffect(() => {
-    window.localStorage.setItem(PROGRESS_STORAGE_KEY, JSON.stringify(progress));
-  }, [progress]);
+    const key = devModeActive ? DEV_PROGRESS_STORAGE_KEY : PROGRESS_STORAGE_KEY;
+    window.localStorage.setItem(key, JSON.stringify(progress));
+  }, [progress, devModeActive]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -137,20 +154,29 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  const toggleDevMode = useCallback(() => {
+    setDevModeActive(current => {
+      const next = !current;
+      window.localStorage.setItem(DEV_MODE_STORAGE_KEY, next ? 'true' : 'false');
+      setProgress(loadStoredProgress(next ? DEV_PROGRESS_STORAGE_KEY : PROGRESS_STORAGE_KEY));
+      return next;
+    });
+  }, []);
+
   const launchMission = useCallback(() => {
-    if (!isMissionUnlocked(selectedMission, progress)) return;
+    if (!isMissionUnlocked(selectedMission, activeProgress)) return;
     playCue('ui');
     setMissionRunId(runId => runId + 1);
     setPhase(GamePhase.IN_MISSION);
-  }, [playCue, progress, selectedMission]);
+  }, [activeProgress, playCue, selectedMission]);
 
   const openBriefing = useCallback((missionId = selectedMission.id) => {
     const mission = getMissionById(missionId);
-    if (!isMissionUnlocked(mission, progress)) return;
+    if (!isMissionUnlocked(mission, activeProgress)) return;
     playCue('ui');
     setSelectedMissionId(mission.id);
     setPhase(GamePhase.BRIEFING);
-  }, [playCue, progress, selectedMission.id]);
+  }, [activeProgress, playCue, selectedMission.id]);
 
   const continueSortie = useCallback(() => {
     openBriefing(nextSortieMission.id);
@@ -245,7 +271,7 @@ export default function App() {
           <Game
             phase={gamePhase}
             mission={selectedMission}
-            progress={progress}
+            progress={activeProgress}
             settings={settings}
             onSettingsChange={setSettings}
             onSound={playCue}
@@ -263,7 +289,7 @@ export default function App() {
         <MainMenu
           missions={MISSIONS}
           nextMissionId={nextSortieMission.id}
-          progress={progress}
+          progress={activeProgress}
           onContinue={continueSortie}
           onOpenCampaign={() => setPhase(GamePhase.MISSION_SELECT)}
           onOpenLoadout={() => setPhase(GamePhase.LOADOUT)}
@@ -280,7 +306,7 @@ export default function App() {
         <MissionSelectScreen
           missions={MISSIONS}
           selectedMissionId={selectedMissionId}
-          progress={progress}
+          progress={activeProgress}
           onSelectMission={setSelectedMissionId}
           onStartMission={() => openBriefing(selectedMissionId)}
           onBack={() => setPhase(GamePhase.MAIN_MENU)}
@@ -289,11 +315,11 @@ export default function App() {
 
       {phase === GamePhase.BRIEFING && <BriefingScreen mission={selectedMission} onContinue={launchMission} onLoadout={() => setPhase(GamePhase.LOADOUT)} onBack={() => setPhase(GamePhase.MISSION_SELECT)} />}
 
-      {phase === GamePhase.LOADOUT && <LoadoutScreen mission={selectedMission} progress={progress} onLaunch={launchMission} onBack={() => setPhase(GamePhase.BRIEFING)} onEquipWeapon={handleEquipWeapon} />}
+      {phase === GamePhase.LOADOUT && <LoadoutScreen mission={selectedMission} progress={activeProgress} onLaunch={launchMission} onBack={() => setPhase(GamePhase.BRIEFING)} onEquipWeapon={handleEquipWeapon} />}
 
-      {phase === GamePhase.CAREER && <CareerScreen missions={MISSIONS} progress={progress} onBack={() => setPhase(GamePhase.MAIN_MENU)} />}
+      {phase === GamePhase.CAREER && <CareerScreen missions={MISSIONS} progress={activeProgress} onBack={() => setPhase(GamePhase.MAIN_MENU)} />}
 
-      {phase === GamePhase.UPGRADES && <UpgradeScreen progress={progress} onPurchaseUpgrade={handlePurchaseUpgrade} onBack={() => setPhase(GamePhase.MAIN_MENU)} />}
+      {phase === GamePhase.UPGRADES && <UpgradeScreen progress={activeProgress} onPurchaseUpgrade={handlePurchaseUpgrade} onBack={() => setPhase(GamePhase.MAIN_MENU)} />}
 
       {phase === GamePhase.CONTROLS && <ControlsScreen onBack={() => setPhase(controlsReturnPhase)} />}
 
@@ -312,6 +338,20 @@ export default function App() {
 
       {phase === GamePhase.SETTINGS && (
         <SettingsMenu settings={settings} onChange={setSettings} onBack={() => setPhase(settingsReturnPhase)} />
+      )}
+
+      {/* Dev mode toggle — always accessible from menus, hidden during active gameplay */}
+      {phase !== GamePhase.IN_MISSION && (
+        <button
+          onClick={toggleDevMode}
+          className={`fixed top-3 right-3 z-[999] font-mono text-[9px] uppercase tracking-[0.25em] px-2 py-1 border transition-all select-none ${
+            devModeActive
+              ? 'border-orange-500/70 bg-orange-500/20 text-orange-300 shadow-[0_0_8px_rgba(249,115,22,0.35)]'
+              : 'border-white/15 bg-black/50 text-white/25 hover:text-white/50 hover:border-white/30'
+          }`}
+        >
+          {devModeActive ? '⚙ DEV ACTIVE' : '○ DEV'}
+        </button>
       )}
     </div>
   );

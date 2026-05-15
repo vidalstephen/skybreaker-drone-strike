@@ -37,6 +37,8 @@ export const DEFAULT_CAMPAIGN_PROGRESS: CampaignProgress = {
 
 export const SETTINGS_STORAGE_KEY = 'skybreaker.settings.v1';
 export const PROGRESS_STORAGE_KEY = 'skybreaker.progress.v1';
+export const DEV_PROGRESS_STORAGE_KEY = 'skybreaker.dev-progress.v1';
+export const DEV_MODE_STORAGE_KEY = 'skybreaker.dev-mode';
 /**
  * Increment this when CampaignProgress schema changes require a migration pass.
  * Version 0 = pre-Stage 6a saves (no saveVersion field).
