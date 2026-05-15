@@ -820,6 +820,95 @@ export const MISSIONS: MissionDefinition[] = [
     },
     unlockAfterMissionId: 'final-dawn',
   }),
+  // Stage 5e: naval prototype mission — patrol craft on ocean platform
+  defineMission({
+    id: 'sea-wolf-prototype',
+    order: 93,
+    title: 'SEA WOLF',
+    levelKitId: 'ocean-platform',
+    campaignArc: 'Prototype Range // Sea Warfare Lab',
+    difficulty: 5,
+    combatDomain: 'AIR_TO_SEA',
+    missionType: 'STRIKE',
+    timeOfDay: 'night',
+    weatherId: 'clear',
+    targetLabel: 'Patrol Craft',
+    initialObjective: 'DESTROY THE PATROL CRAFT',
+    targetDestroyedMessage: 'PATROL CRAFT DESTROYED',
+    nextTargetMessage: 'CONTACT ELIMINATED...',
+    allTargetsDestroyedMessage: 'TARGET DOWN // RETURN TO EXTRACTION',
+    briefing: [
+      { label: 'Objective', value: 'Destroy the naval patrol craft before it completes its route' },
+      { label: 'Threat', value: 'Fighter CAP providing air cover — intercept before engaging' },
+      { label: 'Weak Points', value: 'Radar mast (optional bonus) and engine pod (required)' },
+    ],
+    targets: [
+      {
+        id: 'sea_wolf_craft',
+        position: [0, 2, -500],
+        health: 220,
+        archetype: 'patrol-craft',
+        movement: {
+          route: [
+            { position: [400, 2, -200] },
+            { position: [0, 2, 400] },
+            { position: [-400, 2, -200] },
+            { position: [0, 2, -500] },
+          ],
+          speed: 14,
+          loopMode: 'loop',
+          endBehavior: 'stop',
+        },
+        weakPoints: [
+          { id: 'radar-mast', label: 'Radar Mast', offset: [0, 14, -4], health: 40, radius: 10, required: false },
+          { id: 'engine-pod', label: 'Engine Pod', offset: [0, 2, 16], health: 60, radius: 12, required: true },
+        ],
+        trackingMeta: {
+          radarLabel: 'SEA',
+          markerLabel: 'PATROL CRAFT',
+          priorityBonus: 100,
+          attentionReason: 'Primary naval strike target',
+          routeHint: 'Craft running diamond patrol — cut across to intercept',
+        },
+      },
+    ],
+    extraction: {
+      label: 'Extraction Buoy',
+      position: [0, 0, 800],
+      activationObjective: 'RETURN TO EXTRACTION BUOY',
+      approachObjective: 'APPROACH EXTRACTION BUOY',
+      completionObjective: 'SEA WOLF COMPLETE',
+      radius: 150,
+      trackingMeta: { radarLabel: 'EXT', markerLabel: 'EXTRACTION BUOY', priorityBonus: 50 },
+    },
+    enemyWave: {
+      triggerTargetsDestroyed: 0,
+      count: 2,
+      message: 'NAVAL CAP FIGHTERS INBOUND',
+      composition: [
+        { role: 'fast-interceptor', count: 2 },
+      ],
+    },
+    failureConditions: [
+      { id: 'hull-depleted', label: 'Hull Integrity', message: 'CRITICAL HULL FAILURE' },
+      { id: 'out-of-bounds', label: 'Strike Boundary', message: 'RETURN TO STRIKE ZONE' },
+    ],
+    scoring: {
+      parTimeMs: 150000,
+      baseScore: 1800,
+      targetBonus: 1200,
+      enemyBonus: 400,
+      healthBonus: 12,
+      timeBonus: 700,
+      rankThresholds: { S: 6000, A: 4500, B: 3000, C: 0 },
+    },
+    reward: {
+      id: 'sea-warfare-calibration',
+      label: 'Sea Warfare Calibration',
+      description: 'Prototype validates patrol craft archetype, ocean-platform biome, sea-surface target movement, and naval weak points.',
+    },
+    unlockAfterMissionId: 'final-dawn',
+  }),
 ];
 
 export const DEFAULT_MISSION_ID = MISSIONS[0].id;

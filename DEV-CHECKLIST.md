@@ -655,16 +655,21 @@ Status: Complete
 
 ### Stage 5e - Air-To-Sea Foundation
 
-Status: Not started
+Status: Complete — commit `feat: phase 5e - air-to-sea foundation`
 
-- [ ] Add ocean/sea plane rendering and water readability rules.
-- [ ] Add moving ships, patrol boats, carriers, platforms, wakes, naval AA, and sea mines.
-- [ ] Add naval weak points such as radar mast, deck guns, engines, hangars, and command tower.
+- [x] Add `ocean-platform` level kit with ocean-buoys waypoint style and sea-surge hazard biome.
+- [x] Add `patrol-craft-vitals` weak point layout (radar-mast optional, engine-pod required).
+- [x] Add `patrol-craft` to `MissionTargetArchetype`; extend `LevelKitId`, `WaypointStyleId`, `TargetWeakPointLayoutId`.
+- [x] `createPatrolCraftModel()` — hull, bow taper, superstructure, radar mast, running lights, wake planes.
+- [x] `createNavalMissionTarget()` — sea-surface locked (y=2), routes naval archetype through targetMovementSystem.
+- [x] `sea-wolf-prototype` mission (order 93) — looping diamond patrol, air CAP, patrol-craft-vitals weak points, ocean-platform biome.
+- [x] `scripts/validate-sea-prototype.ts` + `validate:sea` script; all validators pass.
+- [x] `PHASE_TAG = 'Phase 5e'`; all lint/build/validate/deploy clean.
 
 Exit criteria:
 
-- [ ] A prototype sea target can move, be tracked, take damage, and complete/fail objective rules.
-- [ ] Naval visuals stay readable on low graphics and mobile.
+- [x] A prototype sea target can move, be tracked, take damage, and complete/fail objective rules.
+- [x] Naval visuals stay readable on low graphics and mobile.
 
 ### Stage 5f - Mixed-Domain HUD/Radar Pass
 

@@ -156,7 +156,7 @@ export interface MissionBriefingItem {
   value: string;
 }
 
-export type LevelKitId = 'night-grid' | 'ash-ridge';
+export type LevelKitId = 'night-grid' | 'ash-ridge' | 'ocean-platform';
 export type BiomeId =
   | 'night-grid'
   | 'ash-ridge'
@@ -173,8 +173,8 @@ export type WeatherId =
   | 'snow-frost'
   | 'sea-squall'
   | 'em-interference';
-export type WaypointStyleId = 'signal-array' | 'ash-relay';
-export type TargetWeakPointLayoutId = 'radar-array' | 'relay-core';
+export type WaypointStyleId = 'signal-array' | 'ash-relay' | 'ocean-buoys';
+export type TargetWeakPointLayoutId = 'radar-array' | 'relay-core' | 'patrol-craft-vitals';
 
 // ---------------------------------------------------------------------------
 // Mission classification types (Stage 2 data model)
@@ -416,7 +416,7 @@ export interface MissionEventAccumulator {
   events: MissionEvent[];
 }
 
-export type MissionTargetArchetype = 'tower' | 'relay-spire' | 'facility-node' | 'bomber' | 'transport';
+export type MissionTargetArchetype = 'tower' | 'relay-spire' | 'facility-node' | 'bomber' | 'transport' | 'patrol-craft';
 
 // ---------------------------------------------------------------------------
 // Stage 2f: Mission-authored tracking metadata

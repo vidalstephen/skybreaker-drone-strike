@@ -12,7 +12,8 @@
     "validate:drone": "tsx scripts/validate-drone-symmetry.ts",
     "validate:prototype": "tsx scripts/validate-set-piece-prototype.ts",
     "validate:intercept": "tsx scripts/validate-intercept-prototype.ts",
-    "validate:ground": "tsx scripts/validate-ground-prototype.ts"
+    "validate:ground": "tsx scripts/validate-ground-prototype.ts",
+    "validate:sea": "tsx scripts/validate-sea-prototype.ts"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",

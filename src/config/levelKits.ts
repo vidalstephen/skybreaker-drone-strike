@@ -21,6 +21,11 @@ export const TARGET_WEAK_POINT_LAYOUTS: Record<TargetWeakPointLayoutId, MissionW
     { id: 'upper-node', label: 'Upper Node', offset: [0, 64, -6], health: 45, radius: 12, required: true },
     { id: 'stabilizer', label: 'Stabilizer', offset: [8, 24, 0], health: 35, radius: 11, required: true },
   ],
+  // Stage 5e: patrol craft vitals
+  'patrol-craft-vitals': [
+    { id: 'radar-mast', label: 'Radar Mast', offset: [0, 14, -4], health: 40, radius: 10, required: false },
+    { id: 'engine-pod', label: 'Engine Pod', offset: [0, 2, 16], health: 60, radius: 12, required: true },
+  ],
 };
 
 export const LEVEL_KITS: Record<LevelKitId, LevelKitDefinition> = {
@@ -39,6 +44,15 @@ export const LEVEL_KITS: Record<LevelKitId, LevelKitDefinition> = {
     waypointStyle: 'ash-relay',
     defaultTarget: { archetype: 'relay-spire', setPieceArchetypeId: 'shield-generator', weakPointLayoutId: 'relay-core' },
     environment: composeEnvironment(BIOMES['ash-ridge'], undefined, 'ash-ridge'),
+  },
+  // Stage 5e: ocean platform kit — sea-surface arena for naval combat
+  'ocean-platform': {
+    id: 'ocean-platform',
+    label: 'Ocean Platform',
+    arenaKit: 'cinematic-ocean-grid',
+    waypointStyle: 'ocean-buoys',
+    defaultTarget: { archetype: 'patrol-craft' },
+    environment: composeEnvironment(BIOMES['ocean-platform'], undefined, 'ocean-platform'),
   },
 };
 

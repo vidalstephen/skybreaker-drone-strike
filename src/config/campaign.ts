@@ -51,4 +51,13 @@ export const CAMPAIGN_ARCS: CampaignArcDefinition[] = [
     escalation: 'Static surface emplacements firing at player without inserting into main campaign.',
     status: 'PLANNED',
   },
+  // Stage 5e: air-to-sea naval prototype arc
+  {
+    id: 'prototype-sea',
+    label: 'Prototype Range // Sea Warfare Lab',
+    missionRange: 'Prototype 93',
+    focus: 'Isolated naval prototype for moving patrol craft, ocean-platform biome, patrol-craft-vitals weak points, and sea-surface target movement.',
+    escalation: 'Single looping patrol craft with air CAP; validates AIR_TO_SEA domain and patrol-craft archetype.',
+    status: 'PLANNED',
+  },
 ];

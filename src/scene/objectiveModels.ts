@@ -161,6 +161,161 @@ function createBomberTargetModel(): THREE.Group {
   return group;
 }
 
+/** Stage 5e: Builds a naval patrol craft silhouette — bow at -Z, stern at +Z. */
+function createPatrolCraftModel(): THREE.Group {
+  const group = new THREE.Group();
+
+  const hullMat = new THREE.MeshStandardMaterial({ color: 0x334455, roughness: 0.72, metalness: 0.38 });
+  const superMat = new THREE.MeshStandardMaterial({ color: 0x445566, roughness: 0.68, metalness: 0.30 });
+  const accentMat = new THREE.MeshBasicMaterial({ color: 0xffdd44, transparent: true, opacity: 0.85 });
+  const wakeMat = new THREE.MeshBasicMaterial({
+    color: 0x4488cc,
+    transparent: true,
+    opacity: 0.22,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  });
+
+  // --- Main hull (tapered flat body) ---
+  const hullGeo = new THREE.BoxGeometry(8, 3, 44);
+  const hull = new THREE.Mesh(hullGeo, hullMat);
+  hull.position.y = 1.5;
+  group.add(hull);
+
+  // Bow taper (wedge nose)
+  const bowGeo = new THREE.ConeGeometry(3, 8, 4);
+  bowGeo.rotateX(-Math.PI / 2);
+  const bow = new THREE.Mesh(bowGeo, hullMat);
+  bow.position.set(0, 1.5, -26);
+  group.add(bow);
+
+  // --- Superstructure (forward) ---
+  const superGeo = new THREE.BoxGeometry(6, 5, 12);
+  const superstructure = new THREE.Mesh(superGeo, superMat);
+  superstructure.position.set(0, 6, -6);
+  group.add(superstructure);
+
+  // --- Radar mast ---
+  const mastGeo = new THREE.CylinderGeometry(0.3, 0.3, 8, 5);
+  const mast = new THREE.Mesh(mastGeo, superMat);
+  mast.position.set(0, 13, -4);
+  group.add(mast);
+
+  const radarDishGeo = new THREE.CylinderGeometry(2.8, 2.8, 0.5, 8);
+  const radarDish = new THREE.Mesh(radarDishGeo, superMat);
+  radarDish.position.set(0, 17.5, -4);
+  group.add(radarDish);
+
+  // Radar dish warning glow
+  const radarGlowMat = new THREE.MeshBasicMaterial({ color: 0xff2222, transparent: true, opacity: 0.55 });
+  const radarGlow = new THREE.Mesh(new THREE.SphereGeometry(1.0, 6, 4), radarGlowMat);
+  radarGlow.position.set(0, 17.5, -4);
+  group.add(radarGlow);
+
+  // --- Stern deck (lower) ---
+  const sternDeckGeo = new THREE.BoxGeometry(7, 1.5, 10);
+  const sternDeck = new THREE.Mesh(sternDeckGeo, superMat);
+  sternDeck.position.set(0, 4.25, 14);
+  group.add(sternDeck);
+
+  // --- Engine exhaust ports ---
+  const exhaustMat = new THREE.MeshBasicMaterial({ color: 0xff6620, transparent: true, opacity: 0.72 });
+  for (const side of [-2, 2]) {
+    const exhaustGeo = new THREE.CylinderGeometry(0.8, 1.0, 1.5, 6);
+    const exhaust = new THREE.Mesh(exhaustGeo, exhaustMat);
+    exhaust.position.set(side, 1.5, 20);
+    group.add(exhaust);
+  }
+
+  // --- Running lights (port red, starboard green) ---
+  const portLightMat = new THREE.MeshBasicMaterial({ color: 0xff2244 });
+  const stbdLightMat = new THREE.MeshBasicMaterial({ color: 0x22ff66 });
+  const lightGeo = new THREE.SphereGeometry(0.35, 4, 3);
+  const portLight = new THREE.Mesh(lightGeo, portLightMat);
+  portLight.position.set(-4.2, 3, -8);
+  group.add(portLight);
+  const stbdLight = new THREE.Mesh(lightGeo, stbdLightMat);
+  stbdLight.position.set(4.2, 3, -8);
+  group.add(stbdLight);
+
+  // --- Deck accent stripe ---
+  const stripeGeo = new THREE.BoxGeometry(7.2, 0.3, 40);
+  const stripe = new THREE.Mesh(stripeGeo, accentMat);
+  stripe.position.set(0, 3.1, -2);
+  group.add(stripe);
+
+  // --- Wake planes (static — trail behind stern in local space) ---
+  const wakeGeo = new THREE.PlaneGeometry(18, 28);
+  const wakePort = new THREE.Mesh(wakeGeo, wakeMat);
+  wakePort.rotation.x = -Math.PI / 2;
+  wakePort.rotation.z = 0.28;
+  wakePort.position.set(-7, 0.1, 32);
+  group.add(wakePort);
+
+  const wakeStbd = new THREE.Mesh(wakeGeo, wakeMat);
+  wakeStbd.rotation.x = -Math.PI / 2;
+  wakeStbd.rotation.z = -0.28;
+  wakeStbd.position.set(7, 0.1, 32);
+  group.add(wakeStbd);
+
+  return group;
+}
+
+/** Stage 5e: Creates a naval surface target (patrol craft) locked to sea level. */
+function createNavalMissionTarget(
+  scene: THREE.Scene,
+  pos: THREE.Vector3,
+  definition: MissionTargetDefinition,
+): Target {
+  const group = new THREE.Group();
+  const craftModel = createPatrolCraftModel();
+  group.add(craftModel);
+
+  // Weak points mapped from definition
+  const weakPoints: TargetWeakPoint[] = definition.weakPoints?.map(weakPointDef => {
+    const weakPointVisual = createWeakPointMesh(weakPointDef, 0xff4422);
+    group.add(weakPointVisual.group);
+    const localOffset = new THREE.Vector3(...weakPointDef.offset);
+    return {
+      id: weakPointDef.id,
+      label: weakPointDef.label,
+      position: pos.clone().add(localOffset),
+      localOffset,
+      health: weakPointDef.health,
+      maxHealth: weakPointDef.health,
+      radius: weakPointDef.radius,
+      required: weakPointDef.required ?? true,
+      destroyed: false,
+      mesh: weakPointVisual.group,
+      damageMesh: weakPointVisual.damageMesh,
+    };
+  }) ?? [];
+
+  const waypoint = createTargetWaypointIllustration(0x0090ff);
+  group.add(waypoint.group);
+  group.userData.waypoint = waypoint;
+  group.userData.targetHandles = { weakPoints };
+
+  // Sea-surface lock: preserve XZ, fix Y to sea level
+  group.position.set(pos.x, 2, pos.z);
+  scene.add(group);
+
+  const seaPos = new THREE.Vector3(pos.x, 2, pos.z);
+
+  return {
+    id: definition.id,
+    position: seaPos,
+    health: definition.health,
+    maxHealth: definition.health,
+    mesh: group,
+    destroyed: false,
+    weakPoints,
+    setPiece: buildTargetSetPieceRuntime(definition),
+    movement: buildTargetMovementRuntime(definition),
+  };
+}
+
 /** Stage 5c: Creates an airborne mission target (bomber / transport) that preserves Y altitude. */
 function createAirborneMissionTarget(
   scene: THREE.Scene,
@@ -200,9 +355,14 @@ function createAirborneMissionTarget(
 export function createMissionTarget(scene: THREE.Scene, pos: THREE.Vector3, definition: MissionTargetDefinition): Target {
   const archetype = definition.archetype ?? 'tower';
   const isAirborne = archetype === 'bomber' || archetype === 'transport';
+  const isNaval = archetype === 'patrol-craft';
 
   if (isAirborne) {
     return createAirborneMissionTarget(scene, pos, definition, archetype);
+  }
+
+  if (isNaval) {
+    return createNavalMissionTarget(scene, pos, definition);
   }
 
   const group = new THREE.Group();
