@@ -72,6 +72,7 @@ export function createTrackingSystem() {
       approachHint:      meta?.approachHint,
       attentionReason:   meta?.attentionReason,
       routeHint:         meta?.routeHint,
+      domain:            meta?.domain,
     });
   }
 
@@ -174,8 +175,14 @@ export function createTrackingSystem() {
           snap.radarPulse = false;
           break;
         case TrackedEntityType.ENEMY:
-          score           = 400 - distPenalty;
-          snap.radarPulse = snap.distanceToPlayer < 180;
+          // Stage 5f: ground emplacements are stationary — treat like hazard when player is within threat range
+          if (snap.domain === 'ground' && snap.distanceToPlayer < 200) {
+            score           = 450 - distPenalty;
+            snap.radarPulse = snap.distanceToPlayer < 160;
+          } else {
+            score           = 400 - distPenalty;
+            snap.radarPulse = snap.distanceToPlayer < 180;
+          }
           break;
         case TrackedEntityType.HAZARD:
           score           = snap.distanceToPlayer < 120 ? 500 : 50;

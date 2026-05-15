@@ -43,12 +43,26 @@ export function Radar({ dronePos, tracks, rotationY, reduceEffects, radarRange }
   // ---- radar state label ------------------------------------------------
   const active = tracks.filter(t => t.priorityScore >= 0);
   const extractionTrack = active.find(t => t.type === TrackedEntityType.EXTRACTION);
-  const hasEnemies      = active.some(t => t.type === TrackedEntityType.ENEMY);
+  const enemyTracks     = active.filter(t => t.type === TrackedEntityType.ENEMY);
+  const hasAirEnemies   = enemyTracks.some(t => !t.domain || t.domain === 'air');
+  const hasGroundEnemies = enemyTracks.some(t => t.domain === 'ground');
+  const hasSeaEnemies   = enemyTracks.some(t => t.domain === 'sea');
+  const hasEnemies      = enemyTracks.length > 0;
   const hasObjectives   = active.some(t => t.type === TrackedEntityType.OBJECTIVE);
   let radarState = 'SCAN';
-  if (extractionTrack) radarState = 'EXTRACT';
-  else if (hasEnemies) radarState = 'HOSTILES';
-  else if (hasObjectives) radarState = 'TARGETS';
+  if (extractionTrack) {
+    radarState = 'EXTRACT';
+  } else if (hasAirEnemies && (hasGroundEnemies || hasSeaEnemies)) {
+    radarState = 'MIXED';
+  } else if (hasGroundEnemies && !hasAirEnemies) {
+    radarState = 'SURFACE';
+  } else if (hasSeaEnemies && !hasAirEnemies) {
+    radarState = 'NAVAL';
+  } else if (hasEnemies) {
+    radarState = 'HOSTILES';
+  } else if (hasObjectives) {
+    radarState = 'TARGETS';
+  }
 
   // Selected track (highest priority)
   const selectedTrack = tracks.find(t => t.isSelected) ?? null;
@@ -84,6 +98,51 @@ export function Radar({ dronePos, tracks, rotationY, reduceEffects, radarRange }
       case TrackedEntityType.ENEMY: {
         const color = '#ef4444';
         const half  = 2;
+        // Stage 5f: blip shape reflects combat domain
+        // ground threat → inverted triangle (▽); sea threat → diamond (◇); air (default) → square (□)
+        if (track.domain === 'ground') {
+          const d = 2.8;
+          const pts = `${bx},${by + d} ${bx - d},${by - d * 0.7} ${bx + d},${by - d * 0.7}`;
+          return (
+            <g key={id}>
+              <polygon points={pts} fill={color} opacity={fade} />
+              {isSelected && !clamped && (
+                <polygon
+                  points={`${bx},${by + d + 2.5} ${bx - d - 2.5},${by - d * 0.7 - 1.5} ${bx + d + 2.5},${by - d * 0.7 - 1.5}`}
+                  fill="none" stroke={color} strokeWidth="0.6" opacity={fade * 0.7}
+                />
+              )}
+              {pulse && (
+                <circle cx={bx} cy={by} r={d} fill="none" stroke={color} strokeWidth="0.5">
+                  <animate attributeName="r"       values={`${d};${d + 7};${d}`} dur="0.9s" repeatCount="indefinite" />
+                  <animate attributeName="opacity" values="0.5;0;0.5"             dur="0.9s" repeatCount="indefinite" />
+                </circle>
+              )}
+            </g>
+          );
+        }
+        if (track.domain === 'sea') {
+          const d = 2.8;
+          const pts = `${bx},${by - d} ${bx + d},${by} ${bx},${by + d} ${bx - d},${by}`;
+          return (
+            <g key={id}>
+              <polygon points={pts} fill={color} opacity={fade} />
+              {isSelected && !clamped && (
+                <polygon
+                  points={`${bx},${by - d - 2.5} ${bx + d + 2.5},${by} ${bx},${by + d + 2.5} ${bx - d - 2.5},${by}`}
+                  fill="none" stroke={color} strokeWidth="0.6" opacity={fade * 0.7}
+                />
+              )}
+              {pulse && (
+                <circle cx={bx} cy={by} r={d} fill="none" stroke={color} strokeWidth="0.5">
+                  <animate attributeName="r"       values={`${d};${d + 7};${d}`} dur="0.9s" repeatCount="indefinite" />
+                  <animate attributeName="opacity" values="0.5;0;0.5"             dur="0.9s" repeatCount="indefinite" />
+                </circle>
+              )}
+            </g>
+          );
+        }
+        // Air (default): red square
         return (
           <g key={id}>
             <rect x={bx - half} y={by - half} width={half * 2} height={half * 2} fill={color} opacity={fade} />
@@ -241,6 +300,16 @@ export function Radar({ dronePos, tracks, rotationY, reduceEffects, radarRange }
       <div className="mt-0.5 text-center font-mono text-[7px] tracking-[0.18em] text-white/38 select-none pointer-events-none uppercase">
         {radarState}
       </div>
+
+      {/* Stage 5f: routing hint — shown when the selected track has authored route metadata */}
+      {selectedTrack?.routeHint && (
+        <div
+          className="mt-0.5 max-w-[130px] text-center font-mono text-[6px] tracking-[0.12em] select-none pointer-events-none uppercase leading-tight"
+          style={{ color: 'rgba(242,125,38,0.55)' }}
+        >
+          {selectedTrack.routeHint}
+        </div>
+      )}
     </>
   );
 }

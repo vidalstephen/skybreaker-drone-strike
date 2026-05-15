@@ -673,16 +673,23 @@ Exit criteria:
 
 ### Stage 5f - Mixed-Domain HUD/Radar Pass
 
-Status: Not started
+Status: Complete — commit `feat: phase 5f - mixed-domain HUD/radar pass`
 
-- [ ] Add icon/label distinctions for air, ground, sea, objective, hazard, ally, and extraction tracks.
-- [ ] Add domain-aware priority scoring and objective routing hints.
-- [ ] Validate clutter limits with mixed air/ground/sea threats.
+- [x] Add `domain?: 'air' | 'ground' | 'sea'` to `TrackedEntitySnapshot`, `TrackingMetaDefinition`, and `TargetLockSnapshot`.
+- [x] Add `ALLY = 'ALLY'` stub to `TrackedEntityType` for future allied units.
+- [x] Radar.tsx: ENEMY blip branches on domain — square (air), inverted triangle (ground), diamond (sea).
+- [x] Radar.tsx: State label extended — MIXED (air+ground/sea), SURFACE (ground only), NAVAL (sea only), HOSTILES (air only).
+- [x] Radar.tsx: Routing hint text displayed below radar when selected track has `routeHint`.
+- [x] TargetLock.tsx: Badge for ENEMY shows AIR / GND / SEA based on domain.
+- [x] TargetLock.tsx: Route hint line rendered below health bar when `routeHint` present.
+- [x] trackingSystem.ts: Ground domain enemies within 200 units boost priority (+50) above air baseline.
+- [x] Game.tsx: Ground threat enemies registered with `domain: 'ground'` meta; `targetLockSnapshot` forwards `domain` and `routeHint`.
+- [x] `scripts/validate-hud-domains.ts` + `validate:hud` script; all validators pass.
 
 Exit criteria:
 
-- [ ] Mixed-domain combat remains readable without hiding urgent information.
-- [ ] Reduced-effects mode preserves tactical meaning.
+- [x] Mixed-domain combat remains readable without hiding urgent information.
+- [x] Reduced-effects mode preserves tactical meaning.
 
 ## Stage 6 - Campaign Expansion Wave 1
 

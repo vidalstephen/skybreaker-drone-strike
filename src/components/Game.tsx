@@ -868,7 +868,10 @@ export default function Game({
                 shields: enemyDefinition.shields,
                 maxShield: enemyDefinition.shields,
                 state: 'detected',
-              }
+              },
+              false,
+              // Stage 5f: pass domain so radar can render domain-appropriate blip shapes
+              enemyDefinition.groundThreat ? { domain: 'ground' } : undefined,
             );
           });
         }
@@ -1509,6 +1512,9 @@ export default function Game({
               lockState,
               lockProgress,
               isManual:    tracksRef.current.isManualTargeting(),
+              // Stage 5f: forward domain and route hint for HUD badge and hint line
+              domain:      selectedSnap.domain,
+              routeHint:   selectedSnap.routeHint,
             };
           } else {
             // No lockable target selected — drain any residual progress

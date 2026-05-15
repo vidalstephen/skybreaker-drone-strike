@@ -29,11 +29,15 @@ function typeColor(type: TrackedEntityType): string {
   }
 }
 
-function typeBadge(type: TrackedEntityType): string {
+function typeBadge(type: TrackedEntityType, domain?: 'air' | 'ground' | 'sea'): string {
   switch (type) {
     case TrackedEntityType.OBJECTIVE:  return 'OBJ';
     case TrackedEntityType.WEAK_POINT: return 'WPT';
-    case TrackedEntityType.ENEMY:      return 'HST';
+    case TrackedEntityType.ENEMY:
+      // Stage 5f: domain-specific enemy badge
+      if (domain === 'ground') return 'GND';
+      if (domain === 'sea')    return 'SEA';
+      return 'AIR';
     default:                           return '---';
   }
 }
@@ -41,9 +45,9 @@ function typeBadge(type: TrackedEntityType): string {
 export function TargetLock({ lock, reduceEffects }: TargetLockProps) {
   if (!lock) return null;
 
-  const { label, type, distance, health, maxHealth, lockState, lockProgress, isManual } = lock;
+  const { label, type, distance, health, maxHealth, lockState, lockProgress, isManual, domain, routeHint } = lock;
   const color   = typeColor(type);
-  const badge   = typeBadge(type);
+  const badge   = typeBadge(type, domain);
   const locked  = lockState === 'locked';
   const hpPct   = health !== undefined && maxHealth ? Math.max(0, health / maxHealth) : null;
 
@@ -162,6 +166,16 @@ export function TargetLock({ lock, reduceEffects }: TargetLockProps) {
                 backgroundColor: hpPct > 0.5 ? color : hpPct > 0.25 ? '#f59e0b' : '#ef4444',
               }}
             />
+          </div>
+        )}
+
+        {/* Stage 5f: routing hint — authored route guidance for moving targets */}
+        {routeHint && (
+          <div
+            className="mt-0.5 text-[6px] font-mono uppercase tracking-[0.1em] leading-snug max-w-[130px]"
+            style={{ color: `${color}99` }}
+          >
+            {routeHint}
           </div>
         )}
       </div>

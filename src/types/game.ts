@@ -449,6 +449,8 @@ export interface TrackingMetaDefinition {
   attentionReason?: string;
   /** Direction or route hint shown when this entity is the active target. */
   routeHint?: string;
+  /** Stage 5f: combat domain — drives radar blip shape and HUD badge. */
+  domain?: 'air' | 'ground' | 'sea';
 }
 
 // ---------------------------------------------------------------------------
@@ -1048,6 +1050,8 @@ export enum TrackedEntityType {
   ENEMY      = 'ENEMY',
   EXTRACTION = 'EXTRACTION',
   HAZARD     = 'HAZARD',
+  /** Stage 5f: allied units — stub for future use, not yet spawned. */
+  ALLY       = 'ALLY',
 }
 
 export type TrackedEntityState =
@@ -1104,6 +1108,10 @@ export interface TargetLockSnapshot {
   lockProgress: number;
   /** True when the player manually cycled to this target rather than auto-priority. */
   isManual: boolean;
+  /** Stage 5f: combat domain — drives badge label in TargetLock HUD. */
+  domain?: 'air' | 'ground' | 'sea';
+  /** Stage 5f: routing hint forwarded from tracking metadata when present. */
+  routeHint?: string;
 }
 
 /** Serializable snapshot passed to HUD components — updated each frame tick */
@@ -1132,6 +1140,8 @@ export interface TrackedEntitySnapshot {
   approachHint?:      string;
   attentionReason?:   string;
   routeHint?:         string;
+  /** Stage 5f: combat domain — air / ground / sea. Drives radar blip shape. */
+  domain?:            'air' | 'ground' | 'sea';
 }
 
 // ---------------------------------------------------------------------------
