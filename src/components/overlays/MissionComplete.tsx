@@ -73,6 +73,15 @@ export function MissionComplete({ startTime, enemiesDestroyed, health, targetsDe
                 <div className="text-sm uppercase tracking-[0.16em] text-white font-mono">{result.reward.label}</div>
                 <div className="mt-2 text-xs leading-relaxed text-white/55">{result.reward.description}</div>
               </div>
+              <div className="border border-sky-500/30 bg-sky-500/[0.06] p-3 sm:p-4 flex items-center justify-between">
+                <div>
+                  <div className="text-[10px] uppercase tracking-[0.25em] text-sky-400 font-mono mb-1">Parts Earned</div>
+                  <div className="text-xs text-sky-200/60 font-mono uppercase tracking-[0.12em]">
+                    {result.rank} rank · {result.bonusConditionsEarned?.length ?? 0} bonus{(result.bonusConditionsEarned?.length ?? 0) !== 1 ? 'es' : ''}
+                  </div>
+                </div>
+                <div className="text-2xl font-mono text-sky-300 font-bold">+{result.partsEarned}</div>
+              </div>
               <div className="grid grid-cols-2 gap-2 font-mono text-[10px] uppercase tracking-[0.12em] text-white/55">
                 <div className="border border-white/10 bg-white/[0.03] p-3"><span className="block text-white/35">Target Bonus</span><span className="mt-1 block text-white">{targetsDestroyed} x</span></div>
                 <div className="border border-white/10 bg-white/[0.03] p-3"><span className="block text-white/35">Enemy Bonus</span><span className="mt-1 block text-white">{enemiesDestroyed} x</span></div>

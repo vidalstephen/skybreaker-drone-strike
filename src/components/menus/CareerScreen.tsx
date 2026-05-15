@@ -29,6 +29,10 @@ export function CareerScreen({ missions, progress, onBack }: CareerScreenProps) 
             <div className="border border-white/10 bg-white/[0.03] p-3"><div className="text-[9px] text-white/35">Unlocked</div><div className="mt-2 text-2xl text-white">{summary.unlockedCount}</div></div>
             <div className="border border-white/10 bg-white/[0.03] p-3"><div className="text-[9px] text-white/35">Rewards</div><div className="mt-2 text-2xl text-white">{summary.earnedRewards}</div></div>
           </div>
+          <div className="mt-3 border border-sky-500/30 bg-sky-500/[0.07] p-3 font-mono uppercase tracking-[0.12em]">
+            <div className="text-[9px] text-sky-300">Spare Parts</div>
+            <div className="mt-2 text-xl text-white">{(progress.inventory?.parts ?? 0).toLocaleString()}</div>
+          </div>
           <div className="mt-5 border border-orange-500/20 bg-orange-500/10 p-3 font-mono uppercase tracking-[0.12em]">
             <div className="text-[9px] text-orange-300">Total Best Score</div>
             <div className="mt-2 text-xl text-white">{summary.totalBestScore.toLocaleString()}</div>

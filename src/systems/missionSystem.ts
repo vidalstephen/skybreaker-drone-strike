@@ -322,12 +322,17 @@ export function calculateMissionResult(mission: MissionDefinition, stats: Missio
         ? 'B'
         : 'C';
 
+  // Stage 7d: rank-based parts + 5 per bonus condition earned
+  const rankPartsBase = rank === 'S' ? 50 : rank === 'A' ? 30 : rank === 'B' ? 20 : 10;
+  const partsEarned = rankPartsBase + (stats.bonusConditionsEarned?.length ?? 0) * 5;
+
   return {
     ...stats,
     setPieceScore,
     score,
     rank,
     reward: mission.reward,
+    partsEarned,
   };
 }
 
@@ -345,11 +350,17 @@ export function completeMission(progress: CampaignProgress, mission: MissionDefi
   const previousBestScore = progress.bestMissionScores[mission.id];
   const earnedRewardIds = Array.from(new Set([...progress.earnedRewardIds, mission.reward.id]));
 
+  // Stage 7d: accumulate earned parts into the player inventory on every completion
+  const updatedInventory = progress.inventory
+    ? { ...progress.inventory, parts: progress.inventory.parts + result.partsEarned }
+    : progress.inventory;
+
   return {
     ...progress,
     unlockedMissionIds,
     completedMissionIds,
     earnedRewardIds,
+    inventory: updatedInventory,
     bestMissionTimes: {
       ...progress.bestMissionTimes,
       [mission.id]: previousBest === undefined ? result.elapsedMs : Math.min(previousBest, result.elapsedMs),

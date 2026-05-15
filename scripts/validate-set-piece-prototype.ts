@@ -85,6 +85,7 @@ if (prototype && finalMission) {
     score: finalMission.scoring.baseScore,
     rank: 'C',
     reward: finalMission.reward,
+    partsEarned: 0,
   };
   const progressAfterFinal = completeMission(DEFAULT_CAMPAIGN_PROGRESS, finalMission, finalResult, MISSIONS);
   assert(isMissionUnlocked(prototype, progressAfterFinal), 'prototype mission should unlock after completing Final Dawn');

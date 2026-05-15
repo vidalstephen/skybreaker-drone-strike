@@ -178,6 +178,8 @@ export interface MissionCompletionResult extends MissionCompletionStats {
   score: number;
   rank: CampaignRank;
   reward: MissionRewardDefinition;
+  /** Stage 7d: spare parts awarded this run; rank-based + bonus condition bonus. */
+  partsEarned: number;
 }
 
 export interface MissionBriefingItem {
