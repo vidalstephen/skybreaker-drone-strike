@@ -33,6 +33,9 @@ export interface EnemyAIContext {
   /** Delta time (delta * 60) — available for future frame-rate-independent controllers.
    *  The default air controller does NOT use dt to preserve existing movement feel. */
   dt: number;
+  /** Stage 8b: world position of the formation leader this frame.
+   *  Present for wing enemies when the leader is alive; absent for solo enemies and leaders. */
+  formationLeaderPosition?: THREE.Vector3;
 }
 
 // ---------------------------------------------------------------------------
@@ -102,12 +105,55 @@ const GroundThreatController: EnemyBehaviorController = {
 };
 
 // ---------------------------------------------------------------------------
+// Stage 8b: Formation wing controller — follows leader with an offset
+// ---------------------------------------------------------------------------
+
+const FormationWingController: EnemyBehaviorController = {
+  id: 'formation-wing',
+
+  tick(enemy, { playerPosition, frameId, formationLeaderPosition }) {
+    // If the leader has been destroyed, fall back to solo pursuit.
+    if (!formationLeaderPosition) {
+      return DefaultAirController.tick(enemy, { playerPosition, frameId, now: 0, dt: 0 });
+    }
+
+    const { speed, drift } = enemy.definition;
+
+    // Target: leader position + pre-computed spawn offset.
+    const targetPos = formationLeaderPosition.clone().add(enemy.formationOffset);
+    const toTarget = targetPos.clone().sub(enemy.mesh.position);
+    const dist = toTarget.length();
+    toTarget.normalize();
+
+    // Chase the slot position. Tighter engagement range than the default controller.
+    const SLOT_FAR = 32;
+    const SLOT_NEAR = 10;
+    if (dist > SLOT_FAR) {
+      enemy.mesh.position.addScaledVector(toTarget, speed * 1.25);
+    } else if (dist > SLOT_NEAR) {
+      enemy.mesh.position.addScaledVector(toTarget, speed * 0.65);
+    }
+
+    // Lateral drift — halved relative to solo AI to preserve tight formation shape.
+    const driftVec = new THREE.Vector3(Math.cos(frameId * 0.01), Math.sin(frameId * 0.02), 0);
+    driftVec.applyQuaternion(enemy.mesh.quaternion);
+    enemy.mesh.position.addScaledVector(driftVec, drift * 0.5);
+
+    // Always face the player (maintains threat readability).
+    enemy.mesh.lookAt(playerPosition);
+
+    return 'patrol';
+  },
+};
+
+// ---------------------------------------------------------------------------
 // Controller registry — future controllers register here
 // ---------------------------------------------------------------------------
 
 const CONTROLLER_REGISTRY: Record<string, EnemyBehaviorController> = {
   [DefaultAirController.id]: DefaultAirController,
   [GroundThreatController.id]: GroundThreatController,
+  [FormationWingController.id]: FormationWingController,
 };
 
 /**
@@ -124,8 +170,15 @@ export function getControllerForEnemy(def: EnemyDefinition): EnemyBehaviorContro
 /**
  * Main per-frame update entry point called by Game.tsx.
  * Updates the enemy mesh in place and returns the new behavior state.
+ *
+ * Stage 8b: formation wings are routed to FormationWingController when their
+ * leader is alive (formationLeaderPosition present in context). When the
+ * leader is destroyed, wings fall back to DefaultAirController automatically.
  */
 export function tickEnemyBehavior(enemy: Enemy, context: EnemyAIContext): EnemyBehaviorStateId {
+  if (enemy.formationRole === 'wing' && context.formationLeaderPosition) {
+    return FormationWingController.tick(enemy, context);
+  }
   const controller = getControllerForEnemy(enemy.definition);
   return controller.tick(enemy, context);
 }

@@ -484,6 +484,8 @@ export interface TrackingMetaDefinition {
   routeHint?: string;
   /** Stage 5f: combat domain — drives radar blip shape and HUD badge. */
   domain?: 'air' | 'ground' | 'sea';
+  /** Stage 8b: formation role — drives radar blip size reduction for wings. */
+  formationRole?: 'leader' | 'wing';
 }
 
 // ---------------------------------------------------------------------------
@@ -705,6 +707,10 @@ export interface MissionEnemyWaveDefinition {
 export interface MissionEnemyWaveEntry {
   role: EnemyRole;
   count: number;
+  /** Stage 8b: formation group id — entries sharing an id form a coordinated unit. */
+  formationId?: string;
+  /** Stage 8b: role within the formation group. Absent = solo (no formation). */
+  formationRole?: 'leader' | 'wing';
 }
 
 // TV-3: Industrial structure archetypes
@@ -1071,6 +1077,12 @@ export interface Enemy {
   behaviorState: EnemyBehaviorStateId;
   /** Stage 8a: named material handles for per-frame visual updates. */
   visualHandles: EnemyVisualHandles;
+  /** Stage 8b: formation group id — shared with leader and other wings. Absent = solo. */
+  formationId?: string;
+  /** Stage 8b: role within a formation group. Absent = solo. */
+  formationRole?: 'leader' | 'wing';
+  /** Stage 8b: desired offset from the formation leader in world space (pre-computed at spawn). */
+  formationOffset: THREE.Vector3;
 }
 
 export interface Projectile {
@@ -1194,6 +1206,8 @@ export interface TrackedEntitySnapshot {
   routeHint?:         string;
   /** Stage 5f: combat domain — air / ground / sea. Drives radar blip shape. */
   domain?:            'air' | 'ground' | 'sea';
+  /** Stage 8b: formation role — 'wing' blips render smaller to reduce radar clutter. */
+  formationRole?:     'leader' | 'wing';
 }
 
 // ---------------------------------------------------------------------------

@@ -73,6 +73,7 @@ export function createTrackingSystem() {
       attentionReason:   meta?.attentionReason,
       routeHint:         meta?.routeHint,
       domain:            meta?.domain,
+      formationRole:     meta?.formationRole,
     });
   }
 

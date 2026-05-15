@@ -97,19 +97,22 @@ export function Radar({ dronePos, tracks, rotationY, reduceEffects, radarRange }
 
       case TrackedEntityType.ENEMY: {
         const color = '#ef4444';
-        const half  = 2;
+        // Stage 8b: wing blips render at reduced size to differentiate from leaders/solos
+        const isWing = track.formationRole === 'wing';
+        const half  = isWing ? 1.4 : 2;
+        const blipFade = isWing ? fade * 0.72 : fade;
         // Stage 5f: blip shape reflects combat domain
         // ground threat → inverted triangle (▽); sea threat → diamond (◇); air (default) → square (□)
         if (track.domain === 'ground') {
-          const d = 2.8;
+          const d = isWing ? 2.0 : 2.8;
           const pts = `${bx},${by + d} ${bx - d},${by - d * 0.7} ${bx + d},${by - d * 0.7}`;
           return (
             <g key={id}>
-              <polygon points={pts} fill={color} opacity={fade} />
+              <polygon points={pts} fill={color} opacity={blipFade} />
               {isSelected && !clamped && (
                 <polygon
                   points={`${bx},${by + d + 2.5} ${bx - d - 2.5},${by - d * 0.7 - 1.5} ${bx + d + 2.5},${by - d * 0.7 - 1.5}`}
-                  fill="none" stroke={color} strokeWidth="0.6" opacity={fade * 0.7}
+                  fill="none" stroke={color} strokeWidth="0.6" opacity={blipFade * 0.7}
                 />
               )}
               {pulse && (
@@ -122,15 +125,15 @@ export function Radar({ dronePos, tracks, rotationY, reduceEffects, radarRange }
           );
         }
         if (track.domain === 'sea') {
-          const d = 2.8;
+          const d = isWing ? 2.0 : 2.8;
           const pts = `${bx},${by - d} ${bx + d},${by} ${bx},${by + d} ${bx - d},${by}`;
           return (
             <g key={id}>
-              <polygon points={pts} fill={color} opacity={fade} />
+              <polygon points={pts} fill={color} opacity={blipFade} />
               {isSelected && !clamped && (
                 <polygon
                   points={`${bx},${by - d - 2.5} ${bx + d + 2.5},${by} ${bx},${by + d + 2.5} ${bx - d - 2.5},${by}`}
-                  fill="none" stroke={color} strokeWidth="0.6" opacity={fade * 0.7}
+                  fill="none" stroke={color} strokeWidth="0.6" opacity={blipFade * 0.7}
                 />
               )}
               {pulse && (
@@ -142,13 +145,13 @@ export function Radar({ dronePos, tracks, rotationY, reduceEffects, radarRange }
             </g>
           );
         }
-        // Air (default): red square
+        // Air (default): red square — wings are smaller (half already scaled above)
         return (
           <g key={id}>
-            <rect x={bx - half} y={by - half} width={half * 2} height={half * 2} fill={color} opacity={fade} />
+            <rect x={bx - half} y={by - half} width={half * 2} height={half * 2} fill={color} opacity={blipFade} />
             {isSelected && !clamped && (
               <rect x={bx - half - 2} y={by - half - 2} width={half * 2 + 4} height={half * 2 + 4}
-                fill="none" stroke={color} strokeWidth="0.6" opacity={fade * 0.7} />
+                fill="none" stroke={color} strokeWidth="0.6" opacity={blipFade * 0.7} />
             )}
             {pulse && (
               <circle cx={bx} cy={by} r={half} fill="none" stroke={color} strokeWidth="0.5">

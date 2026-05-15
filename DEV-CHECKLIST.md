@@ -1037,16 +1037,28 @@ Completion summary:
 
 ### Stage 8b - Formation And Group Behaviors
 
-Status: Not started
+Status: Complete
 
-- [ ] Add formation leaders and child contacts for enemy groups.
-- [ ] Support bomber escorts, patrol groups, and defensive screens.
-- [ ] Reflect grouped tracks on radar without excessive clutter.
+- [x] Add formation leaders and child contacts for enemy groups.
+- [x] Support bomber escorts, patrol groups, and defensive screens.
+- [x] Reflect grouped tracks on radar without excessive clutter.
 
 Exit criteria:
 
-- [ ] Formation enemies feel coordinated and remain readable.
-- [ ] Formation leader and child unit models each meet the Unit Visual Fidelity Standard; radar blip domain shapes (square/triangle/diamond) correctly reflect the updated geometry.
+- [x] Formation enemies feel coordinated and remain readable.
+- [x] Formation leader and child unit models each meet the Unit Visual Fidelity Standard; radar blip domain shapes (square/triangle/diamond) correctly reflect the updated geometry.
+
+Completion summary:
+
+- `src/types/game.ts`: `MissionEnemyWaveEntry` extended with `formationId?` and `formationRole?`; `Enemy` extended with `formationId?`, `formationRole?`, and `formationOffset`; `TrackingMetaDefinition` and `TrackedEntitySnapshot` extended with `formationRole?`.
+- `src/systems/enemyBehavior.ts`: `EnemyAIContext` extended with `formationLeaderPosition?`; `FormationWingController` added (holds slot relative to leader, falls back to `DefaultAirController` when leader is destroyed); `tickEnemyBehavior` routes wings through `FormationWingController` when `formationLeaderPosition` is available.
+- `src/config/enemies.ts`: `ExpandedWaveEntry` interface, `expandEnemyWaveGrouped()`, and `WING_OFFSETS` (5 symmetrical slot positions) added.
+- `src/systems/trackingSystem.ts`: `formationRole` stored in track snapshot via `registerTrack`.
+- `src/components/hud/Radar.tsx`: Wing blips render at 70% size (`half=1.4` vs 2, `d=2.0` vs 2.8) and 72% opacity to reduce radar clutter while remaining readable.
+- `src/components/Game.tsx`: Spawn loop uses `expandEnemyWaveGrouped`, computes per-wing `formationOffset` from `WING_OFFSETS`, and attaches `formationId`/`formationRole`/`formationOffset` to each spawned enemy; `registerTrack` receives `{ domain, formationRole }`; AI loop resolves `formationLeaderPosition` for each wing and passes it to `tickEnemyBehavior`.
+- `src/config/missions.ts`: Three missions updated with formation groups — iron-veil (bomber escort: heavy-gunship leader + 2 fast-interceptor wings), black-sky-hook (patrol group: fast-interceptor leader + 2 fast-interceptor wings), bastion-fall (command defensive screen: mini-boss leader + 2 shielded-warden wings).
+- `src/config/buildMeta.ts`: `PHASE_TAG` updated to `'Phase 8b'`.
+- Changed files: `src/types/game.ts`, `src/systems/enemyBehavior.ts`, `src/config/enemies.ts`, `src/systems/trackingSystem.ts`, `src/components/hud/Radar.tsx`, `src/components/Game.tsx`, `src/config/missions.ts`, `src/config/buildMeta.ts`, `DEV-CHECKLIST.md`.
 
 ### Stage 8c - Ground And Naval Enemy Behaviors
 

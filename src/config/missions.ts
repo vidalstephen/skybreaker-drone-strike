@@ -148,10 +148,11 @@ export const MISSIONS: MissionDefinition[] = [
     },
     enemyWave: {
       triggerTargetsDestroyed: 2,
-      count: 3,
-      message: 'WARNING: HEAVY PATROL VECTORING IN',
+      count: 4,
+      message: 'WARNING: HEAVY PATROL VECTORING IN // BOMBER ESCORT INBOUND',
       composition: [
-        { role: 'heavy-gunship', count: 2 },
+        { role: 'heavy-gunship',    count: 1, formationId: 'bomber-alpha', formationRole: 'leader' },
+        { role: 'fast-interceptor', count: 2, formationId: 'bomber-alpha', formationRole: 'wing'   },
         { role: 'missile-platform', count: 1 },
       ],
     },
@@ -224,10 +225,11 @@ export const MISSIONS: MissionDefinition[] = [
     enemyWave: {
       triggerTargetsDestroyed: 2,
       count: 4,
-      message: 'WARNING: INTERCEPTOR SCREEN ACTIVE',
+      message: 'WARNING: INTERCEPTOR SCREEN ACTIVE // PATROL GROUP INBOUND',
       composition: [
-        { role: 'fast-interceptor', count: 3 },
-        { role: 'heavy-gunship', count: 1 },
+        { role: 'fast-interceptor', count: 1, formationId: 'patrol-bravo', formationRole: 'leader' },
+        { role: 'fast-interceptor', count: 2, formationId: 'patrol-bravo', formationRole: 'wing'   },
+        { role: 'heavy-gunship',    count: 1 },
       ],
     },
     failureConditions: [
@@ -1657,7 +1659,7 @@ export const MISSIONS: MissionDefinition[] = [
       { id: 'bastion_jammer', position: [0, 0, 980], health: 280, archetype: 'facility-node', trackingMeta: { radarLabel: 'JAM', markerLabel: 'BASTION JAMMER', priorityBonus: 95 } },
     ],
     extraction: { label: 'Canyon Crown', position: [0, 0, 1460], activationObjective: 'RETREAT TO CANYON CROWN', approachObjective: 'RETREAT TO CANYON CROWN', completionObjective: 'RED CANYON SECURED', radius: 150, trackingMeta: { radarLabel: 'EXT', markerLabel: 'CANYON CROWN', priorityBonus: 70 } },
-    enemyWave: { triggerTargetsDestroyed: 2, count: 8, message: 'WARNING: BASTION COMMAND ESCORT INBOUND', composition: [{ role: 'mini-boss', count: 1 }, { role: 'shielded-warden', count: 2 }, { role: 'railgun-emplacement', count: 2 }, { role: 'missile-platform', count: 2 }, { role: 'fast-interceptor', count: 1 }] },
+    enemyWave: { triggerTargetsDestroyed: 2, count: 8, message: 'WARNING: BASTION COMMAND ESCORT INBOUND', composition: [{ role: 'mini-boss', count: 1, formationId: 'command-screen', formationRole: 'leader' }, { role: 'shielded-warden', count: 2, formationId: 'command-screen', formationRole: 'wing' }, { role: 'railgun-emplacement', count: 2 }, { role: 'missile-platform', count: 2 }, { role: 'fast-interceptor', count: 1 }] },
     failureConditions: [{ id: 'hull-depleted', label: 'Hull Integrity', message: 'CRITICAL HULL FAILURE' }, { id: 'out-of-bounds', label: 'Red Canyon Boundary', message: 'RETURN TO BASTION FALL' }],
     objectiveSet: { primary: [{ id: 'destroy-targets', type: 'ELIMINATE_BOSS', label: 'Canyon Bastion', required: true, totalCount: 5, hudText: 'DESTROY CANYON BASTION', completionMessage: 'CANYON BASTION FALLEN // PROCEED TO EXTRACTION', activatesExtraction: true, successorObjectiveId: 'extract' }, { id: 'extract', type: 'EXTRACT', label: 'Canyon Crown', required: true, hudText: 'RETREAT TO CANYON CROWN', completionMessage: 'RED CANYON SECURED' }], bonusConditions: [{ id: 'bastion-break', type: 'TIME_THRESHOLD', label: 'Bastion Break', description: 'Collapse the bastion in under 6 minutes 30 seconds', goalValue: 390000, scoreBonus: 1250 }, { id: 'crown-run', type: 'HULL_THRESHOLD', label: 'Crown Run', description: 'Exit with 55% hull or better through bastion fire', goalValue: 55, scoreBonus: 900 }] },
     scoring: { parTimeMs: 585000, baseScore: 7600, targetBonus: 1550, enemyBonus: 625, healthBonus: 10, timeBonus: 2250, setPieceComponentBonus: 120, setPiecePhaseBonus: 250, setPieceOptionalComponentBonus: 300, rankThresholds: { S: 20500, A: 16400, B: 12300, C: 0 } },

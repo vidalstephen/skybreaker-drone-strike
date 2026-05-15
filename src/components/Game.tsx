@@ -28,7 +28,7 @@ import {
   MISSILE_TURN_RATE,
   MISSILE_MIN_LOCK,
 } from '../config/constants';
-import { expandEnemyWave } from '../config/enemies';
+import { expandEnemyWaveGrouped, WING_OFFSETS } from '../config/enemies';
 import { getEquippedWeapons } from '../config/weapons';
 import { resolveUpgradeEffects } from '../config/upgrades';
 import type { AudioCue } from '../hooks/useAudio';
@@ -826,25 +826,42 @@ export default function Game({
           });
           setGameState(prev => ({ ...prev, message: mission.enemyWave.message }));
           
-          const waveDefinitions = expandEnemyWave(mission.enemyWave.composition).slice(0, mission.enemyWave.count);
-          waveDefinitions.forEach(enemyDefinition => {
+          const waveDefinitions = expandEnemyWaveGrouped(mission.enemyWave.composition).slice(0, mission.enemyWave.count);
+          // Stage 8b: track leader spawn positions by formationId so wings spawn near the leader
+          const leaderSpawnPositions = new Map<string, THREE.Vector3>();
+          waveDefinitions.forEach(({ definition: enemyDefinition, formationId, formationRole, wingIndex }) => {
             const { group: enemyGroup, visualHandles: enemyVisualHandles } = createEnemyModel(enemyDefinition);
             // Stage 5d: ground threats spawn at surface level around the mission area;
             // air enemies spawn relative to the player at altitude.
-            const spawnPos = enemyDefinition.groundThreat
-              ? new THREE.Vector3(
-                  (Math.random() - 0.5) * 1200,
-                  2,
-                  (Math.random() - 0.5) * 1200
-                )
-              : droneRef.current.position.clone().add(new THREE.Vector3(
-                  (Math.random() - 0.5) * 400,
-                  50,
-                  (Math.random() - 0.5) * 400
-                ));
+            // Stage 8b: formation wings spawn adjacent to their leader.
+            let spawnPos: THREE.Vector3;
+            if (formationId && formationRole === 'wing' && leaderSpawnPositions.has(formationId)) {
+              const leaderPos = leaderSpawnPositions.get(formationId)!;
+              const off = WING_OFFSETS[wingIndex % WING_OFFSETS.length];
+              spawnPos = leaderPos.clone().add(new THREE.Vector3(off[0], off[1], off[2]));
+            } else if (enemyDefinition.groundThreat) {
+              spawnPos = new THREE.Vector3(
+                (Math.random() - 0.5) * 1200,
+                2,
+                (Math.random() - 0.5) * 1200
+              );
+            } else {
+              spawnPos = droneRef.current.position.clone().add(new THREE.Vector3(
+                (Math.random() - 0.5) * 400,
+                50,
+                (Math.random() - 0.5) * 400
+              ));
+            }
+            if (formationId && formationRole === 'leader') {
+              leaderSpawnPositions.set(formationId, spawnPos.clone());
+            }
             enemyGroup.position.copy(spawnPos);
             scene.add(enemyGroup);
             const enemyId = `enemy_${enemySequenceRef.current++}`;
+            // Compute this wing's offset relative to leader (stored for FormationWingController)
+            const formationOffset = formationId && formationRole === 'wing' && leaderSpawnPositions.has(formationId)
+              ? spawnPos.clone().sub(leaderSpawnPositions.get(formationId)!)
+              : new THREE.Vector3();
             enemiesRef.current.push({
               id: enemyId,
               role: enemyDefinition.role,
@@ -860,6 +877,10 @@ export default function Game({
               // Stage 8a: behavior controller architecture
               behaviorState: 'spawn',
               visualHandles: enemyVisualHandles,
+              // Stage 8b: formation group membership
+              formationId,
+              formationRole,
+              formationOffset,
             });
             tracksRef.current.registerTrack(
               enemyId,
@@ -877,8 +898,8 @@ export default function Game({
                 state: 'detected',
               },
               false,
-              // Stage 5f: pass domain so radar can render domain-appropriate blip shapes
-              enemyDefinition.groundThreat ? { domain: 'ground' } : undefined,
+              // Stage 5f: domain drives radar blip shape; Stage 8b: formationRole drives blip size
+              { domain: enemyDefinition.groundThreat ? 'ground' : undefined, formationRole },
             );
           });
         }
@@ -887,12 +908,22 @@ export default function Game({
         enemiesRef.current = enemiesRef.current.filter(enemy => {
           if (enemy.destroyed) return false;
 
+          // Stage 8b: resolve formation leader position for wing enemies.
+          let formationLeaderPosition: THREE.Vector3 | undefined;
+          if (enemy.formationRole === 'wing' && enemy.formationId) {
+            const leader = enemiesRef.current.find(
+              e => e.formationId === enemy.formationId && e.formationRole === 'leader' && !e.destroyed
+            );
+            formationLeaderPosition = leader?.mesh.position;
+          }
+
           // Stage 8a: delegate movement/orientation to the behavior controller.
           enemy.behaviorState = tickEnemyBehavior(enemy, {
             playerPosition: droneRef.current!.position,
             frameId: frameIdRef.current,
             now: Date.now(),
             dt,
+            formationLeaderPosition,
           });
 
           // Enemy Firing (unchanged — controller handles movement only)

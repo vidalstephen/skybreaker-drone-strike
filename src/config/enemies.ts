@@ -185,3 +185,47 @@ export function getEnemyDefinition(role: EnemyRole) {
 export function expandEnemyWave(composition: MissionEnemyWaveEntry[]) {
   return composition.flatMap(entry => Array.from({ length: entry.count }, () => getEnemyDefinition(entry.role)));
 }
+
+// ---------------------------------------------------------------------------
+// Stage 8b: Formation-aware wave expansion
+// ---------------------------------------------------------------------------
+
+/** One slot in an expanded enemy wave — carries formation metadata through to spawn. */
+export interface ExpandedWaveEntry {
+  definition: EnemyDefinition;
+  formationId?: string;
+  formationRole?: 'leader' | 'wing';
+  /** 0-based index of this slot within its formation (used to compute the spawn offset). */
+  wingIndex: number;
+}
+
+/**
+ * Expands the wave composition into individual spawn slots while preserving
+ * formation group metadata. The first enemy in a formation entry marked
+ * 'leader' becomes the anchor; subsequent entries marked 'wing' become child
+ * contacts. Non-formation entries behave identically to expandEnemyWave.
+ */
+export function expandEnemyWaveGrouped(composition: MissionEnemyWaveEntry[]): ExpandedWaveEntry[] {
+  const result: ExpandedWaveEntry[] = [];
+  for (const entry of composition) {
+    const def = getEnemyDefinition(entry.role);
+    for (let i = 0; i < entry.count; i++) {
+      result.push({
+        definition: def,
+        formationId: entry.formationId,
+        formationRole: entry.formationRole,
+        wingIndex: entry.formationRole === 'wing' ? i : 0,
+      });
+    }
+  }
+  return result;
+}
+
+/** Standard wing position offsets (index 0-4) relative to the formation leader. */
+export const WING_OFFSETS: [number, number, number][] = [
+  [ 36,  0,  16],
+  [-36,  0,  16],
+  [ 22, 10, -12],
+  [-22, 10, -12],
+  [  0, -8,  26],
+];
