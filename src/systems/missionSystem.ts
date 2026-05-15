@@ -322,9 +322,15 @@ export function calculateMissionResult(mission: MissionDefinition, stats: Missio
         ? 'B'
         : 'C';
 
-  // Stage 7d: rank-based parts + 5 per bonus condition earned
+  // Stage 7e: rank base + bonus conditions + arc-tier escalation for later missions
   const rankPartsBase = rank === 'S' ? 50 : rank === 'A' ? 30 : rank === 'B' ? 20 : 10;
-  const partsEarned = rankPartsBase + (stats.bonusConditionsEarned?.length ?? 0) * 5;
+  const bonusParts = (stats.bonusConditionsEarned?.length ?? 0) * 5;
+  // Arc-tier bonus: uses authored partsReward when present, otherwise scales by mission.order
+  const arcTierBonus = mission.scoring.partsReward ??
+    (mission.order >= 9 && mission.order <= 24
+      ? (mission.order >= 21 ? 15 : mission.order >= 17 ? 10 : mission.order >= 13 ? 8 : 5)
+      : 0);
+  const partsEarned = rankPartsBase + bonusParts + arcTierBonus;
 
   return {
     ...stats,

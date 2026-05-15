@@ -28,7 +28,7 @@ import {
 } from './config/defaults';
 import { buildDevProgress } from './config/devMode';
 import { DEFAULT_MISSION_ID, getMissionById, MISSIONS } from './config/missions';
-import { applyUpgradePurchase } from './config/upgrades';
+import { applyUpgradePurchase, allUpgradeNodes } from './config/upgrades';
 import { useAudio } from './hooks/useAudio';
 import { completeMission, isMissionUnlocked, normalizeCampaignProgress } from './systems/missionSystem';
 import { GamePhase, type AppSettings, type CampaignProgress, type MissionCompletionResult, type WeaponId, type WeaponSlot } from './types/game';
@@ -246,6 +246,25 @@ export default function App() {
     }));
   }, [playCue]);
 
+  /** Stage 7e: refund all purchased upgrades and clear upgradeLevels. */
+  const handleRespecUpgrades = useCallback(() => {
+    playCue('ui');
+    setProgress(current => {
+      if (!current.inventory) return current;
+      const refund = allUpgradeNodes()
+        .filter(n => (current.inventory!.upgradeLevels[n.id] ?? 0) >= 1)
+        .reduce((sum, n) => sum + n.costParts, 0);
+      return {
+        ...current,
+        inventory: {
+          ...current.inventory,
+          parts: current.inventory.parts + refund,
+          upgradeLevels: {},
+        },
+      };
+    });
+  }, [playCue]);
+
   const gamePhase = (phase === GamePhase.SETTINGS && settingsReturnPhase === GamePhase.PAUSED) || (phase === GamePhase.CONTROLS && controlsReturnPhase === GamePhase.PAUSED) ? GamePhase.PAUSED : phase;
   const shouldRenderGame = gamePhase === GamePhase.IN_MISSION || gamePhase === GamePhase.PAUSED || gamePhase === GamePhase.DEBRIEF;
 
@@ -319,7 +338,7 @@ export default function App() {
 
       {phase === GamePhase.CAREER && <CareerScreen missions={MISSIONS} progress={activeProgress} onBack={() => setPhase(GamePhase.MAIN_MENU)} />}
 
-      {phase === GamePhase.UPGRADES && <UpgradeScreen progress={activeProgress} onPurchaseUpgrade={handlePurchaseUpgrade} onBack={() => setPhase(GamePhase.MAIN_MENU)} />}
+      {phase === GamePhase.UPGRADES && <UpgradeScreen progress={activeProgress} onPurchaseUpgrade={handlePurchaseUpgrade} onRespecUpgrades={handleRespecUpgrades} onBack={() => setPhase(GamePhase.MAIN_MENU)} />}
 
       {phase === GamePhase.CONTROLS && <ControlsScreen onBack={() => setPhase(controlsReturnPhase)} />}
 

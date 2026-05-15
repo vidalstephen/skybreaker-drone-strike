@@ -147,6 +147,8 @@ export interface MissionScoringDefinition {
   /** Optional additive score per destroyed optional set-piece component. Absent preserves current scoring. */
   setPieceOptionalComponentBonus?: number;
   rankThresholds: Record<CampaignRank, number>;
+  /** Optional flat parts bonus added on top of rank-based earning. When absent, arc-tier defaults apply based on mission.order (M09-12: +5, M13-16: +8, M17-20: +10, M21-24: +15). */
+  partsReward?: number;
 }
 
 export interface SetPieceMissionStats {

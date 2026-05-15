@@ -1,5 +1,5 @@
-import { ArrowLeft, CheckCircle, Lock, Zap } from 'lucide-react';
-import { UPGRADE_TREES, canPurchaseUpgrade } from '../../config/upgrades';
+import { ArrowLeft, CheckCircle, Lock, RotateCcw, Zap } from 'lucide-react';
+import { allUpgradeNodes, UPGRADE_TREES, canPurchaseUpgrade } from '../../config/upgrades';
 import type { CampaignProgress, UpgradeCoreId } from '../../types/game';
 import { MenuButton } from './MenuButton';
 import { ShellPanel } from './ShellPanel';
@@ -7,6 +7,7 @@ import { ShellPanel } from './ShellPanel';
 export interface UpgradeScreenProps {
   progress: CampaignProgress;
   onPurchaseUpgrade: (nodeId: string) => void;
+  onRespecUpgrades?: () => void;
   onBack: () => void;
 }
 
@@ -26,10 +27,14 @@ const CORE_BORDER: Record<UpgradeCoreId, string> = {
   payload: 'border-red-400/30',
 };
 
-export function UpgradeScreen({ progress, onPurchaseUpgrade, onBack }: UpgradeScreenProps) {
+export function UpgradeScreen({ progress, onPurchaseUpgrade, onRespecUpgrades, onBack }: UpgradeScreenProps) {
   const inventory = progress.inventory;
   const upgradeLevels = inventory?.upgradeLevels ?? {};
   const parts = inventory?.parts ?? 0;
+
+  const ownedNodes = allUpgradeNodes().filter(n => (upgradeLevels[n.id] ?? 0) >= 1);
+  const hasOwned = ownedNodes.length > 0;
+  const respecRefund = ownedNodes.reduce((sum, n) => sum + n.costParts, 0);
 
   return (
     <ShellPanel
@@ -51,6 +56,18 @@ export function UpgradeScreen({ progress, onPurchaseUpgrade, onBack }: UpgradeSc
           <div className="mt-5">
             <MenuButton icon={<ArrowLeft size={18} />} onClick={onBack}>Hangar</MenuButton>
           </div>
+          {hasOwned && onRespecUpgrades && (
+            <div className="mt-3">
+              <button
+                type="button"
+                onClick={onRespecUpgrades}
+                className="flex w-full items-center justify-center gap-2 border border-amber-500/40 bg-amber-500/10 px-3 py-2 font-mono text-[9px] uppercase tracking-[0.22em] text-amber-400 transition-colors hover:bg-amber-500/20"
+              >
+                <RotateCcw size={11} />
+                Respec All +{respecRefund} pts
+              </button>
+            </div>
+          )}
         </div>
       }
     >
