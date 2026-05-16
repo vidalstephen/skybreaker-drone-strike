@@ -30,7 +30,7 @@ import { buildDevProgress } from './config/devMode';
 import { DEFAULT_MISSION_ID, getMissionById, MISSIONS } from './config/missions';
 import { applyUpgradePurchase, allUpgradeNodes } from './config/upgrades';
 import { useAudio } from './hooks/useAudio';
-import { completeMission, isMissionUnlocked, normalizeCampaignProgress } from './systems/missionSystem';
+import { completeMission, getMainMissions, isMissionUnlocked, normalizeCampaignProgress } from './systems/missionSystem';
 import { GamePhase, type AppSettings, type CampaignProgress, type MissionCompletionResult, type WeaponId, type WeaponSlot } from './types/game';
 
 function loadStoredJson(key: string): unknown {
@@ -127,9 +127,11 @@ export default function App() {
     };
   }, []);
 
-  const nextSortieMission = MISSIONS.find(mission => isMissionUnlocked(mission, activeProgress) && !activeProgress.completedMissionIds.includes(mission.id))
-    ?? MISSIONS.find(mission => mission.id === selectedMissionId)
-    ?? MISSIONS[0];
+  // Stage 9a: "Continue" CTA advances only through main campaign missions, not optional sorties
+  const mainMissions = getMainMissions(MISSIONS);
+  const nextSortieMission = mainMissions.find(mission => isMissionUnlocked(mission, activeProgress) && !activeProgress.completedMissionIds.includes(mission.id))
+    ?? mainMissions.find(mission => mission.id === selectedMissionId)
+    ?? mainMissions[0];
 
   useEffect(() => {
     window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));

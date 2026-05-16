@@ -1,4 +1,4 @@
-import { ArrowLeft, Lock, PlaneTakeoff } from 'lucide-react';
+import { ArrowLeft, Lock, PlaneTakeoff, Star } from 'lucide-react';
 import { CAMPAIGN_ARCS } from '../../config/campaign';
 import { getMissionBestTime, getMissionStatus, isMissionUnlocked } from '../../systems/missionSystem';
 import type { CampaignProgress, MissionDefinition } from '../../types/game';
@@ -19,6 +19,12 @@ export function MissionSelectScreen({ missions, selectedMissionId, progress, onS
   const selectedMission = missions.find(mission => mission.id === selectedMissionId) ?? missions[0];
   const selectedUnlocked = isMissionUnlocked(selectedMission, progress);
   const selectedArc = getArcForMission(selectedMission);
+
+  // Separate main campaign missions from optional sorties
+  const mainMissions = missions.filter(m => !m.sortieType || m.sortieType === 'main');
+  const optionalSorties = missions.filter(m => m.sortieType === 'optional');
+  // Show optional sorties section only if at least one is unlocked
+  const anyOptionalUnlocked = optionalSorties.some(m => isMissionUnlocked(m, progress));
 
   return (
     <ShellPanel
@@ -52,8 +58,8 @@ export function MissionSelectScreen({ missions, selectedMissionId, progress, onS
       }
     >
       <div className="grid gap-5 max-w-3xl">
-        {CAMPAIGN_ARCS.map(arc => {
-          const arcMissions = missions.filter(mission => mission.campaignArc === arc.label);
+        {CAMPAIGN_ARCS.filter(arc => arc.id !== 'optional-sorties').map(arc => {
+          const arcMissions = mainMissions.filter(mission => mission.campaignArc === arc.label);
           if (arcMissions.length === 0) return null;
 
           return (
@@ -100,6 +106,54 @@ export function MissionSelectScreen({ missions, selectedMissionId, progress, onS
             </section>
           );
         })}
+
+        {/* Stage 9a: Optional Sorties section — shown only when at least one sortie is unlocked */}
+        {anyOptionalUnlocked && (
+          <section className="border border-sky-500/25 bg-black/30 p-4 sm:p-5">
+            <div className="mb-4 flex flex-wrap items-end justify-between gap-3 font-mono uppercase tracking-[0.16em]">
+              <div className="flex items-center gap-3">
+                <Star size={14} className="text-sky-400" />
+                <div>
+                  <div className="text-[10px] text-sky-400">Optional</div>
+                  <h2 className="mt-1 text-base text-white sm:text-lg">Optional Sorties</h2>
+                </div>
+              </div>
+              <div className="text-[10px] text-white/40">Not required for campaign completion</div>
+            </div>
+            <div className="grid gap-3">
+              {optionalSorties.map(mission => {
+                const status = getMissionStatus(mission, progress);
+                const selected = mission.id === selectedMissionId;
+                const unlocked = isMissionUnlocked(mission, progress);
+                return (
+                  <button
+                    key={mission.id}
+                    className={`pointer-events-auto w-full border p-3 text-left font-mono transition-colors sm:p-4 ${selected ? 'border-sky-500 bg-sky-500/10' : 'border-white/10 bg-black/35 hover:border-sky-500/30'} ${!unlocked ? 'opacity-65' : ''}`}
+                    onClick={() => onSelectMission(mission.id)}
+                    type="button"
+                    aria-pressed={selected}
+                  >
+                    <div className="flex items-start justify-between gap-4 uppercase tracking-[0.14em]">
+                      <div className="min-w-0">
+                        <div className="text-[10px] text-sky-400/70">Sortie // {mission.combatDomain?.replace('_', '-') ?? 'SPECIAL'}</div>
+                        <div className="mt-2 text-sm text-white sm:text-base">{mission.title}</div>
+                      </div>
+                      <div className={`flex items-center gap-2 text-[10px] ${status === 'CLEARED' ? 'text-emerald-400' : status === 'READY' ? 'text-sky-400' : 'text-white/35'}`}>
+                        {!unlocked && <Lock size={13} />}
+                        {status}
+                      </div>
+                    </div>
+                    <div className="mt-4 grid grid-cols-3 gap-2 text-[10px] uppercase tracking-[0.12em] text-white/45">
+                      <span>Threat {mission.difficulty}</span>
+                      <span>{formatTime(getMissionBestTime(mission.id, progress))}</span>
+                      <span className="text-right">{formatScore(progress.bestMissionScores[mission.id])}</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        )}
       </div>
     </ShellPanel>
   );

@@ -1157,15 +1157,15 @@ Goal: add replay value and optional breadth after the expanded campaign is stabl
 
 ### Stage 9a - Optional Sortie Framework
 
-Status: Not started
+Status: Complete
 
-- [ ] Add optional sortie definitions separate from required campaign missions.
-- [ ] Add unlock rules, rewards, replay state, and career display for optional sorties.
-- [ ] Keep optional content from blocking main campaign progress.
+- [x] Add optional sortie definitions separate from required campaign missions.
+- [x] Add unlock rules, rewards, replay state, and career display for optional sorties.
+- [x] Keep optional content from blocking main campaign progress.
 
 Exit criteria:
 
-- [ ] Optional sorties can be discovered, launched, completed, and replayed.
+- [x] Optional sorties can be discovered, launched, completed, and replayed.
 
 ### Stage 9b - Challenge Variant System
 
@@ -1400,6 +1400,9 @@ Gameplay regression for future phases:
 - 2026-05-15: Stage 7a Dockerized `npm run lint` — passed; TypeScript zero errors after adding `UpgradeCoreId`, `PlayerInventory`, inventory migration, and updated campaign validator.
 - 2026-05-15: Stage 7a Dockerized `npm run build && npm run validate:drone && npm run validate:prototype && npm run validate:intercept && npm run validate:ground && npm run validate:sea && npm run validate:hud && npm run validate:storm && npm run validate:frozen && npm run validate:canyon && npm run validate:core && npm run validate:campaign` — passed; Vite 2132 modules with existing large-chunk warning only, all validators passed including updated inventory regression coverage in validate:campaign.
 - 2026-05-15: Stage 7a `docker compose --progress plain build && docker compose --progress plain up -d --no-build && docker compose ps` — passed; image `skybreaker-drone-strike:latest` rebuilt with `PHASE_TAG = 'Phase 7a'`, container `skybreaker-drone-strike` reported `Up`.
+- 2026-05-16: Stage 9a Dockerized `npm run lint` — passed; TypeScript zero errors after fixing 6 missing `BonusCondition.id` fields.
+- 2026-05-16: Stage 9a Dockerized `npm run build && npm run validate:drone && npm run validate:prototype && npm run validate:intercept && npm run validate:ground && npm run validate:sea && npm run validate:hud && npm run validate:storm && npm run validate:frozen && npm run validate:canyon && npm run validate:core && npm run validate:campaign && npm run validate:sorties` — passed; Vite 2136 modules with existing large-chunk warning only, all 13 validators passed, validate:sorties 31/31 assertions passed.
+- 2026-05-16: Stage 9a `docker compose --progress plain build && docker compose --progress plain up -d --no-build && docker compose ps` — passed; image `skybreaker-drone-strike:latest` rebuilt with `PHASE_TAG = 'Phase 9a'`, container `skybreaker-drone-strike` reported `Up`.
 
 ## Latest Session Summary
 
@@ -1575,6 +1578,58 @@ Introduced airborne mission objectives with escape failure, a new ace-intercepto
 ---
 
 ## Latest Session Summary
+
+Date: 2026-05-16
+
+Phase worked:
+- Stage 9a - Optional Sortie Framework.
+
+Shipped:
+- `sortieType?: 'main' | 'optional' | 'prototype'` and `unlockAfterRewardId?: string` added to `MissionDefinition` type.
+- `getMainMissions()` and `getOptionalSorties()` helpers added to `missionSystem.ts`.
+- `unlockAfterRewardId` unlock check added to `isMissionUnlocked()` in `missionSystem.ts`.
+- `optional-sorties` campaign arc registered in `campaign.ts`.
+- 3 optional sortie missions authored in `missions.ts`: `hunting-ground` (unlocks after storm-coast-secured), `static-barrage` (unlocks after frozen-relay-secured), `carrier-hunt` (unlocks after red-canyon-secured). Each has `sortieType: 'optional'`, `objectiveSet`, and 2 bonus conditions.
+- `MissionSelectScreen.tsx` updated to show optional sorties as a separate section below the main arc grid.
+- `CareerScreen.tsx` updated to show optional sortie records (cleared count, per-sortie best time/score).
+- `App.tsx` `nextSortieMission` filtered to main missions only.
+- `scripts/validate-optional-sorties.ts` created with 31 assertions (sortie registration, campaign isolation, unlock rules, completion/replay tracking, main mission count integrity).
+- `validate:sorties` npm script added to `package.json`.
+- `PHASE_TAG = 'Phase 9a'`.
+
+Changed files:
+- `src/types/game.ts`
+- `src/systems/missionSystem.ts`
+- `src/config/campaign.ts`
+- `src/config/missions.ts`
+- `src/components/menus/MissionSelectScreen.tsx`
+- `src/components/menus/CareerScreen.tsx`
+- `src/App.tsx`
+- `scripts/validate-optional-sorties.ts`
+- `package.json`
+- `src/config/buildMeta.ts`
+- `DEV-CHECKLIST.md`
+
+Verification:
+- Dockerized `npm run lint` — passed (0 TypeScript errors).
+- Dockerized `npm run build` — passed; Vite 2136 modules, existing large-chunk warning only.
+- Dockerized full validator chain (13 validators) — all passed; validate:sorties 31/31.
+- `docker compose --progress plain build` — passed; image rebuilt with Phase 9a tag.
+- `docker compose --progress plain up -d --no-build && docker compose ps` — passed; container `skybreaker-drone-strike` reported `Up`.
+
+Deferred:
+- Stage 9b challenge modifiers, 9c procedural contracts, 9d mastery scoring — all remain Not started.
+
+Next recommended starting point:
+- Begin Stage 9b - Challenge Variant System.
+- Start by reading `src/config/missions.ts` (optional sortie missions), `src/types/game.ts` (MissionDefinition), and `src/components/menus/MissionSelectScreen.tsx`.
+- Add a `challengeModifiers` array to `MissionDefinition` (e.g. storm, night, elite-patrol, timed-extraction, no-shield).
+- Display active modifiers clearly in BriefingScreen before launch.
+- Validate that modifiers are only applied to optional sorties and do not alter main campaign flags.
+
+---
+
+## Stage 6g - Campaign Wave 1 Regression Completion Summary (Archive)
 
 Date: 2026-05-15
 

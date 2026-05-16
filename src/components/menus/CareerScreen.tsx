@@ -1,4 +1,4 @@
-import { ArrowLeft, Award, Trophy } from 'lucide-react';
+import { ArrowLeft, Award, Star, Trophy } from 'lucide-react';
 import { CAMPAIGN_ARCS } from '../../config/campaign';
 import { getMissionStatus } from '../../systems/missionSystem';
 import type { CampaignProgress, MissionDefinition } from '../../types/game';
@@ -15,6 +15,11 @@ export interface CareerScreenProps {
 export function CareerScreen({ missions, progress, onBack }: CareerScreenProps) {
   const summary = getCareerSummary(missions, progress);
   const earnedRewards = missions.filter(mission => progress.earnedRewardIds.includes(mission.reward.id));
+
+  // Stage 9a: Separate main campaign missions from optional sorties for distinct display
+  const mainMissions = missions.filter(m => !m.sortieType || m.sortieType === 'main');
+  const optionalSorties = missions.filter(m => m.sortieType === 'optional');
+  const completedOptional = optionalSorties.filter(m => progress.completedMissionIds.includes(m.id));
 
   return (
     <ShellPanel
@@ -43,12 +48,12 @@ export function CareerScreen({ missions, progress, onBack }: CareerScreenProps) 
     >
       <div className="grid gap-5 max-w-3xl">
         <section className="grid gap-3 sm:grid-cols-3">
-          {CAMPAIGN_ARCS.filter(arc => missions.some(mission => mission.campaignArc === arc.label)).map(arc => (
+          {CAMPAIGN_ARCS.filter(arc => arc.id !== 'optional-sorties' && mainMissions.some(mission => mission.campaignArc === arc.label)).map(arc => (
             <div key={arc.id} className="border border-white/10 bg-black/35 p-4 font-mono uppercase tracking-[0.13em]">
               <div className="text-[10px] text-orange-400">{arc.missionRange}</div>
               <div className="mt-2 text-sm text-white">{arc.label}</div>
-              <div className="mt-4 h-1.5 bg-white/10"><div className="h-full bg-orange-500" style={{ width: `${getArcProgress(missions, arc, progress)}%` }} /></div>
-              <div className="mt-3 text-[10px] text-white/45">{getArcProgress(missions, arc, progress)}% archived</div>
+              <div className="mt-4 h-1.5 bg-white/10"><div className="h-full bg-orange-500" style={{ width: `${getArcProgress(mainMissions, arc, progress)}%` }} /></div>
+              <div className="mt-3 text-[10px] text-white/45">{getArcProgress(mainMissions, arc, progress)}% archived</div>
             </div>
           ))}
         </section>
@@ -56,7 +61,7 @@ export function CareerScreen({ missions, progress, onBack }: CareerScreenProps) 
         <section className="border border-white/10 bg-black/30 p-4 sm:p-5">
           <div className="mb-4 text-[10px] font-mono uppercase tracking-[0.28em] text-white/45">Mission Records</div>
           <div className="grid gap-2">
-            {missions.map(mission => (
+            {mainMissions.map(mission => (
               <div key={mission.id} className="grid gap-3 border border-white/10 bg-white/[0.03] p-3 font-mono uppercase tracking-[0.12em] sm:grid-cols-[1fr_auto_auto_auto] sm:items-center">
                 <div>
                   <div className="text-[9px] text-white/35">Mission {mission.order.toString().padStart(2, '0')}</div>
@@ -69,6 +74,31 @@ export function CareerScreen({ missions, progress, onBack }: CareerScreenProps) 
             ))}
           </div>
         </section>
+
+        {/* Stage 9a: Optional sortie records — only shown when any optional sorties exist */}
+        {optionalSorties.length > 0 && (
+          <section className="border border-sky-500/25 bg-black/30 p-4 sm:p-5">
+            <div className="mb-4 flex items-center gap-3 text-[10px] font-mono uppercase tracking-[0.28em] text-white/45">
+              <Star size={14} className="text-sky-400" /> Optional Sorties ({completedOptional.length}/{optionalSorties.length} cleared)
+            </div>
+            <div className="grid gap-2">
+              {optionalSorties.map(mission => {
+                const status = getMissionStatus(mission, progress);
+                return (
+                  <div key={mission.id} className="grid gap-3 border border-white/10 bg-white/[0.03] p-3 font-mono uppercase tracking-[0.12em] sm:grid-cols-[1fr_auto_auto_auto] sm:items-center">
+                    <div>
+                      <div className="text-[9px] text-sky-400/70">{mission.combatDomain?.replace(/_/g, '-') ?? 'OPTIONAL'}</div>
+                      <div className="mt-1 text-sm text-white">{mission.title}</div>
+                    </div>
+                    <div className={`text-[10px] ${status === 'CLEARED' ? 'text-emerald-400' : status === 'READY' ? 'text-sky-400' : 'text-white/35'}`}>{status}</div>
+                    <div className="text-[10px] text-white/60">{formatTime(progress.bestMissionTimes[mission.id] ?? null)}</div>
+                    <div className="text-[10px] text-white/60">{formatScore(progress.bestMissionScores[mission.id])} // {progress.bestMissionRanks[mission.id] ?? '--'}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
 
         <section className="border border-white/10 bg-black/30 p-4 sm:p-5">
           <div className="mb-4 flex items-center gap-3 text-[10px] font-mono uppercase tracking-[0.28em] text-white/45"><Award size={16} className="text-orange-400" /> Rewards</div>

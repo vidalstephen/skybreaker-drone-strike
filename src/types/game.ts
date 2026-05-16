@@ -1002,6 +1002,19 @@ export interface MissionDefinition {
   scoring: MissionScoringDefinition;
   reward: MissionRewardDefinition;
   unlockAfterMissionId?: string;
+  /**
+   * Stage 9a: Mission classification by narrative role.
+   * - 'main'     — numbered campaign mission (M01–M24); drives "Continue" CTA and career progress.
+   * - 'optional' — optional sortie discovered separately; does not advance campaign unlock chain.
+   * - 'prototype' — isolated dev/prototype sortie; unlocked by DEV_UNLOCK_PROTOTYPES.
+   * Absent = treated as 'main' for backward compatibility.
+   */
+  sortieType?: 'main' | 'optional' | 'prototype';
+  /**
+   * Stage 9a: Unlock this mission when the named reward id is present in earnedRewardIds.
+   * Supplements unlockAfterMissionId; either condition satisfies the unlock check.
+   */
+  unlockAfterRewardId?: string;
 }
 
 // ---------------------------------------------------------------------------

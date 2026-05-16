@@ -92,7 +92,20 @@ export function isMissionUnlocked(mission: MissionDefinition, progress: Campaign
     const arc = CAMPAIGN_ARCS.find(a => a.label === mission.campaignArc);
     if (arc?.status === 'PLANNED') return true;
   }
-  return progress.unlockedMissionIds.includes(mission.id);
+  if (progress.unlockedMissionIds.includes(mission.id)) return true;
+  // Stage 9a: reward-gated optional sorties unlock when the reward is earned
+  if (mission.unlockAfterRewardId && progress.earnedRewardIds.includes(mission.unlockAfterRewardId)) return true;
+  return false;
+}
+
+/** Stage 9a: Return only main campaign missions (sortieType 'main' or absent). */
+export function getMainMissions(missions: MissionDefinition[]): MissionDefinition[] {
+  return missions.filter(m => !m.sortieType || m.sortieType === 'main');
+}
+
+/** Stage 9a: Return only optional sorties (sortieType 'optional'). */
+export function getOptionalSorties(missions: MissionDefinition[]): MissionDefinition[] {
+  return missions.filter(m => m.sortieType === 'optional');
 }
 
 export function getMissionBestTime(missionId: string, progress: CampaignProgress) {

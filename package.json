@@ -19,7 +19,8 @@
     "validate:canyon": "tsx scripts/validate-red-canyon.ts",
     "validate:core": "tsx scripts/validate-skybreaker-core.ts",
     "validate:hud": "tsx scripts/validate-hud-domains.ts",
-    "validate:campaign": "tsx scripts/validate-campaign-wave1.ts"
+    "validate:campaign": "tsx scripts/validate-campaign-wave1.ts",
+    "validate:sorties": "tsx scripts/validate-optional-sorties.ts"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",

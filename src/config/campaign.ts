@@ -93,4 +93,13 @@ export const CAMPAIGN_ARCS: CampaignArcDefinition[] = [
     escalation: 'Builds to a finale mission that requires mastery of all combat domains; campaign completion state and final rewards.',
     status: 'ACTIVE',
   },
+  // Stage 9a: optional sorties — separate section, unlocked by arc reward, not required for campaign completion
+  {
+    id: 'optional-sorties',
+    label: 'Optional Sorties',
+    missionRange: 'Sorties',
+    focus: 'High-difficulty domain-specific challenges unlocked by completing campaign arcs.',
+    escalation: 'Each sortie isolates a single combat domain under pressure. Not required to complete the campaign.',
+    status: 'ACTIVE',
+  },
 ];
