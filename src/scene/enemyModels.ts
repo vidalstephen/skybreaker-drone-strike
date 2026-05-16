@@ -13,21 +13,20 @@ export interface EnemyModelResult {
  * AIRCRAFT_SCALE = 0.28 world-scale reference. Ground threat models are
  * unchanged from Stage 5d.
  */
-export function createEnemyModel(def: EnemyDefinition): EnemyModelResult {
-  if (def.navalThreat) {
-    return createNavalModel(def);
-  }
-  if (def.groundThreat) {
-    return createGroundThreatModel(def);
-  }
-  return createAirEnemyModel(def);
+export function createEnemyModel(
+  def: EnemyDefinition,
+  variantColors?: { color: number; emissive: number },
+): EnemyModelResult {
+  if (def.navalThreat) return createNavalModel(def, variantColors);
+  if (def.groundThreat) return createGroundThreatModel(def, variantColors);
+  return createAirEnemyModel(def, variantColors);
 }
 
 // ---------------------------------------------------------------------------
 // Air enemy model — role-specific silhouettes
 // ---------------------------------------------------------------------------
 
-function createAirEnemyModel(def: EnemyDefinition): EnemyModelResult {
+function createAirEnemyModel(def: EnemyDefinition, variantColors?: { color: number; emissive: number }): EnemyModelResult {
   const sx = def.scale[0];
   const sy = def.scale[1];
   const sz = def.scale[2];
@@ -37,12 +36,16 @@ function createAirEnemyModel(def: EnemyDefinition): EnemyModelResult {
   const engineGlows: THREE.Mesh[] = [];
   let shieldMesh: THREE.Mesh | null = null;
 
+  // Stage 8f: faction variant overrides base definition colors; geometry/hitbox unchanged.
+  const c = variantColors?.color ?? def.color;
+  const e = variantColors?.emissive ?? def.emissive;
+
   // Each structural mesh gets a cloned material so per-mesh flash updates are independent.
   const baseMat = () =>
-    new THREE.MeshStandardMaterial({ color: def.color, emissive: def.emissive, emissiveIntensity: 0.5 });
-  const glowMat = () => new THREE.MeshBasicMaterial({ color: def.emissive });
+    new THREE.MeshStandardMaterial({ color: c, emissive: e, emissiveIntensity: 0.5 });
+  const glowMat = () => new THREE.MeshBasicMaterial({ color: e });
   const accentMat = () =>
-    new THREE.MeshStandardMaterial({ color: def.emissive, emissive: def.emissive, emissiveIntensity: 1.0 });
+    new THREE.MeshStandardMaterial({ color: e, emissive: e, emissiveIntensity: 1.0 });
 
   const addBody = (geo: THREE.BufferGeometry, mat: THREE.Material, pos?: [number, number, number]): THREE.Mesh => {
     const mesh = new THREE.Mesh(geo, mat);
@@ -245,12 +248,15 @@ function createAirEnemyModel(def: EnemyDefinition): EnemyModelResult {
 // ---------------------------------------------------------------------------
 
 /** Stage 5d: Creates a ground emplacement model for surface threat enemies. */
-function createGroundThreatModel(def: EnemyDefinition): EnemyModelResult {
+function createGroundThreatModel(def: EnemyDefinition, variantColors?: { color: number; emissive: number }): EnemyModelResult {
   const group = new THREE.Group();
   const sx = def.scale[0];
   const sz = def.scale[2];
-  const baseMat = new THREE.MeshStandardMaterial({ color: def.color, emissive: def.emissive, emissiveIntensity: 0.4, roughness: 0.8 });
-  const accentMat = new THREE.MeshBasicMaterial({ color: def.emissive });
+  // Stage 8f: faction variant overrides base definition colors; geometry/hitbox unchanged.
+  const c = variantColors?.color ?? def.color;
+  const e = variantColors?.emissive ?? def.emissive;
+  const baseMat = new THREE.MeshStandardMaterial({ color: c, emissive: e, emissiveIntensity: 0.4, roughness: 0.8 });
+  const accentMat = new THREE.MeshBasicMaterial({ color: e });
 
   const bodyMeshes: THREE.Mesh[] = [];
   const engineGlows: THREE.Mesh[] = [];
@@ -325,7 +331,7 @@ function createGroundThreatModel(def: EnemyDefinition): EnemyModelResult {
 // ---------------------------------------------------------------------------
 
 /** Stage 8c: Creates a naval surface-unit model for sea-threat enemies. */
-function createNavalModel(def: EnemyDefinition): EnemyModelResult {
+function createNavalModel(def: EnemyDefinition, variantColors?: { color: number; emissive: number }): EnemyModelResult {
   const group = new THREE.Group();
   const sx = def.scale[0];
   const sy = def.scale[1];
@@ -333,8 +339,11 @@ function createNavalModel(def: EnemyDefinition): EnemyModelResult {
   const bodyMeshes: THREE.Mesh[] = [];
   const engineGlows: THREE.Mesh[] = [];
 
-  const baseMat   = () => new THREE.MeshStandardMaterial({ color: def.color,   emissive: def.emissive, emissiveIntensity: 0.35, roughness: 0.75 });
-  const accentMat = () => new THREE.MeshBasicMaterial({ color: def.emissive });
+  // Stage 8f: faction variant overrides base definition colors; geometry/hitbox unchanged.
+  const c = variantColors?.color ?? def.color;
+  const e = variantColors?.emissive ?? def.emissive;
+  const baseMat   = () => new THREE.MeshStandardMaterial({ color: c,   emissive: e, emissiveIntensity: 0.35, roughness: 0.75 });
+  const accentMat = () => new THREE.MeshBasicMaterial({ color: e });
 
   const addPart = (geo: THREE.BufferGeometry, mat: THREE.Material, pos?: [number, number, number]): THREE.Mesh => {
     const mesh = new THREE.Mesh(geo, mat);

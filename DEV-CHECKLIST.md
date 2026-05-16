@@ -1130,16 +1130,24 @@ Implementation notes:
 
 ### Stage 8f - Faction And Theater Variants
 
-Status: Not started
+Status: Complete
 
-- [ ] Add faction/theater-specific enemy variants with distinct silhouettes, weapons, and behavior weights.
-- [ ] Keep role readability consistent across skins/variants.
+- [x] Add faction/theater-specific enemy variants with distinct silhouettes, weapons, and behavior weights.
+- [x] Keep role readability consistent across skins/variants.
 
 Exit criteria:
 
-- [ ] Variants add variety without confusing threat recognition.
-- [ ] Each variant preserves the base role's proportional scale and hitbox-mesh correspondence — reskins that shrink or enlarge the visual without adjusting the collision volume are a bug.
-- [ ] Named material handles (damage flash, shield glow, thrust state) are carried through all variants; anonymous inline material references are not acceptable on any reskinned unit.
+- [x] Variants add variety without confusing threat recognition.
+- [x] Each variant preserves the base role's proportional scale and hitbox-mesh correspondence — reskins that shrink or enlarge the visual without adjusting the collision volume are a bug.
+- [x] Named material handles (damage flash, shield glow, thrust state) are carried through all variants; anonymous inline material references are not acceptable on any reskinned unit.
+
+Implementation notes:
+- `src/types/game.ts`: `FactionId` type added (`'signal-war' | 'storm-coast' | 'frozen-relay' | 'red-canyon' | 'skybreaker'`); `factionVariant?: FactionId` added to `Enemy`.
+- `src/config/enemies.ts`: `FactionVariantColors` interface, `FACTION_VARIANT_COLORS` record (5 theater palettes), and `LEVEL_KIT_FACTION` map (levelKitId → FactionId) added.
+- `src/scene/enemyModels.ts`: `createEnemyModel()`, `createAirEnemyModel()`, `createNavalModel()`, and `createGroundThreatModel()` each accept an optional `variantColors?: { color: number; emissive: number }` parameter; colors are resolved to `c`/`e` locals before any material factory call. All geometry, scale, hitbox, and named material handles (`bodyMeshes`, `shieldMesh`, `engineGlows`) are unchanged.
+- `src/components/Game.tsx`: `spawnEnemyWave` resolves `wavefaction` from `LEVEL_KIT_FACTION[mission.levelKitId]` and `waveVariantColors` from `FACTION_VARIANT_COLORS[wavefaction]`; passes `waveVariantColors` to `createEnemyModel`; stores `factionVariant` on every spawned enemy.
+- Theater coverage: signal-war (Arcs 1-3, prototypes — default, no override); storm-coast (Arc 4, ocean-platform — teal `0x1a5c7e`/`0x00aacc`); frozen-relay (Arc 5 — ice blue `0x7ab0cc`/`0x44c8ff`); red-canyon (Arc 6 — rust `0x7a3018`/`0xcc4400`); skybreaker (Arc 7 — void violet `0x2a0a4a`/`0x9900ff`).
+- `src/config/buildMeta.ts`: `PHASE_TAG` → `'Phase 8f'`.
 
 ## Stage 9 - Campaign Expansion Wave 2 And Optional Sorties
 

@@ -1,4 +1,4 @@
-import type { EnemyDefinition, EnemyRole, MissionEnemyWaveEntry } from '../types/game';
+import type { EnemyDefinition, EnemyRole, FactionId, MissionEnemyWaveEntry } from '../types/game';
 
 export const ENEMY_DEFINITIONS: Record<EnemyRole, EnemyDefinition> = {
   'fast-interceptor': {
@@ -268,3 +268,38 @@ export const WING_OFFSETS: [number, number, number][] = [
   [-22, 10, -12],
   [  0, -8,  26],
 ];
+
+// ---------------------------------------------------------------------------
+// Stage 8f: Faction/theater variant palettes
+// ---------------------------------------------------------------------------
+
+/** Color palette applied to all enemies spawned within a given faction/theater. */
+export interface FactionVariantColors {
+  color: number;
+  emissive: number;
+}
+
+/**
+ * Per-faction color overrides. Enemies in these theaters receive the palette
+ * across all roles. Geometry, hitbox, and material handles are always preserved.
+ * 'signal-war' entries are not overridden — enemies use their base def colors.
+ */
+export const FACTION_VARIANT_COLORS: Record<FactionId, FactionVariantColors> = {
+  'signal-war':   { color: 0xff2a2a, emissive: 0xff0000 }, // default — not applied (see LEVEL_KIT_FACTION)
+  'storm-coast':  { color: 0x1a5c7e, emissive: 0x00aacc }, // ocean teal
+  'frozen-relay': { color: 0x7ab0cc, emissive: 0x44c8ff }, // arctic ice blue
+  'red-canyon':   { color: 0x7a3018, emissive: 0xcc4400 }, // burnt rust
+  'skybreaker':   { color: 0x2a0a4a, emissive: 0x9900ff }, // void violet
+};
+
+/**
+ * Maps a mission levelKitId to its theater faction.
+ * Level kits absent from this map default to signal-war (base def colors).
+ */
+export const LEVEL_KIT_FACTION: Partial<Record<string, FactionId>> = {
+  'storm-coast':    'storm-coast',
+  'ocean-platform': 'storm-coast',
+  'arctic-shelf':   'frozen-relay',
+  'red-canyon':     'red-canyon',
+  'skybreaker-core': 'skybreaker',
+};

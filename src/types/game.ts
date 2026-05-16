@@ -86,6 +86,8 @@ export interface PlayerInventory {
 export type WeaponSlot = 'PRIMARY' | 'SECONDARY';
 export type WeaponId = 'pulse-cannon' | 'ion-missile';
 export type EnemyRole = 'fast-interceptor' | 'heavy-gunship' | 'missile-platform' | 'shielded-warden' | 'mini-boss' | 'ace-interceptor' | 'sam-battery' | 'flak-cannon' | 'railgun-emplacement' | 'patrol-craft' | 'destroyer';
+/** Stage 8f: faction/theater identifier — drives enemy color variants without changing geometry or hitbox. */
+export type FactionId = 'signal-war' | 'storm-coast' | 'frozen-relay' | 'red-canyon' | 'skybreaker';
 
 export interface WeaponDefinition {
   id: WeaponId;
@@ -1095,6 +1097,8 @@ export interface Enemy {
   bossPhase?: 1 | 2 | 3;
   /** Stage 8e: epoch ms when the current expose window expires; undefined when not in expose. */
   bossExposeUntil?: number;
+  /** Stage 8f: faction/theater variant that drove this enemy's color palette. Absent = signal-war defaults. */
+  factionVariant?: FactionId;
 }
 
 export interface Projectile {

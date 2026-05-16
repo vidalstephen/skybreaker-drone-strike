@@ -28,7 +28,7 @@ import {
   MISSILE_TURN_RATE,
   MISSILE_MIN_LOCK,
 } from '../config/constants';
-import { expandEnemyWaveGrouped, WING_OFFSETS } from '../config/enemies';
+import { expandEnemyWaveGrouped, WING_OFFSETS, LEVEL_KIT_FACTION, FACTION_VARIANT_COLORS } from '../config/enemies';
 import { getEquippedWeapons } from '../config/weapons';
 import { resolveUpgradeEffects } from '../config/upgrades';
 import type { AudioCue } from '../hooks/useAudio';
@@ -833,8 +833,11 @@ export default function Game({
           const waveDefinitions = expandEnemyWaveGrouped(waveDef.composition).slice(0, waveDef.count);
           // Stage 8b: track leader spawn positions by formationId so wings spawn near the leader
           const leaderSpawnPositions = new Map<string, THREE.Vector3>();
+          // Stage 8f: resolve theater faction color palette for all enemies in this wave
+          const wavefaction = LEVEL_KIT_FACTION[mission.levelKitId];
+          const waveVariantColors = wavefaction ? FACTION_VARIANT_COLORS[wavefaction] : undefined;
           waveDefinitions.forEach(({ definition: enemyDefinition, formationId, formationRole, wingIndex }) => {
-            const { group: enemyGroup, visualHandles: enemyVisualHandles } = createEnemyModel(enemyDefinition);
+            const { group: enemyGroup, visualHandles: enemyVisualHandles } = createEnemyModel(enemyDefinition, waveVariantColors);
             let spawnPos: THREE.Vector3;
             if (formationId && formationRole === 'wing' && leaderSpawnPositions.has(formationId)) {
               const leaderPos = leaderSpawnPositions.get(formationId)!;
@@ -884,6 +887,7 @@ export default function Game({
               formationId,
               formationRole,
               formationOffset,
+              factionVariant: wavefaction,
             });
             tracksRef.current.registerTrack(
               enemyId,
